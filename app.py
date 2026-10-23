@@ -136,14 +136,13 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # --- [연간 재무제표 rowList 파싱: 가장 마지막 미래 연도 추정치 기준] ---
+            # --- [연간 재무제표 rowList 파싱: 정확한 타이틀 일치 적용] ---
             fin_data = {
                 "기준연도": "-",
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
             }
             
-            # rowList 추출
             row_list = fin_json.get("rowList", [])
             if not row_list and isinstance(fin_json, dict):
                 for val in fin_json.values():
@@ -153,45 +152,42 @@ if current_codes:
 
             if row_list:
                 for row in row_list:
-                    title = row.get("title", "").strip()
+                    raw_title = row.get("title", "").strip()
                     columns = row.get("columns", {})
                     if not columns:
                         continue
                         
-                    # 모든 연도 키 정렬
                     sorted_years = sorted(list(columns.keys()))
                     if not sorted_years:
                         continue
                         
-                    # 가장 마지막 연도(미래 추정치) 및 직전 연도 선택
                     latest_yr = sorted_years[-1]
                     prev_yr = sorted_years[-2] if len(sorted_years) >= 2 else None
                     
                     fin_data["기준연도"] = f"{latest_yr[:4]}년"
                     
-                    # 가장 마지막 미래 연도 값 추출
                     latest_item = columns.get(latest_yr, {})
                     latest_val_str = latest_item.get("value") if isinstance(latest_item, dict) else latest_item
                     cur_v = to_num(latest_val_str)
                     
-                    # 직전 연도 값 추출
                     prev_item = columns.get(prev_yr, {}) if prev_yr else {}
                     prev_val_str = prev_item.get("value") if isinstance(prev_item, dict) else prev_item
                     prev_v = to_num(prev_val_str)
 
-                    if "매출액" in title:
+                    # 완전 일치(==)로 영업이익률 등 다른 항목의 오버라이트 방지
+                    if raw_title in ["매출액", "수익"]:
                         fin_data["매출액"] = cur_v
                         if pd.notna(cur_v) and pd.notna(prev_v) and prev_v != 0:
                             fin_data["매출YoY"] = round(((cur_v - prev_v) / abs(prev_v)) * 100, 2)
-                    elif "영업이익" in title:
+                    elif raw_title == "영업이익":
                         fin_data["영업이익"] = cur_v
-                    elif "당기순이익" in title:
+                    elif raw_title in ["당기순이익", "당기순익"]:
                         fin_data["당기순이익"] = cur_v
-                    elif "주당배당금" in title or "DPS" in title:
+                    elif raw_title in ["주당배당금(원)", "주당배당금", "DPS"]:
                         fin_data["DPS"] = cur_v
-                    elif "EPS" in title:
+                    elif raw_title in ["수정주당순이익(원)", "주당순이익(원)", "EPS"]:
                         fin_data["EPS"] = cur_v
-                    elif "BPS" in title:
+                    elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
                         fin_data["BPS"] = cur_v
 
             scan_results.append({
@@ -200,15 +196,15 @@ if current_codes:
                 "현재가": curr_price_str,
                 "시총": market_cap,
                 "기준실적": fin_data["기준연도"],
-                "매출액(억)": f"{fin_data['매출액']:,.0f}" if pd.notna(fin_data['매출액']) else "-",
+                "매출액(억)": f"{fin_data['매출액']:,.0f}억" if pd.notna(fin_data['매출액']) else "-",
                 "매출 YoY": f"{fin_data['매출YoY']:+.1f}%" if pd.notna(fin_data['매출YoY']) else "-",
-                "영업이익(억)": f"{fin_data['영업이익']:,.0f}" if pd.notna(fin_data['영업이익']) else "-",
-                "당기순익(억)": f"{fin_data['당기순이익']:,.0f}" if pd.notna(fin_data['당기순이익']) else "-",
-                "DPS(원)": f"{fin_data['DPS']:,.0f}" if pd.notna(fin_data['DPS']) else "-",
+                "영업이익(억)": f"{fin_data['영업이익']:,.0f}억" if pd.notna(fin_data['영업이익']) else "-",
+                "당기순익(억)": f"{fin_data['당기순이익']:,.0f}억" if pd.notna(fin_data['당기순이익']) else "-",
+                "DPS(원)": f"{fin_data['DPS']:,.0f}원" if pd.notna(fin_data['DPS']) else "-",
                 "배당수익률": div_val,
-                "EPS(원)": f"{fin_data['EPS']:,.0f}" if pd.notna(fin_data['EPS']) else "-",
+                "EPS(원)": f"{fin_data['EPS']:,.0f}원" if pd.notna(fin_data['EPS']) else "-",
                 "현재 PER": per_val,
-                "BPS(원)": f"{fin_data['BPS']:,.0f}" if pd.notna(fin_data['BPS']) else "-",
+                "BPS(원)": f"{fin_data['BPS']:,.0f}원" if pd.notna(fin_data['BPS']) else "-",
                 "현재 PBR": pbr_val
             })
 
