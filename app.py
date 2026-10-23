@@ -23,7 +23,7 @@ def save_codes(codes):
 
 # 1. 네이버 모바일 기본 시세 및 밸류에이션 지표 수집
 def get_naver_summary(code: str):
-    url = f"https://m.stock.naver.com/api/stock/{code}/integration"
+    url = f"https://stock.naver.com/domestic/stock/{code}/info/company"
     headers = {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
     }
