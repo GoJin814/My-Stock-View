@@ -20,12 +20,10 @@ def save_codes(codes):
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
-# 표준 모바일 브라우저 위장 헤더
 REQ_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
     "Referer": "https://m.stock.naver.com/",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+    "Accept": "application/json, text/plain, */*"
 }
 
 # 1. 실시간 시세 및 밸류에이션 (/basic)
@@ -50,8 +48,7 @@ def fetch_finance(code: str):
         pass
     return {}
 
-# 숫자 파싱 유틸
-def clean_num(val):
+def to_num(val):
     if val is None or val in ["", "-", "N/A"]:
         return np.nan
     try:
@@ -61,11 +58,11 @@ def clean_num(val):
 
 # --- 화면 구성 ---
 st.title("📋 Scanning_주식 (모바일 뷰어)")
-st.caption("네이버 증권 공식 모바일 API (/basic, /finance/annual) 연동")
+st.caption("네이버 증권 공식 모바일 API (/basic, /finance/annual) 실시간 연동")
 
 current_codes = load_codes()
 
-# 1. 새 종목 추가
+# 종목 추가
 col_add, col_btn = st.columns([3, 1])
 with col_add:
     new_code = st.text_input("➕ 추가할 종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6)
@@ -80,7 +77,7 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# 2. 관리 및 개별 삭제
+# 관리/삭제
 with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False):
     to_delete = st.multiselect("삭제할 종목 선택", current_codes)
     if st.button("선택 삭제"):
@@ -89,50 +86,52 @@ with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False)
             save_codes(current_codes)
             st.rerun()
 
-# 3. 데이터 파싱
+# 데이터 수집 및 표 생성
 if current_codes:
     scan_results = []
     
-    with st.spinner("네이버 증권에서 실시간 시세와 결산 재무를 수집하는 중..."):
+    with st.spinner("네이버 증권 데이터를 동기화하고 있습니다..."):
         for code in current_codes:
             basic = fetch_basic(code)
             fin_json = fetch_finance(code)
             
-            # --- [1번 링크 /basic 파싱] ---
-            # 종목명
+            # 1) /basic 데이터 파싱
             stock_name = basic.get("stockName", "-")
             
-            # 현재가 (now 또는 closePrice)
-            now_val = basic.get("now", basic.get("closePrice", "-"))
-            if now_val != "-":
-                curr_price_str = f"{int(clean_num(now_val)):,}원" if pd.notna(clean_num(now_val)) else str(now_val)
+            # 말씀해주신 closePrice 필드 직접 타겟팅
+            raw_close = basic.get("closePrice", "-")
+            if raw_close != "-":
+                curr_price_str = f"{raw_close}원" if "원" not in str(raw_close) else str(raw_close)
             else:
                 curr_price_str = "-"
                 
-            # 시총
-            market_cap = basic.get("marketValue", "-")
-            if market_cap != "-" and str(market_cap).isdigit():
-                # 억 단위 환산
-                market_cap = f"{int(market_cap) // 100000000:,}억"
+            # 시총 (marketValue는 원 단위 숫자로 들어오므로 억원 단위 환산)
+            market_cap_raw = basic.get("marketValue", "-")
+            if market_cap_raw != "-" and str(market_cap_raw).isdigit():
+                market_cap = f"{int(market_cap_raw) // 100000000:,}억"
+            else:
+                market_cap = str(market_cap_raw)
             
             # PER / PBR / 배당수익률
-            per_val = basic.get("per", "-")
-            pbr_val = basic.get("pbr", "-")
-            div_yield = basic.get("dividendYield", "-")
+            raw_per = basic.get("per", "-")
+            raw_pbr = basic.get("pbr", "-")
+            raw_div = basic.get("dividendYield", "-")
             
-            # --- [3번 링크 /finance/annual 파싱] ---
+            per_val = f"{raw_per}배" if (raw_per not in ["-", "N/A", None]) else "-"
+            pbr_val = f"{raw_pbr}배" if (raw_pbr not in ["-", "N/A", None]) else "-"
+            div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
+
+            # 2) /finance/annual 재무제표 파싱
             fin_data = {
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
             }
             
-            # 응답 구조가 최상위에 있거나 data 키 안에 감싸져 있는 경우 대응
             data_obj = fin_json.get("data", fin_json) if isinstance(fin_json, dict) else {}
             dates = data_obj.get("dates", [])
             tables = data_obj.get("tables", [])
             
             if dates and tables:
-                # 확정 결산 연도 (추정치 E 제외)
                 actual_indices = [i for i, d in enumerate(dates) if "(E)" not in str(d)]
                 rec_idx = actual_indices[-1] if actual_indices else (len(dates) - 1)
                 prev_idx = actual_indices[-2] if len(actual_indices) >= 2 else None
@@ -144,8 +143,8 @@ if current_codes:
                         if not vals:
                             continue
                             
-                        cur_v = clean_num(vals[rec_idx]) if rec_idx < len(vals) else np.nan
-                        prev_v = clean_num(vals[prev_idx]) if (prev_idx is not None and prev_idx < len(vals)) else np.nan
+                        cur_v = to_num(vals[rec_idx]) if rec_idx < len(vals) else np.nan
+                        prev_v = to_num(vals[prev_idx]) if (prev_idx is not None and prev_idx < len(vals)) else np.nan
                         
                         if "매출액" in title:
                             fin_data["매출액"] = cur_v
@@ -172,11 +171,11 @@ if current_codes:
                 "영업이익(억)": f"{fin_data['영업이익']:,.0f}" if pd.notna(fin_data['영업이익']) else "-",
                 "당기순익(억)": f"{fin_data['당기순이익']:,.0f}" if pd.notna(fin_data['당기순이익']) else "-",
                 "DPS(원)": f"{fin_data['DPS']:,.0f}" if pd.notna(fin_data['DPS']) else "-",
-                "배당수익률": f"{div_yield}%" if (div_yield != "-" and "%" not in str(div_yield)) else str(div_yield),
+                "배당수익률": div_val,
                 "EPS(원)": f"{fin_data['EPS']:,.0f}" if pd.notna(fin_data['EPS']) else "-",
-                "현재 PER": f"{per_val}배" if per_val != "-" else "-",
+                "현재 PER": per_val,
                 "BPS(원)": f"{fin_data['BPS']:,.0f}" if pd.notna(fin_data['BPS']) else "-",
-                "현재 PBR": f"{pbr_val}배" if pbr_val != "-" else "-"
+                "현재 PBR": pbr_val
             })
 
     if scan_results:
