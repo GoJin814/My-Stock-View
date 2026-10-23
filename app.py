@@ -26,7 +26,7 @@ REQ_HEADERS = {
     "Accept": "application/json, text/plain, */*"
 }
 
-# 1. 실시간 시세 및 밸류에이션 수집 (/basic)
+# 1. 실시간 시세 및 밸류에이션 (/basic)
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -37,7 +37,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 수집 (/integration)
+# 2. 통합 정보 (/integration)
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -48,7 +48,7 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 수집 (/finance/annual)
+# 3. 연간 재무제표 (/finance/annual)
 def fetch_finance(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
     try:
@@ -59,11 +59,11 @@ def fetch_finance(code: str):
         pass
     return {}
 
-def to_num(val):
+def to_clean_float(val):
     if val is None or val in ["", "-", "N/A"]:
         return np.nan
     try:
-        return float(str(val).replace(",", "").strip())
+        return float(str(val).replace(",", "").replace("배", "").replace("%", "").strip())
     except:
         return np.nan
 
@@ -97,7 +97,7 @@ with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False)
             save_codes(current_codes)
             st.rerun()
 
-# 3. 테이블 데이터 집계
+# 3. 데이터 집계
 if current_codes:
     scan_results = []
     
@@ -107,41 +107,28 @@ if current_codes:
             integration = fetch_integration(code)
             fin_json = fetch_finance(code)
             
-            # 종목명 및 현재가 (/basic)
             stock_name = basic.get("stockName", "-")
-            raw_close = basic.get("closePrice", "-")
-            curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
             
-            # --- [시가총액 1억 미만 반올림 로직] ---
-            # /basic의 marketValue(원 단위 정수)를 우선 사용하여 1억으로 나눈 뒤 반올림
+            # 1) 현재가: 순수 정수형 숫자 추출
+            raw_close = basic.get("closePrice")
+            curr_price = to_clean_float(raw_close)
+            
+            # 2) 시총: 1억 미만 반올림된 순수 숫자(억원 단위)
             raw_mv = basic.get("marketValue")
-            market_cap = "-"
-            
             if raw_mv and str(raw_mv).isdigit():
-                val_won = float(raw_mv)
-                rounded_in_eok = round(val_won / 100000000) # 1억 미만 반올림
-                market_cap = f"{rounded_in_eok:,}억"
+                market_cap_eok = round(float(raw_mv) / 100000000)
             else:
-                # fallback: /integration의 문자열 사용
-                total_infos = integration.get("totalInfos", [])
-                for item in total_infos:
-                    if item.get("code") == "marketValue" or item.get("key") in ["시총", "시가총액"]:
-                        market_cap = item.get("value", "-")
-                        break
-
-            # 지표 매핑 (/basic 우선, /integration fallback)
+                market_cap_eok = np.nan
+                
+            # 3) 지표: 순수 float 추출
             total_infos = integration.get("totalInfos", [])
-            integration_dict = {str(item.get("key", "")).strip(): str(item.get("value", "")).strip() for item in total_infos}
+            integration_dict = {str(item.get("key", "")).strip(): item.get("value") for item in total_infos}
             
-            raw_per = basic.get("per", integration_dict.get("PER", "-"))
-            raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
-            raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
-            
-            per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
-            pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
-            div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
+            per_val = to_clean_float(basic.get("per", integration_dict.get("PER")))
+            pbr_val = to_clean_float(basic.get("pbr", integration_dict.get("PBR")))
+            div_val = to_clean_float(basic.get("dividendYield", integration_dict.get("배당수익률")))
 
-            # 연간 재무제표 (/finance/annual)
+            # 4) 연간 재무제표: 순수 float 추출
             fin_data = {
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
@@ -163,8 +150,8 @@ if current_codes:
                         if not vals:
                             continue
                             
-                        cur_v = to_num(vals[rec_idx]) if rec_idx < len(vals) else np.nan
-                        prev_v = to_num(vals[prev_idx]) if (prev_idx is not None and prev_idx < len(vals)) else np.nan
+                        cur_v = to_clean_float(vals[rec_idx]) if rec_idx < len(vals) else np.nan
+                        prev_v = to_clean_float(vals[prev_idx]) if (prev_idx is not None and prev_idx < len(vals)) else np.nan
                         
                         if "매출액" in title:
                             fin_data["매출액"] = cur_v
@@ -184,23 +171,45 @@ if current_codes:
             scan_results.append({
                 "종목코드": code,
                 "종목명": stock_name,
-                "현재가": curr_price_str,
-                "시총": market_cap,
-                "매출액(억)": f"{fin_data['매출액']:,.0f}" if pd.notna(fin_data['매출액']) else "-",
-                "매출 YoY": f"{fin_data['매출YoY']:+.1f}%" if pd.notna(fin_data['매출YoY']) else "-",
-                "영업이익(억)": f"{fin_data['영업이익']:,.0f}" if pd.notna(fin_data['영업이익']) else "-",
-                "당기순익(억)": f"{fin_data['당기순이익']:,.0f}" if pd.notna(fin_data['당기순이익']) else "-",
-                "DPS(원)": f"{fin_data['DPS']:,.0f}" if pd.notna(fin_data['DPS']) else "-",
+                "현재가": curr_price,
+                "시총(억)": market_cap_eok,
+                "매출액(억)": fin_data["매출액"],
+                "매출 YoY": fin_data["매출YoY"],
+                "영업이익(억)": fin_data["영업이익"],
+                "당기순익(억)": fin_data["당기순이익"],
+                "DPS": fin_data["DPS"],
                 "배당수익률": div_val,
-                "EPS(원)": f"{fin_data['EPS']:,.0f}" if pd.notna(fin_data['EPS']) else "-",
+                "EPS": fin_data["EPS"],
                 "현재 PER": per_val,
-                "BPS(원)": f"{fin_data['BPS']:,.0f}" if pd.notna(fin_data['BPS']) else "-",
+                "BPS": fin_data["BPS"],
                 "현재 PBR": pbr_val
             })
 
     if scan_results:
         result_df = pd.DataFrame(scan_results)
-        st.dataframe(result_df, use_container_width=True, hide_index=True)
+        
+        # 순수 숫자로 저장된 데이터에 화면 표시용 포맷팅 적용
+        st.dataframe(
+            result_df,
+            column_config={
+                "종목코드": st.column_config.TextColumn("종목코드"),
+                "종목명": st.column_config.TextColumn("종목명"),
+                "현재가": st.column_config.NumberColumn("현재가", format="%,d원"),
+                "시총(억)": st.column_config.NumberColumn("시총(억)", format="%,d억"),
+                "매출액(억)": st.column_config.NumberColumn("매출액(억)", format="%,d억"),
+                "매출 YoY": st.column_config.NumberColumn("매출 YoY", format="%+.1f%%"),
+                "영업이익(억)": st.column_config.NumberColumn("영업이익(억)", format="%,d억"),
+                "당기순익(억)": st.column_config.NumberColumn("당기순익(억)", format="%,d억"),
+                "DPS": st.column_config.NumberColumn("DPS(원)", format="%,d원"),
+                "배당수익률": st.column_config.NumberColumn("배당수익률", format="%.2f%%"),
+                "EPS": st.column_config.NumberColumn("EPS(원)", format="%,d원"),
+                "현재 PER": st.column_config.NumberColumn("현재 PER", format="%.2f배"),
+                "BPS": st.column_config.NumberColumn("BPS(원)", format="%,d원"),
+                "현재 PBR": st.column_config.NumberColumn("현재 PBR", format="%.2f배"),
+            },
+            use_container_width=True,
+            hide_index=True
+        )
         
         csv = result_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
