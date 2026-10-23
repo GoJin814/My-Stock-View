@@ -37,7 +37,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 수집 (/integration) - 시총 원본 텍스트("2조 1,188억") 추출용
+# 2. 통합 정보 수집 (/integration)
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -112,23 +112,27 @@ if current_codes:
             raw_close = basic.get("closePrice", "-")
             curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
             
-            # --- [시가총액 추출: code="marketValue" 또는 key="시총" 매핑] ---
-            total_infos = integration.get("totalInfos", [])
+            # --- [시가총액 1억 미만 반올림 로직] ---
+            # /basic의 marketValue(원 단위 정수)를 우선 사용하여 1억으로 나눈 뒤 반올림
+            raw_mv = basic.get("marketValue")
             market_cap = "-"
-            integration_dict = {}
             
-            for item in total_infos:
-                item_code = str(item.get("code", "")).strip()
-                item_key = str(item.get("key", "")).strip()
-                item_val = str(item.get("value", "")).strip()
-                
-                # 사용자가 찾아주신 code="marketValue" 또는 key="시총"으로 우선 매핑
-                if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
-                    market_cap = item_val
-                
-                integration_dict[item_key] = item_val
+            if raw_mv and str(raw_mv).isdigit():
+                val_won = float(raw_mv)
+                rounded_in_eok = round(val_won / 100000000) # 1억 미만 반올림
+                market_cap = f"{rounded_in_eok:,}억"
+            else:
+                # fallback: /integration의 문자열 사용
+                total_infos = integration.get("totalInfos", [])
+                for item in total_infos:
+                    if item.get("code") == "marketValue" or item.get("key") in ["시총", "시가총액"]:
+                        market_cap = item.get("value", "-")
+                        break
 
-            # PER / PBR / 배당수익률 (/basic 우선, 없으면 /integration 매핑)
+            # 지표 매핑 (/basic 우선, /integration fallback)
+            total_infos = integration.get("totalInfos", [])
+            integration_dict = {str(item.get("key", "")).strip(): str(item.get("value", "")).strip() for item in total_infos}
+            
             raw_per = basic.get("per", integration_dict.get("PER", "-"))
             raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
             raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
