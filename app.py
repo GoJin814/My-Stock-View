@@ -26,7 +26,7 @@ REQ_HEADERS = {
     "Accept": "application/json, text/plain, */*"
 }
 
-# 1. 실시간 시세 및 밸류에이션 (/basic)
+# 1. 실시간 시세 및 밸류에이션 수집 (/basic)
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -37,7 +37,18 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 연간 재무제표 (/finance/annual)
+# 2. 통합 정보 수집 (/integration) - 시총 원본 텍스트("2조 1,188억") 추출용
+def fetch_integration(code: str):
+    url = f"https://m.stock.naver.com/api/stock/{code}/integration"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return {}
+
+# 3. 연간 재무제표 수집 (/finance/annual)
 def fetch_finance(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
     try:
@@ -56,13 +67,13 @@ def to_num(val):
     except:
         return np.nan
 
-# --- 화면 구성 ---
+# --- 화면 렌더링 ---
 st.title("📋 Scanning_주식 (모바일 뷰어)")
-st.caption("네이버 증권 공식 모바일 API (/basic, /finance/annual) 실시간 연동")
+st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
 
 current_codes = load_codes()
 
-# 종목 추가
+# 1. 종목 추가 영역
 col_add, col_btn = st.columns([3, 1])
 with col_add:
     new_code = st.text_input("➕ 추가할 종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6)
@@ -77,7 +88,7 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# 관리/삭제
+# 2. 종목 관리 및 삭제
 with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False):
     to_delete = st.multiselect("삭제할 종목 선택", current_codes)
     if st.button("선택 삭제"):
@@ -86,42 +97,47 @@ with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False)
             save_codes(current_codes)
             st.rerun()
 
-# 데이터 수집 및 표 생성
+# 3. 테이블 데이터 집계
 if current_codes:
     scan_results = []
     
     with st.spinner("네이버 증권 데이터를 동기화하고 있습니다..."):
         for code in current_codes:
             basic = fetch_basic(code)
+            integration = fetch_integration(code)
             fin_json = fetch_finance(code)
             
-            # 1) /basic 데이터 파싱
+            # 종목명 및 현재가 (/basic)
             stock_name = basic.get("stockName", "-")
-            
-            # 말씀해주신 closePrice 필드 직접 타겟팅
             raw_close = basic.get("closePrice", "-")
-            if raw_close != "-":
-                curr_price_str = f"{raw_close}원" if "원" not in str(raw_close) else str(raw_close)
-            else:
-                curr_price_str = "-"
+            curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
+            
+            # --- [시가총액 추출: code="marketValue" 또는 key="시총" 매핑] ---
+            total_infos = integration.get("totalInfos", [])
+            market_cap = "-"
+            integration_dict = {}
+            
+            for item in total_infos:
+                item_code = str(item.get("code", "")).strip()
+                item_key = str(item.get("key", "")).strip()
+                item_val = str(item.get("value", "")).strip()
                 
-            # 시총 (marketValue는 원 단위 숫자로 들어오므로 억원 단위 환산)
-            market_cap_raw = basic.get("marketValue", "-")
-            if market_cap_raw != "-" and str(market_cap_raw).isdigit():
-                market_cap = f"{int(market_cap_raw) // 100000000:,}억"
-            else:
-                market_cap = str(market_cap_raw)
+                # 사용자가 찾아주신 code="marketValue" 또는 key="시총"으로 우선 매핑
+                if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
+                    market_cap = item_val
+                
+                integration_dict[item_key] = item_val
+
+            # PER / PBR / 배당수익률 (/basic 우선, 없으면 /integration 매핑)
+            raw_per = basic.get("per", integration_dict.get("PER", "-"))
+            raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
+            raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
             
-            # PER / PBR / 배당수익률
-            raw_per = basic.get("per", "-")
-            raw_pbr = basic.get("pbr", "-")
-            raw_div = basic.get("dividendYield", "-")
-            
-            per_val = f"{raw_per}배" if (raw_per not in ["-", "N/A", None]) else "-"
-            pbr_val = f"{raw_pbr}배" if (raw_pbr not in ["-", "N/A", None]) else "-"
+            per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
+            pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # 2) /finance/annual 재무제표 파싱
+            # 연간 재무제표 (/finance/annual)
             fin_data = {
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
