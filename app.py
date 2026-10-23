@@ -8,7 +8,6 @@ st.set_page_config(page_title="종목Scan 대시보드", layout="wide")
 
 SAVE_FILE = "saved_codes.txt"
 
-# 1. 영구 저장된 종목코드 목록 읽기
 def load_codes():
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
@@ -16,13 +15,12 @@ def load_codes():
             return list(dict.fromkeys(codes))
     return ["178320", "001130", "086450", "007690", "095660", "161890"]
 
-# 2. 종목코드 영구 저장
 def save_codes(codes):
     with open(SAVE_FILE, "w", encoding="utf-8") as f:
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
-# 3. 네이버 모바일 통합 정보 수집 (현재가, 시총, 실시간 PER/PBR, 배당수익률)
+# 1. 네이버 모바일 통합 정보 수집 (현재가, 시총, PER, PBR, 배당수익률 등)
 def get_naver_summary(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     headers = {
@@ -36,81 +34,99 @@ def get_naver_summary(code: str):
         pass
     return None
 
-# 4. 네이버 모바일 연간 재무제표 전용 JSON API 수집
-# (사용자 제공 URL: m.stock.naver.com/domestic/stock/{code}/finance/annual 의 원천 API)
-def get_naver_annual_finance_api(code: str):
-    url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
-    }
-    
+# 2. 네이버 기업정보 재무제표 원본 테이블 수집 (가장 확실한 HTML 방식 - 블록 우회 헤더 적용)
+def get_naver_financials_direct(code: str):
     fin_data = {
         "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan, 
         "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
     }
     
+    # 네이버페이 증권이 Financial Highlight를 가져오는 WiseReport 프레임 주소
+    url = f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={code}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Referer": "https://navercomp.wisereport.co.kr/"
+    }
+    
     try:
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code != 200:
-            return fin_data
+        resp = requests.get(url, headers=headers, timeout=7)
+        if resp.status_code == 200:
+            tables = pd.read_html(resp.text)
             
-        data = res.json()
-        
-        # 날짜 헤더 목록 (예: ['2021.12', '2022.12', '2023.12', '2024.12(E)'])
-        date_list = data.get("dates", [])
-        if not date_list:
-            return fin_data
-            
-        # (E) 추정치가 없는 가장 최근 확정 결산 인덱스 선택
-        actual_indices = [i for i, d in enumerate(date_list) if "(E)" not in str(d)]
-        recent_idx = actual_indices[-1] if actual_indices else 0
-        prev_idx = actual_indices[-2] if len(actual_indices) >= 2 else None
-        
-        # 재무 계정 테이블 리스트 탐색
-        for table in data.get("tables", []):
-            for row in table.get("rows", []):
-                title = row.get("title", "").strip()
-                values = row.get("values", [])
+            # 11~14번째 인근 또는 '주요재무정보'가 포함된 테이블 탐색
+            target_df = None
+            for t in tables:
+                col_text = " ".join([str(c) for c in t.columns.values])
+                if "주요재무정보" in col_text or "매출액" in t.to_string():
+                    target_df = t
+                    break
+                    
+            if target_df is not None:
+                # 2단 헤더를 평탄화 (예: 2023/12, 2024/12 등)
+                if isinstance(target_df.columns, pd.MultiIndex):
+                    target_df.columns = [f"{c[1]}" if c[1] else str(c[0]) for c in target_df.columns]
                 
-                def parse_val(idx):
-                    if idx is not None and idx < len(values):
-                        raw = str(values[idx]).replace(",", "").strip()
-                        try:
-                            return float(raw)
-                        except:
-                            return np.nan
-                    return np.nan
+                # 첫 번째 열을 계정과목 열로 지정
+                item_col = target_df.columns[0]
+                
+                # 연간 실적 컬럼 찾기 (보통 앞쪽 4~5개 컬럼이 연간 실적)
+                date_cols = [c for c in target_df.columns[1:] if ("20" in str(c) or "/12" in str(c))]
+                
+                # (E) 추정치가 안 붙은 가장 최근 확정 결산 컬럼
+                actual_cols = [c for c in date_cols if "(E)" not in str(c)]
+                
+                recent_col = actual_cols[-1] if actual_cols else (date_cols[0] if date_cols else None)
+                prev_col = actual_cols[-2] if len(actual_cols) >= 2 else None
 
-                if "매출액" in title:
-                    c_sales = parse_val(recent_idx)
-                    p_sales = parse_val(prev_idx) if prev_idx is not None else np.nan
+                if recent_col:
+                    def parse_row(name):
+                        for _, row in target_df.iterrows():
+                            title = str(row[item_col]).strip()
+                            if name in title:
+                                val_str = str(row[recent_col]).replace(",", "").strip()
+                                try:
+                                    return float(val_str)
+                                except:
+                                    return np.nan
+                        return np.nan
+
+                    def parse_prev(name):
+                        if not prev_col:
+                            return np.nan
+                        for _, row in target_df.iterrows():
+                            title = str(row[item_col]).strip()
+                            if name in title:
+                                val_str = str(row[prev_col]).replace(",", "").strip()
+                                try:
+                                    return float(val_str)
+                                except:
+                                    return np.nan
+                        return np.nan
+
+                    c_sales = parse_row("매출액")
+                    p_sales = parse_prev("매출액")
+                    
                     fin_data["매출액"] = c_sales
                     if pd.notna(c_sales) and pd.notna(p_sales) and p_sales != 0:
                         fin_data["매출YoY"] = round(((c_sales - p_sales) / abs(p_sales)) * 100, 2)
                         
-                elif "영업이익" in title:
-                    fin_data["영업이익"] = parse_val(recent_idx)
-                elif "당기순이익" in title:
-                    fin_data["당기순이익"] = parse_val(recent_idx)
-                elif "주당배당금" in title or "DPS" in title:
-                    fin_data["DPS"] = parse_val(recent_idx)
-                elif "EPS" in title:
-                    fin_data["EPS"] = parse_val(recent_idx)
-                elif "BPS" in title:
-                    fin_data["BPS"] = parse_val(recent_idx)
-                    
+                    fin_data["영업이익"] = parse_row("영업이익")
+                    fin_data["당기순이익"] = parse_row("당기순이익")
+                    fin_data["DPS"] = parse_row("주당배당금")
+                    fin_data["EPS"] = parse_row("EPS")
+                    fin_data["BPS"] = parse_row("BPS")
     except Exception:
         pass
         
     return fin_data
 
-# --- 대시보드 화면 렌더링 ---
+# --- UI 화면 ---
 st.title("📋 Scanning_주식 (모바일 뷰어)")
-st.caption("네이버페이 증권 모바일 연간 재무 API 직접 연동")
+st.caption("네이버페이 증권 데이터 기반 실시간 자동 파싱 시스템")
 
 current_codes = load_codes()
 
-# 1. 종목 추가 영역
+# 1. 새 종목 추가 영역
 col_add, col_btn = st.columns([3, 1])
 with col_add:
     new_code = st.text_input("➕ 추가할 종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6)
@@ -125,7 +141,7 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# 2. 관리/삭제 아코디언
+# 2. 관리/삭제
 with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False):
     to_delete = st.multiselect("삭제할 종목 선택", current_codes)
     if st.button("선택 삭제"):
@@ -134,37 +150,40 @@ with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False)
             save_codes(current_codes)
             st.rerun()
 
-# 3. 데이터 집계 및 표 렌더링
+# 3. 데이터 집계 및 테이블 출력
 if current_codes:
     scan_results = []
     
-    with st.spinner("네이버 증권에서 최근 결산 재무 데이터를 가져오는 중..."):
+    with st.spinner("네이버 증권에서 재무제표와 실시간 시세를 수집하는 중..."):
         for code in current_codes:
             summary = get_naver_summary(code)
             if not summary or "stockName" not in summary:
                 continue
                 
-            fin = get_naver_annual_finance_api(code)
+            fin = get_naver_financials_direct(code)
             
             # 실시간 시세
             stock_name = summary.get("stockName", "-")
             curr_price = summary.get("dealTrendInfos", [{}])[0].get("closePrice", "0").replace(",", "")
             
-            # totalInfos 파싱 (시가총액, PER, PBR, 배당수익률)
-            total_dict = {item.get("key", "").strip(): item.get("value", "").strip() for item in summary.get("totalInfos", [])}
+            # totalInfos에서 모든 키-값 추출 (키워드 매칭으로 시가총액 안전하게 추출)
+            market_cap = "-"
+            per_val = "-"
+            pbr_val = "-"
+            div_yield = "-"
             
-            market_cap = total_dict.get("시가총액", "-")
-            div_yield = total_dict.get("배당수익률", "-")
-            
-            # 단위 중복("배배") 방지 처리: 이미 '배'가 있으면 그대로 사용
-            def clean_ratio(val_str):
-                if not val_str or val_str in ["-", "N/A"]:
-                    return "-"
-                val_str = val_str.replace("배", "").strip()
-                return f"{val_str}배"
-
-            per_val = clean_ratio(total_dict.get("PER", "-"))
-            pbr_val = clean_ratio(total_dict.get("PBR", "-"))
+            for item in summary.get("totalInfos", []):
+                k = item.get("key", "").strip()
+                v = item.get("value", "").strip()
+                
+                if "시가총액" in k:
+                    market_cap = v
+                elif k == "PER":
+                    per_val = f"{v.replace('배', '').strip()}배" if v not in ["-", "N/A"] else "-"
+                elif k == "PBR":
+                    pbr_val = f"{v.replace('배', '').strip()}배" if v not in ["-", "N/A"] else "-"
+                elif "배당수익률" in k:
+                    div_yield = v
 
             scan_results.append({
                 "종목코드": code,
