@@ -214,4 +214,32 @@ if current_codes:
         result_df,
         column_config={
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small", pinned=True),
-            "종목명": st.column_config.TextColumn("종목명",
+            "종목명": st.column_config.TextColumn("종목명", pinned=True),
+        },
+        disabled=disabled_cols,
+        hide_index=True,
+        use_container_width=True,
+        key="stock_editor"
+    )
+
+    # 선택 항목 일괄 삭제 처리
+    if delete_btn:
+        selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
+        if selected_codes:
+            remaining_codes = [c for c in current_codes if c not in selected_codes]
+            save_codes(remaining_codes)
+            st.success(f"{len(selected_codes)}개 종목 삭제 완료")
+            st.rerun()
+        else:
+            st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
+
+    # CSV 다운로드
+    csv_data = result_df.drop(columns=["선택"]).to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        "📥 조회 결과 CSV 다운로드",
+        data=csv_data,
+        file_name="종목Scan_결과.csv",
+        mime="text/csv"
+    )
+else:
+    st.info("등록된 종목이 없습니다. 상단에서 종목코드를 추가해 주세요.")
