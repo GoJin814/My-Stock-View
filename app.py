@@ -88,16 +88,7 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# 2. 종목 관리 및 삭제
-with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False):
-    to_delete = st.multiselect("삭제할 종목 선택", current_codes)
-    if st.button("선택 삭제"):
-        if to_delete:
-            current_codes = [c for c in current_codes if c not in to_delete]
-            save_codes(current_codes)
-            st.rerun()
-
-# 3. 테이블 데이터 집계
+# 2. 테이블 데이터 집계
 if current_codes:
     scan_results = []
     
@@ -127,7 +118,7 @@ if current_codes:
                 
                 integration_dict[item_key] = item_val
 
-            # PER / PBR / 배당수익률
+            # 실시간 PER / PBR / 배당수익률 (/basic 우선, 없으면 /integration)
             raw_per = basic.get("per", integration_dict.get("PER", "-"))
             raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
             raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
@@ -136,7 +127,7 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # --- [연간 재무제표 rowList 파싱: 정확한 타이틀 일치 적용] ---
+            # 연간 재무제표 rowList 파싱
             fin_data = {
                 "기준연도": "-",
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
@@ -174,7 +165,6 @@ if current_codes:
                     prev_val_str = prev_item.get("value") if isinstance(prev_item, dict) else prev_item
                     prev_v = to_num(prev_val_str)
 
-                    # 완전 일치(==)로 영업이익률 등 다른 항목의 오버라이트 방지
                     if raw_title in ["매출액", "수익"]:
                         fin_data["매출액"] = cur_v
                         if pd.notna(cur_v) and pd.notna(prev_v) and prev_v != 0:
@@ -190,8 +180,9 @@ if current_codes:
                     elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
                         fin_data["BPS"] = cur_v
 
-            # 순서 변경: 종목명을 첫 번째, 종목코드를 두 번째로 배치
+            # 맨 앞에 체크박스용 '선택' 컬럼 추가
             scan_results.append({
+                "선택": False,
                 "종목명": stock_name,
                 "종목코드": code,
                 "현재가": curr_price_str,
@@ -209,96 +200,18 @@ if current_codes:
                 "현재 PBR": pbr_val
             })
 
-    if scan_results:
-        result_df = pd.DataFrame(scan_results)
+    result_df = pd.DataFrame(scan_results)
 
-        # --- [종목명 고정 스티키(Sticky) HTML/CSS 테이블 렌더링] ---
-        cols = list(result_df.columns)
-        
-        # 헤더 생성
-        th_html = ""
-        for i, col in enumerate(cols):
-            sticky_class = ' class="sticky-col sticky-header"' if i == 0 else ""
-            th_html += f"<th{sticky_class}>{col}</th>"
-            
-        # 본문 생성
-        tb_html = ""
-        for _, row in result_df.iterrows():
-            tb_html += "<tr>"
-            for i, col in enumerate(cols):
-                val = row[col]
-                sticky_class = ' class="sticky-col"' if i == 0 else ""
-                tb_html += f"<td{sticky_class}>{val}</td>"
-            tb_html += "</tr>"
+    # 3. 일괄 삭제 및 동작 버튼 영역
+    btn_col1, btn_col2 = st.columns([1.5, 6])
+    with btn_col1:
+        delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
 
-        sticky_table_style = f"""
-        <style>
-        .table-container {{
-            width: 100%;
-            overflow-x: auto;
-            position: relative;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            background-color: #ffffff;
-        }}
-        .sticky-table {{
-            border-collapse: separate;
-            border-spacing: 0;
-            width: 100%;
-            font-size: 14px;
-            text-align: center;
-            white-space: nowrap;
-        }}
-        .sticky-table th, .sticky-table td {{
-            padding: 10px 14px;
-            border-bottom: 1px solid #f0f0f0;
-            border-right: 1px solid #f0f0f0;
-        }}
-        .sticky-table th {{
-            background-color: #f8f9fa;
-            font-weight: 600;
-            color: #333333;
-            border-top: none;
-        }}
-        /* 첫 번째 열(종목명) 고정 스타일 */
-        .sticky-table .sticky-col {{
-            position: sticky;
-            left: 0;
-            background-color: #ffffff;
-            z-index: 2;
-            font-weight: bold;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.06);
-            border-right: 2px solid #e0e0e0;
-        }}
-        .sticky-table th.sticky-header {{
-            background-color: #f1f3f5;
-            z-index: 3;
-        }}
-        .sticky-table tr:hover td {{
-            background-color: #fcfcfc;
-        }}
-        .sticky-table tr:hover td.sticky-col {{
-            background-color: #f8f9fa;
-        }}
-        </style>
-        <div class="table-container">
-            <table class="sticky-table">
-                <thead><tr>{th_html}</tr></thead>
-                <tbody>{tb_html}</tbody>
-            </table>
-        </div>
-        """
-        
-        st.markdown(sticky_table_style, unsafe_allow_html=True)
-        
-        # CSV 다운로드 기능
-        csv = result_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            "📥 조회 결과 CSV 다운로드",
-            data=csv,
-            file_name="종목Scan_결과.csv",
-            mime="text/csv"
-        )
-else:
-    st.info("등록된 종목이 없습니다. 상단에서 종목코드를 추가해 주세요.")
+    # 4. 체크박스 지원 데이터 에디터 테이블 렌더링
+    disabled_cols = [c for c in result_df.columns if c != "선택"]
+    
+    edited_df = st.data_editor(
+        result_df,
+        column_config={
+            "선택": st.column_config.CheckboxColumn("선택", default=False, width="small", pinned=True),
+            "종목명": st.column_config.TextColumn("종목명",
