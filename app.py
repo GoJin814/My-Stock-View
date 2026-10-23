@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import numpy as np
 import os
+import re
 
 st.set_page_config(page_title="종목Scan 대시보드", layout="wide")
 
@@ -26,7 +27,7 @@ REQ_HEADERS = {
     "Accept": "application/json, text/plain, */*"
 }
 
-# 1. 실시간 시세 및 밸류에이션 (/basic)
+# 1. 실시간 현재가 수집 (/basic)
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -37,7 +38,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 (/integration)
+# 2. 통합 정보 수집 (/integration) - 시총 텍스트 파싱용
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -48,7 +49,7 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 (/finance/annual)
+# 3. 연간 재무제표 수집 (/finance/annual)
 def fetch_finance(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
     try:
@@ -66,6 +67,30 @@ def to_clean_float(val):
         return float(str(val).replace(",", "").replace("배", "").replace("%", "").strip())
     except:
         return np.nan
+
+def parse_market_cap_text(text: str) -> float:
+    """'2조 1,188억' 텍스트를 1억 단위 반올림 정수 숫자로 변환"""
+    if not text or text in ["-", "N/A"]:
+        return np.nan
+        
+    text = text.replace(",", "").strip()
+    total_eok = 0.0
+    
+    jo_match = re.search(r'([\d\.]+)\s*조', text)
+    if jo_match:
+        total_eok += float(jo_match.group(1)) * 10000
+        
+    eok_match = re.search(r'([\d\.]+)\s*억', text)
+    if eok_match:
+        total_eok += float(eok_match.group(1))
+        
+    if total_eok == 0.0:
+        try:
+            return round(float(text))
+        except:
+            return np.nan
+            
+    return round(total_eok)
 
 # --- 화면 렌더링 ---
 st.title("📋 Scanning_주식 (모바일 뷰어)")
@@ -97,7 +122,7 @@ with st.expander("📌 등록된 종목 관리 / 개별 삭제", expanded=False)
             save_codes(current_codes)
             st.rerun()
 
-# 3. 데이터 집계
+# 3. 테이블 데이터 집계
 if current_codes:
     scan_results = []
     
@@ -107,28 +132,35 @@ if current_codes:
             integration = fetch_integration(code)
             fin_json = fetch_finance(code)
             
+            # 종목명 및 현재가 (/basic)
             stock_name = basic.get("stockName", "-")
-            
-            # 1) 현재가: 순수 정수형 숫자 추출
             raw_close = basic.get("closePrice")
             curr_price = to_clean_float(raw_close)
             
-            # 2) 시총: 1억 미만 반올림된 순수 숫자(억원 단위)
-            raw_mv = basic.get("marketValue")
-            if raw_mv and str(raw_mv).isdigit():
-                market_cap_eok = round(float(raw_mv) / 100000000)
-            else:
-                market_cap_eok = np.nan
-                
-            # 3) 지표: 순수 float 추출
+            # 시총 텍스트 파싱 (/integration totalInfos 내부)
             total_infos = integration.get("totalInfos", [])
-            integration_dict = {str(item.get("key", "")).strip(): item.get("value") for item in total_infos}
+            raw_cap_text = "-"
+            integration_dict = {}
             
+            for item in total_infos:
+                item_code = str(item.get("code", "")).strip()
+                item_key = str(item.get("key", "")).strip()
+                item_val = str(item.get("value", "")).strip()
+                
+                # 확인해주신 code == "marketValue" 항목 타겟팅
+                if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
+                    raw_cap_text = item_val
+                
+                integration_dict[item_key] = item_val
+                
+            market_cap_eok = parse_market_cap_text(raw_cap_text)
+            
+            # 지표 (/basic 우선, 없으면 /integration)
             per_val = to_clean_float(basic.get("per", integration_dict.get("PER")))
             pbr_val = to_clean_float(basic.get("pbr", integration_dict.get("PBR")))
             div_val = to_clean_float(basic.get("dividendYield", integration_dict.get("배당수익률")))
 
-            # 4) 연간 재무제표: 순수 float 추출
+            # 연간 재무제표 (/finance/annual)
             fin_data = {
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
@@ -171,45 +203,23 @@ if current_codes:
             scan_results.append({
                 "종목코드": code,
                 "종목명": stock_name,
-                "현재가": curr_price,
-                "시총(억)": market_cap_eok,
-                "매출액(억)": fin_data["매출액"],
-                "매출 YoY": fin_data["매출YoY"],
-                "영업이익(억)": fin_data["영업이익"],
-                "당기순익(억)": fin_data["당기순이익"],
-                "DPS": fin_data["DPS"],
-                "배당수익률": div_val,
-                "EPS": fin_data["EPS"],
-                "현재 PER": per_val,
-                "BPS": fin_data["BPS"],
-                "현재 PBR": pbr_val
+                "현재가": f"{int(curr_price):,}원" if pd.notna(curr_price) else "-",
+                "시총(억)": f"{int(market_cap_eok):,}억" if pd.notna(market_cap_eok) else "-",
+                "매출액(억)": f"{fin_data['매출액']:,.0f}억" if pd.notna(fin_data['매출액']) else "-",
+                "매출 YoY": f"{fin_data['매출YoY']:+.1f}%" if pd.notna(fin_data['매출YoY']) else "-",
+                "영업이익(억)": f"{fin_data['영업이익']:,.0f}억" if pd.notna(fin_data['영업이익']) else "-",
+                "당기순익(억)": f"{fin_data['당기순이익']:,.0f}억" if pd.notna(fin_data['당기순이익']) else "-",
+                "DPS": f"{fin_data['DPS']:,.0f}원" if pd.notna(fin_data['DPS']) else "-",
+                "배당수익률": f"{div_val:.2f}%" if pd.notna(div_val) else "-",
+                "EPS": f"{fin_data['EPS']:,.0f}원" if pd.notna(fin_data['EPS']) else "-",
+                "현재 PER": f"{per_val:.2f}배" if pd.notna(per_val) else "-",
+                "BPS": f"{fin_data['BPS']:,.0f}원" if pd.notna(fin_data['BPS']) else "-",
+                "현재 PBR": f"{pbr_val:.2f}배" if pd.notna(pbr_val) else "-"
             })
 
     if scan_results:
         result_df = pd.DataFrame(scan_results)
-        
-        # 순수 숫자로 저장된 데이터에 화면 표시용 포맷팅 적용
-        st.dataframe(
-            result_df,
-            column_config={
-                "종목코드": st.column_config.TextColumn("종목코드"),
-                "종목명": st.column_config.TextColumn("종목명"),
-                "현재가": st.column_config.NumberColumn("현재가", format="%,d원"),
-                "시총(억)": st.column_config.NumberColumn("시총(억)", format="%,d억"),
-                "매출액(억)": st.column_config.NumberColumn("매출액(억)", format="%,d억"),
-                "매출 YoY": st.column_config.NumberColumn("매출 YoY", format="%+.1f%%"),
-                "영업이익(억)": st.column_config.NumberColumn("영업이익(억)", format="%,d억"),
-                "당기순익(억)": st.column_config.NumberColumn("당기순익(억)", format="%,d억"),
-                "DPS": st.column_config.NumberColumn("DPS(원)", format="%,d원"),
-                "배당수익률": st.column_config.NumberColumn("배당수익률", format="%.2f%%"),
-                "EPS": st.column_config.NumberColumn("EPS(원)", format="%,d원"),
-                "현재 PER": st.column_config.NumberColumn("현재 PER", format="%.2f배"),
-                "BPS": st.column_config.NumberColumn("BPS(원)", format="%,d원"),
-                "현재 PBR": st.column_config.NumberColumn("현재 PBR", format="%.2f배"),
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(result_df, use_container_width=True, hide_index=True)
         
         csv = result_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
