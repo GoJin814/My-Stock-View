@@ -26,7 +26,7 @@ REQ_HEADERS = {
     "Accept": "application/json, text/plain, */*"
 }
 
-# 1. 실시간 현재가 수집 (/basic)
+# 1. 실시간 시세 및 밸류에이션 수집 (/basic)
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -37,7 +37,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 수집 (/integration) - 시가총액 원본 텍스트("1조 7,382억원") 추출용
+# 2. 통합 정보 수집 (/integration) - 시총 원본 텍스트("2조 1,188억") 추출용
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -112,17 +112,26 @@ if current_codes:
             raw_close = basic.get("closePrice", "-")
             curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
             
-            # 시가총액 및 지표 추출 (/integration)
+            # --- [시가총액 추출: code="marketValue" 또는 key="시총" 매핑] ---
             total_infos = integration.get("totalInfos", [])
-            total_dict = {item.get("key", "").strip(): item.get("value", "").strip() for item in total_infos}
+            market_cap = "-"
+            integration_dict = {}
             
-            # 2번 방식: '1조 7,382억원' 형태의 원본 텍스트 직접 반영
-            market_cap = total_dict.get("시가총액", "-")
-            
+            for item in total_infos:
+                item_code = str(item.get("code", "")).strip()
+                item_key = str(item.get("key", "")).strip()
+                item_val = str(item.get("value", "")).strip()
+                
+                # 사용자가 찾아주신 code="marketValue" 또는 key="시총"으로 우선 매핑
+                if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
+                    market_cap = item_val
+                
+                integration_dict[item_key] = item_val
+
             # PER / PBR / 배당수익률 (/basic 우선, 없으면 /integration 매핑)
-            raw_per = basic.get("per", total_dict.get("PER", "-"))
-            raw_pbr = basic.get("pbr", total_dict.get("PBR", "-"))
-            raw_div = basic.get("dividendYield", total_dict.get("배당수익률", "-"))
+            raw_per = basic.get("per", integration_dict.get("PER", "-"))
+            raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
+            raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
             
             per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
