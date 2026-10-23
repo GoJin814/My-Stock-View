@@ -190,9 +190,10 @@ if current_codes:
                     elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
                         fin_data["BPS"] = cur_v
 
+            # 순서 변경: 종목명을 첫 번째, 종목코드를 두 번째로 배치
             scan_results.append({
-                "종목코드": code,
                 "종목명": stock_name,
+                "종목코드": code,
                 "현재가": curr_price_str,
                 "시총": market_cap,
                 "기준실적": fin_data["기준연도"],
@@ -210,8 +211,88 @@ if current_codes:
 
     if scan_results:
         result_df = pd.DataFrame(scan_results)
-        st.dataframe(result_df, use_container_width=True, hide_index=True)
+
+        # --- [종목명 고정 스티키(Sticky) HTML/CSS 테이블 렌더링] ---
+        cols = list(result_df.columns)
         
+        # 헤더 생성
+        th_html = ""
+        for i, col in enumerate(cols):
+            sticky_class = ' class="sticky-col sticky-header"' if i == 0 else ""
+            th_html += f"<th{sticky_class}>{col}</th>"
+            
+        # 본문 생성
+        tb_html = ""
+        for _, row in result_df.iterrows():
+            tb_html += "<tr>"
+            for i, col in enumerate(cols):
+                val = row[col]
+                sticky_class = ' class="sticky-col"' if i == 0 else ""
+                tb_html += f"<td{sticky_class}>{val}</td>"
+            tb_html += "</tr>"
+
+        sticky_table_style = f"""
+        <style>
+        .table-container {{
+            width: 100%;
+            overflow-x: auto;
+            position: relative;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            background-color: #ffffff;
+        }}
+        .sticky-table {{
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            font-size: 14px;
+            text-align: center;
+            white-space: nowrap;
+        }}
+        .sticky-table th, .sticky-table td {{
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            border-right: 1px solid #f0f0f0;
+        }}
+        .sticky-table th {{
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #333333;
+            border-top: none;
+        }}
+        /* 첫 번째 열(종목명) 고정 스타일 */
+        .sticky-table .sticky-col {{
+            position: sticky;
+            left: 0;
+            background-color: #ffffff;
+            z-index: 2;
+            font-weight: bold;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+            border-right: 2px solid #e0e0e0;
+        }}
+        .sticky-table th.sticky-header {{
+            background-color: #f1f3f5;
+            z-index: 3;
+        }}
+        .sticky-table tr:hover td {{
+            background-color: #fcfcfc;
+        }}
+        .sticky-table tr:hover td.sticky-col {{
+            background-color: #f8f9fa;
+        }}
+        </style>
+        <div class="table-container">
+            <table class="sticky-table">
+                <thead><tr>{th_html}</tr></thead>
+                <tbody>{tb_html}</tbody>
+            </table>
+        </div>
+        """
+        
+        st.markdown(sticky_table_style, unsafe_allow_html=True)
+        
+        # CSV 다운로드 기능
         csv = result_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
             "📥 조회 결과 CSV 다운로드",
