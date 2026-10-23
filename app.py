@@ -26,7 +26,7 @@ REQ_HEADERS = {
     "Accept": "application/json, text/plain, */*"
 }
 
-# 1. 실시간 시세 및 밸류에이션 수집 (/basic)
+# 1. 실시간 시세 및 밸류에이션 (/basic)
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -37,7 +37,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 수집 (/integration) - 시총 원본 텍스트("2조 1,188억") 추출용
+# 2. 통합 정보 (/integration) - 시총 텍스트 원본 추출용
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -48,7 +48,7 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 수집 (/finance/annual)
+# 3. 연간 재무제표 (/finance/annual)
 def fetch_finance(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
     try:
@@ -112,7 +112,7 @@ if current_codes:
             raw_close = basic.get("closePrice", "-")
             curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
             
-            # --- [시가총액 추출: code="marketValue" 또는 key="시총" 매핑] ---
+            # 시가총액 추출: code="marketValue" 또는 key="시총" 매핑
             total_infos = integration.get("totalInfos", [])
             market_cap = "-"
             integration_dict = {}
@@ -122,13 +122,12 @@ if current_codes:
                 item_key = str(item.get("key", "")).strip()
                 item_val = str(item.get("value", "")).strip()
                 
-                # 사용자가 찾아주신 code="marketValue" 또는 key="시총"으로 우선 매핑
                 if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
                     market_cap = item_val
                 
                 integration_dict[item_key] = item_val
 
-            # PER / PBR / 배당수익률 (/basic 우선, 없으면 /integration 매핑)
+            # PER / PBR / 배당수익률
             raw_per = basic.get("per", integration_dict.get("PER", "-"))
             raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
             raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
@@ -137,45 +136,59 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # 연간 재무제표 (/finance/annual)
+            # --- [연간 재무제표 rowList 파싱] ---
             fin_data = {
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
             }
             
-            data_obj = fin_json.get("data", fin_json) if isinstance(fin_json, dict) else {}
-            dates = data_obj.get("dates", [])
-            tables = data_obj.get("tables", [])
-            
-            if dates and tables:
-                actual_indices = [i for i, d in enumerate(dates) if "(E)" not in str(d)]
-                rec_idx = actual_indices[-1] if actual_indices else (len(dates) - 1)
-                prev_idx = actual_indices[-2] if len(actual_indices) >= 2 else None
-                
-                for t in tables:
-                    for r in t.get("rows", []):
-                        title = r.get("title", "").strip()
-                        vals = r.get("values", [])
-                        if not vals:
-                            continue
-                            
-                        cur_v = to_num(vals[rec_idx]) if rec_idx < len(vals) else np.nan
-                        prev_v = to_num(vals[prev_idx]) if (prev_idx is not None and prev_idx < len(vals)) else np.nan
+            # rowList 추출 (최상위 또는 하위 딕셔너리 탐색)
+            row_list = fin_json.get("rowList", [])
+            if not row_list and isinstance(fin_json, dict):
+                for val in fin_json.values():
+                    if isinstance(val, dict) and "rowList" in val:
+                        row_list = val.get("rowList", [])
+                        break
+
+            if row_list:
+                for row in row_list:
+                    title = row.get("title", "").strip()
+                    columns = row.get("columns", {})
+                    if not columns:
+                        continue
                         
-                        if "매출액" in title:
-                            fin_data["매출액"] = cur_v
-                            if pd.notna(cur_v) and pd.notna(prev_v) and prev_v != 0:
-                                fin_data["매출YoY"] = round(((cur_v - prev_v) / abs(prev_v)) * 100, 2)
-                        elif "영업이익" in title:
-                            fin_data["영업이익"] = cur_v
-                        elif "당기순이익" in title:
-                            fin_data["당기순이익"] = cur_v
-                        elif "주당배당금" in title or "DPS" in title:
-                            fin_data["DPS"] = cur_v
-                        elif "EPS" in title:
-                            fin_data["EPS"] = cur_v
-                        elif "BPS" in title:
-                            fin_data["BPS"] = cur_v
+                    # 연도 정렬 (예: ['202312', '202412', '202512', '202612'])
+                    sorted_years = sorted(list(columns.keys()))
+                    if not sorted_years:
+                        continue
+                        
+                    recent_yr = sorted_years[-1]
+                    prev_yr = sorted_years[-2] if len(sorted_years) >= 2 else None
+                    
+                    # 최근 연도 값 추출
+                    rec_item = columns.get(recent_yr, {})
+                    rec_val_str = rec_item.get("value") if isinstance(rec_item, dict) else rec_item
+                    cur_v = to_num(rec_val_str)
+                    
+                    # 직전 연도 값 추출
+                    prev_item = columns.get(prev_yr, {}) if prev_yr else {}
+                    prev_val_str = prev_item.get("value") if isinstance(prev_item, dict) else prev_item
+                    prev_v = to_num(prev_val_str)
+
+                    if "매출액" in title:
+                        fin_data["매출액"] = cur_v
+                        if pd.notna(cur_v) and pd.notna(prev_v) and prev_v != 0:
+                            fin_data["매출YoY"] = round(((cur_v - prev_v) / abs(prev_v)) * 100, 2)
+                    elif "영업이익" in title:
+                        fin_data["영업이익"] = cur_v
+                    elif "당기순이익" in title:
+                        fin_data["당기순이익"] = cur_v
+                    elif "주당배당금" in title or "DPS" in title:
+                        fin_data["DPS"] = cur_v
+                    elif "EPS" in title:
+                        fin_data["EPS"] = cur_v
+                    elif "BPS" in title:
+                        fin_data["BPS"] = cur_v
 
             scan_results.append({
                 "종목코드": code,
