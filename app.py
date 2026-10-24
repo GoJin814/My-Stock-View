@@ -143,7 +143,7 @@ def fetch_all_stock_data(codes_tuple):
 
         dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
-        # 1. 기본 & 시세
+        # 기본 & 시세
         scan_basic.append({
             "선택": False,
             "종목명": stock_name,
@@ -156,9 +156,10 @@ def fetch_all_stock_data(codes_tuple):
             "배당수익률": div_val
         })
 
-        # 2. 실적 & 성장성
+        # 실적 & 성장성
         scan_perf.append({
             "종목명": stock_name,
+            "종목코드": code,
             "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
             "영업익_직전": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
             "순익_직전": f"{fin_info['prev_np']:,.0f}억" if pd.notna(fin_info['prev_np']) else "-",
@@ -170,7 +171,7 @@ def fetch_all_stock_data(codes_tuple):
             "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
         })
 
-        # 3. 주당 가치
+        # 주당 가치
         p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
         p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
         c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
@@ -178,6 +179,7 @@ def fetch_all_stock_data(codes_tuple):
 
         scan_share.append({
             "종목명": stock_name,
+            "종목코드": code,
             "PER_직전": p_per_str, "PBR_직전": p_pbr_str, "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
             "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-", "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
             "PER_최근": c_per_str, "PBR_최근": c_pbr_str, "ROE_최근": f"{fin_info['cur_roe']:.2f}%" if pd.notna(fin_info['cur_roe']) else "-",
@@ -207,7 +209,6 @@ def fetch_all_stock_data(codes_tuple):
 
     return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
-# 상단 헤더
 title_col, sync_col = st.columns([5, 1])
 with title_col:
     st.title("Scanning_주식")
