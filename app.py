@@ -8,7 +8,7 @@ from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list,
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_perf import render_tab_perf
 from tabs.tab_share import render_tab_share
-from tabs.tab_market import render_tab_market
+from tabs.tab_market import render_tab_market, load_market_cache, save_market_cache
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 apply_custom_styles()
@@ -210,7 +210,6 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 탭 생성 및 각 모듈 함수 호출
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "📈 실적 & 성장성 (2개년 비교)", 
@@ -228,12 +227,12 @@ if current_codes:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
     with tab4:
-        render_tab_market()
+        edited_market_df = render_tab_market()
 
-    # 하단 컨트롤 (선택 삭제 & CSV 다운로드)
+    # 하단 컨트롤 (선택 항목 삭제 & CSV 다운로드)
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
-        delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
+        delete_btn = st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True)
     with btn_col2:
         csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
         st.download_button(
@@ -245,14 +244,31 @@ if current_codes:
         )
 
     if delete_btn:
+        deleted_anything = False
+
+        # 1. 종목 삭제 판별
         selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
         if selected_codes:
             remaining_codes = [c for c in current_codes if c not in selected_codes]
             save_codes(remaining_codes)
-            st.success(f"{len(selected_codes)}개 종목 삭제 완료")
+            st.success(f"종목 {len(selected_codes)}개 삭제 완료")
+            deleted_anything = True
+
+        # 2. 국내지수 일자 삭제 판별
+        if edited_market_df is not None and not edited_market_df.empty:
+            selected_dates = edited_market_df[edited_market_df["선택"] == True]["일시"].tolist()
+            if selected_dates:
+                m_cache = load_market_cache()
+                for d in selected_dates:
+                    m_cache.pop(d, None)
+                save_market_cache(m_cache)
+                st.success(f"지수 데이터 {len(selected_dates)}일자 삭제 완료")
+                deleted_anything = True
+
+        if deleted_anything:
             st.rerun()
         else:
-            st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요. (기본 & 시세 탭)")
+            st.warning("삭제할 항목(종목 또는 일자)의 체크박스를 먼저 선택해 주세요.")
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
