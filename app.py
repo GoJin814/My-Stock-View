@@ -7,9 +7,8 @@ import re
 from styles import apply_custom_styles
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from tabs.tab_basic import render_tab_basic
-from tabs.tab_perf import render_tab_perf
 from tabs.tab_share import render_tab_share
-from tabs.tab_safety import render_tab_safety
+from tabs.tab_perf import render_tab_perf
 from tabs.tab_market import render_tab_market, render_market_inputs, load_market_cache, save_market_cache
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
@@ -34,7 +33,6 @@ def fetch_all_stock_data(codes_tuple):
     scan_basic = []
     scan_perf = []
     scan_share = []
-    scan_safety = []
     full_csv_records = []
     prev_years = []
     latest_years = []
@@ -78,11 +76,6 @@ def fetch_all_stock_data(codes_tuple):
             "cur_roe": np.nan, "prev_roe": np.nan,
             "cur_per": np.nan, "prev_per": np.nan,
             "cur_pbr": np.nan, "prev_pbr": np.nan,
-            # 안전성 요약 정규 지표
-            "cur_debt_ratio": np.nan, "prev_debt_ratio": np.nan,
-            "cur_quick_ratio": np.nan, "prev_quick_ratio": np.nan,
-            "cur_reserve_ratio": np.nan, "prev_reserve_ratio": np.nan,
-            "cur_cf": np.nan, "prev_cf": np.nan,
         }
 
         row_list = extract_row_list(fin_json)
@@ -142,19 +135,6 @@ def fetch_all_stock_data(codes_tuple):
                 elif "PBR" in raw_title:
                     fin_info["cur_pbr"] = c_val
                     fin_info["prev_pbr"] = p_val
-                # 안전성 지표 파싱
-                elif "부채비율" in raw_title:
-                    fin_info["cur_debt_ratio"] = c_val
-                    fin_info["prev_debt_ratio"] = p_val
-                elif "당좌비율" in raw_title:
-                    fin_info["cur_quick_ratio"] = c_val
-                    fin_info["prev_quick_ratio"] = p_val
-                elif "유보율" in raw_title:
-                    fin_info["cur_reserve_ratio"] = c_val
-                    fin_info["prev_reserve_ratio"] = p_val
-                elif any(k in raw_title for k in ["영업활동으로인한현금흐름", "영업활동현금흐름", "영업현금흐름"]):
-                    fin_info["cur_cf"] = c_val
-                    fin_info["prev_cf"] = p_val
 
         if fin_info["prev_yr"] != "-":
             prev_years.append(fin_info["prev_yr"])
@@ -208,19 +188,6 @@ def fetch_all_stock_data(codes_tuple):
             "_num_EPS_직전": fin_info['prev_eps'], "_num_BPS_직전": fin_info['prev_bps'],
         })
 
-        # 4. 안전성 & 현금흐름
-        scan_safety.append({
-            "종목명": stock_name,
-            "부채비율_직전": f"{fin_info['prev_debt_ratio']:.1f}%" if pd.notna(fin_info['prev_debt_ratio']) else "-",
-            "당좌비율_직전": f"{fin_info['prev_quick_ratio']:.1f}%" if pd.notna(fin_info['prev_quick_ratio']) else "-",
-            "유보율_직전": f"{fin_info['prev_reserve_ratio']:,.0f}%" if pd.notna(fin_info['prev_reserve_ratio']) else "-",
-            "영업현금_직전": f"{fin_info['prev_cf']:,.0f}억" if pd.notna(fin_info['prev_cf']) else "-",
-            "부채비율_최근": f"{fin_info['cur_debt_ratio']:.1f}%" if pd.notna(fin_info['cur_debt_ratio']) else "-",
-            "당좌비율_최근": f"{fin_info['cur_quick_ratio']:.1f}%" if pd.notna(fin_info['cur_quick_ratio']) else "-",
-            "유보율_최근": f"{fin_info['cur_reserve_ratio']:,.0f}%" if pd.notna(fin_info['cur_reserve_ratio']) else "-",
-            "영업현금_최근": f"{fin_info['cur_cf']:,.0f}억" if pd.notna(fin_info['cur_cf']) else "-",
-        })
-
         full_csv_records.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
             "직전연도": fin_info['prev_yr'], "최근연도": fin_info['latest_yr'],
@@ -232,17 +199,13 @@ def fetch_all_stock_data(codes_tuple):
             "ROE_직전": fin_info['prev_roe'], "ROE_최근": fin_info['cur_roe'],
             "PER_직전": fin_info['prev_per'], "PER_최근": fin_info['cur_per'],
             "PBR_직전": fin_info['prev_pbr'], "PBR_최근": fin_info['cur_pbr'],
-            "부채비율_직전": fin_info['prev_debt_ratio'], "부채비율_최근": fin_info['cur_debt_ratio'],
-            "당좌비율_직전": fin_info['prev_quick_ratio'], "당좌비율_최근": fin_info['cur_quick_ratio'],
-            "유보율_직전": fin_info['prev_reserve_ratio'], "유보율_최근": fin_info['cur_reserve_ratio'],
-            "영업현금_직전": fin_info['prev_cf'], "영업현금_최근": fin_info['cur_cf'],
             "DPS": fin_info['cur_dps'], "현재PER": per_val, "현재PBR": pbr_val, "배당수익률": div_val
         })
 
     most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
     most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
 
-    return scan_basic, scan_perf, scan_share, scan_safety, full_csv_records, most_prev_yr, most_latest_yr
+    return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
 # 상단 헤더
 title_col, sync_col = st.columns([5, 1])
@@ -257,12 +220,11 @@ with sync_col:
 current_codes = load_codes()
 
 if current_codes:
-    scan_basic, scan_perf, scan_share, scan_safety, full_csv_records, most_prev_yr, most_latest_yr = fetch_all_stock_data(tuple(current_codes))
+    scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = fetch_all_stock_data(tuple(current_codes))
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
-    df_safety = pd.DataFrame(scan_safety)
 
     # 1. 정렬 제어
     sort_col1, sort_col2, _ = st.columns([2, 1.5, 3.5])
@@ -314,7 +276,6 @@ if current_codes:
     df_basic = df_basic[valid_mask].copy()
     df_perf = df_perf[valid_mask].copy()
     df_share = df_share[valid_mask].copy()
-    df_safety = df_safety[valid_mask].copy()
 
     # 정렬 수행
     metric_map = {
@@ -338,19 +299,16 @@ if current_codes:
         df_basic = df_basic.loc[sorted_indices].reset_index(drop=True)
         df_perf = df_perf.loc[sorted_indices].reset_index(drop=True)
         df_share = df_share.loc[sorted_indices].reset_index(drop=True)
-        df_safety = df_safety.loc[sorted_indices].reset_index(drop=True)
     else:
         df_basic = df_basic.reset_index(drop=True)
         df_perf = df_perf.reset_index(drop=True)
         df_share = df_share.reset_index(drop=True)
-        df_safety = df_safety.reset_index(drop=True)
 
-    # 5개 탭 렌더링
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # 4개 탭 렌더링
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "💰 주당 가치 (2개년 비교)",
         "📈 실적 & 성장성 (2개년 비교)", 
-        "🛡️ 안전성 & 현금흐름 (2개년 비교)",
         "🌐 국내지수 Monitor"
     ])
 
@@ -364,9 +322,6 @@ if current_codes:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
     with tab4:
-        render_tab_safety(df_safety, most_prev_yr, most_latest_yr)
-
-    with tab5:
         edited_market_df = render_tab_market()
 
     # 하단 컨트롤
