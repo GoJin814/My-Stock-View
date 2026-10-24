@@ -7,10 +7,7 @@ REQ_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
     "Referer": "https://m.stock.naver.com/",
     "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-origin"
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
 }
 
 def to_num(val):
@@ -54,19 +51,9 @@ def fetch_integration(code: str):
     return {}
 
 def fetch_finance(code: str):
-    url_front = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
+    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
     try:
-        res = requests.get(url_front, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            if data:
-                return data
-    except Exception:
-        pass
-        
-    url_legacy = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
-    try:
-        res = requests.get(url_legacy, headers=REQ_HEADERS, timeout=5)
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
             return res.json()
     except Exception:
@@ -74,7 +61,7 @@ def fetch_finance(code: str):
     return {}
 
 def fetch_financial_statement(code: str):
-    """재무분석 -> 재무상태표 및 현금흐름표 상세 API"""
+    """재무상태표 및 현금흐름표 상세 API (순현금, 순차입금, FCF 산출용)"""
     url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual/financialStatement?code={code}"
     try:
         res = requests.get(url, headers=REQ_HEADERS, timeout=5)
