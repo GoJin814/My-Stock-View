@@ -501,35 +501,79 @@ if current_codes:
             divider_indices=[5]
         )
 
-    with tab4:
-        st.subheader("📝 국내지수 및 자금동향 직접 입력 / 관리")
+with tab4:
+        st.subheader("📝 국내지수 및 자금동향 관리")
         
         market_cache = load_market_cache()
 
+        # 1. 파일 일괄 가져오기 (CSV / JSON)
+        with st.expander("📂 기존 데이터 일괄 불러오기 (CSV / JSON 파일 업로드)", expanded=False):
+            uploaded_file = st.file_uploader("파일 선택", type=["csv", "json"], key="market_file_uploader")
+            if uploaded_file is not None:
+                if st.button("📥 데이터 병합하여 저장하기", type="primary"):
+                    try:
+                        count = 0
+                        if uploaded_file.name.endswith(".json"):
+                            imported_data = json.load(uploaded_file)
+                            for k, v in imported_data.items():
+                                dt_norm = normalize_date(k)
+                                if dt_norm:
+                                    market_cache[dt_norm] = v
+                                    count += 1
+                        else:
+                            df_up = pd.read_csv(uploaded_file)
+                            # 컬럼명 유연 매핑
+                            for _, row in df_up.iterrows():
+                                dt_raw = row.get("일시") or row.get("날짜") or row.get("Date") or row.iloc[0]
+                                dt_norm = normalize_date(dt_raw)
+                                if not dt_norm:
+                                    continue
+                                
+                                k_v = to_num(row.get("KOSPI") or row.get("코스피"))
+                                mcap_v = row.get("시가총액(억원)") or row.get("시총") or row.get("시가총액") or "-"
+                                per_v = row.get("PER") or "-"
+                                pbr_v = row.get("PBR") or "-"
+                                dep_v = to_num(row.get("고객예탁금(억원)") or row.get("고객예탁금") or row.get("예탁금"))
+                                crd_v = to_num(row.get("신용잔고(억원)") or row.get("신용잔고") or row.get("신용융자"))
+                                fx_v = to_num(row.get("환율") or row.get("원달러환율"))
+
+                                market_cache[dt_norm] = {
+                                    "KOSPI": k_v if pd.notna(k_v) else None,
+                                    "시가총액(억원)": str(mcap_v).strip(),
+                                    "PER": str(per_v).strip(),
+                                    "PBR": str(pbr_v).strip(),
+                                    "고객예탁금(억원)": dep_v if pd.notna(dep_v) else None,
+                                    "신용잔고(억원)": crd_v if pd.notna(crd_v) else None,
+                                    "환율": fx_v if pd.notna(fx_v) else None
+                                }
+                                count += 1
+                        save_market_cache(market_cache)
+                        st.success(f"총 {count}건의 데이터가 성공적으로 병합되었습니다.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"파일 불러오기 중 오류가 발생했습니다: {e}")
+
+        # 2. 직접 입력 폼 (증감 항목 제외, 시총/예탁금/신용 배치)
         with st.form("market_input_form", clear_on_submit=False):
-            r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
+            r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
             with r1_c1:
                 in_date = st.date_input("기준일자", value=date.today())
             with r1_c2:
                 in_kospi = st.text_input("KOSPI (포인트)", placeholder="예: 2650.50")
             with r1_c3:
-                in_mcap = st.text_input("시가총액(억원)", placeholder="예: 2,150,000")
+                in_mcap = st.text_input("시가총액(억원)", placeholder="예: 2150000")
             with r1_c4:
-                in_per = st.text_input("PER (배)", placeholder="예: 12.50")
-            with r1_c5:
-                in_pbr = st.text_input("PBR (배)", placeholder="예: 0.95")
-
-            r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
-            with r2_c1:
-                in_dep = st.text_input("고객예탁금(억원)", placeholder="예: 54000")
-            with r2_c2:
-                in_dep_diff = st.text_input("예탁금 증감(억원)", placeholder="예: +1200")
-            with r2_c3:
-                in_credit = st.text_input("신용잔고(억원)", placeholder="예: 18000")
-            with r2_c4:
-                in_credit_diff = st.text_input("신용 증감(억원)", placeholder="예: -350")
-            with r2_c5:
                 in_fx = st.text_input("환율 (원)", placeholder="예: 1350.5")
+
+            r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+            with r2_c1:
+                in_per = st.text_input("PER (배)", placeholder="예: 12.50")
+            with r2_c2:
+                in_pbr = st.text_input("PBR (배)", placeholder="예: 0.95")
+            with r2_c3:
+                in_dep = st.text_input("고객예탁금(억원)", placeholder="예: 54000")
+            with r2_c4:
+                in_credit = st.text_input("신용잔고(억원)", placeholder="예: 18000")
 
             f_btn1, f_btn2, _ = st.columns([1.5, 1.5, 3])
             with f_btn1:
@@ -542,9 +586,7 @@ if current_codes:
         if save_manual_btn:
             k_val = to_num(in_kospi)
             dep_val = to_num(in_dep)
-            dep_d_val = to_num(in_dep_diff)
             crd_val = to_num(in_credit)
-            crd_d_val = to_num(in_credit_diff)
             fx_val = to_num(in_fx)
 
             market_cache[target_dt_str] = {
@@ -553,9 +595,7 @@ if current_codes:
                 "PER": in_per.strip() if in_per.strip() else "-",
                 "PBR": in_pbr.strip() if in_pbr.strip() else "-",
                 "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
-                "증감(억원)": dep_d_val if pd.notna(dep_d_val) else None,
                 "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
-                "증감(신용)(억원)": crd_d_val if pd.notna(crd_d_val) else None,
                 "환율": fx_val if pd.notna(fx_val) else None
             }
             save_market_cache(market_cache)
@@ -571,7 +611,7 @@ if current_codes:
             else:
                 st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
-        # 테이블 렌더링
+        # 3. 테이블 렌더링 (고객예탁금/시가총액, 신용잔고/시가총액 비율 계산)
         if market_cache:
             sorted_dates = sorted(market_cache.keys(), reverse=True)
             table_rows = []
@@ -581,48 +621,46 @@ if current_codes:
                 k_val = info.get("KOSPI")
                 kospi_str = f"{float(k_val):,.2f}" if (k_val is not None and not np.isnan(k_val)) else "-"
 
+                mcap_raw = info.get("시가총액(억원)", "-")
+                mcap_num = to_num(mcap_raw)
+                mcap_str = f"{mcap_num:,.0f}" if pd.notna(mcap_num) else str(mcap_raw)
+
                 dep_val = info.get("고객예탁금(억원)")
-                dep_diff = info.get("증감(억원)")
                 cust_dep_str = f"{float(dep_val):,.0f}" if (dep_val is not None and not np.isnan(dep_val)) else "-"
-                cust_diff_str = f"{float(dep_diff):+,.0f}" if (dep_diff is not None and not np.isnan(dep_diff)) else "-"
 
                 crd_val = info.get("신용잔고(억원)")
-                crd_diff = info.get("증감(신용)(억원)")
                 credit_tot_str = f"{float(crd_val):,.0f}" if (crd_val is not None and not np.isnan(crd_val)) else "-"
-                credit_diff_str = f"{float(crd_diff):+,.0f}" if (crd_diff is not None and not np.isnan(crd_diff)) else "-"
 
                 ex_val = info.get("환율")
                 ex_str = f"{float(ex_val):,.1f}원" if (ex_val is not None and not np.isnan(ex_val)) else "-"
 
-                # 유동성 비율 계산
-                dep_ratio_str = "-"
-                credit_ratio_str = "-"
-                if k_val and dep_val and float(k_val) > 0:
-                    dep_ratio_str = f"{(float(dep_val) / float(k_val)):.2f}"
-                if k_val and crd_val and float(k_val) > 0:
-                    credit_ratio_str = f"{(float(crd_val) / float(k_val)):.2f}"
+                # 고객예탁금 / 시가총액, 신용잔고 / 시가총액 (%)
+                dep_to_mcap_str = "-"
+                crd_to_mcap_str = "-"
+                if pd.notna(mcap_num) and mcap_num > 0:
+                    if dep_val is not None and not np.isnan(dep_val):
+                        dep_to_mcap_str = f"{(float(dep_val) / mcap_num) * 100:.2f}%"
+                    if crd_val is not None and not np.isnan(crd_val):
+                        crd_to_mcap_str = f"{(float(crd_val) / mcap_num) * 100:.2f}%"
 
                 table_rows.append({
                     "일시": dt,
                     "KOSPI": kospi_str,
-                    "시가총액(억원)": str(info.get("시가총액(억원)", "-")),
+                    "시가총액(억원)": mcap_str,
                     "PER": str(info.get("PER", "-")),
                     "PBR": str(info.get("PBR", "-")),
                     "고객예탁금(억원)": cust_dep_str,
-                    "증감(억원)": cust_diff_str,
                     "신용잔고(억원)": credit_tot_str,
-                    "증감(억원)": credit_diff_str,
                     "환율": ex_str,
-                    "고객예탁금/지수": dep_ratio_str,
-                    "신용잔고/지수": credit_ratio_str
+                    "고객예탁금/시가총액": dep_to_mcap_str,
+                    "신용잔고/시가총액": crd_to_mcap_str
                 })
 
             df_market_rendered = pd.DataFrame(table_rows)
             st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
-            render_single_header_table(df_market_rendered, divider_indices=[4, 6, 8])
+            render_single_header_table(df_market_rendered, divider_indices=[4, 6])
         else:
-            st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하고 [데이터 저장 / 갱신]을 눌러주세요.")
-
+            st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
     # 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드)
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
