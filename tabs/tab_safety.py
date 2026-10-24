@@ -9,24 +9,28 @@ def render_tab_safety(df_safety: pd.DataFrame, prev_yr: str, latest_yr: str):
 
     desired_cols = [
         "종목명",
-        "부채비율_직전", "순현금_직전", "FCF_직전",
-        "부채비율_최근", "순현금_최근", "FCF_최근"
+        "부채비율_직전", "순현금_직전", "순차입금_직전", "FCF_직전",
+        "부채비율_최근", "순현금_최근", "순차입금_최근", "FCF_최근"
     ]
     display_df = df_safety[[c for c in desired_cols if c in df_safety.columns]]
 
     top_headers_safety = [
         ("종목명", 1, False),
-        (prev_yr, 3, True),
-        (latest_yr, 3, False)
+        (prev_yr, 4, True),
+        (latest_yr, 4, False)
     ]
     sub_headers_safety = [
-        "부채비율", "순현금성자산", "FCF",
-        "부채비율", "순현금성자산", "FCF"
+        "부채비율", "순현금성자산", "순차입금", "FCF",
+        "부채비율", "순현금성자산", "순차입금", "FCF"
     ]
 
     render_multi_header_table(
         display_df,
         top_headers=top_headers_safety,
         sub_headers=sub_headers_safety,
-        divider_indices=[3]
+        divider_indices=[4]
     )
+
+    # 표 하단 계산 수식 안내
+    st.caption("※ **순현금성자산** = 현금및현금성자산 + 단기금융상품 (단위: 억원)")
+    st.caption("※ **순차입금** = 총차입금(단기차입금 + 유동성장기부채 + 사채 + 장기차입금) - 순현금성자산 (단위: 억원)")
