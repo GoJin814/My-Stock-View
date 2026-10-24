@@ -661,6 +661,7 @@ with tab4:
             render_single_header_table(df_market_rendered, divider_indices=[4, 6])
         else:
             st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
+            
     # 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드)
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
