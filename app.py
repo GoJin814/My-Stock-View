@@ -117,7 +117,7 @@ st.title("Scanning_주식")
 
 current_codes = load_codes()
 
-# --- 2. 테이블 데이터 수집 및 렌더링 ---
+# --- 2. 데이터 수집 ---
 if current_codes:
     scan_results = []
     
@@ -225,30 +225,47 @@ if current_codes:
 
     result_df = pd.DataFrame(scan_results)
 
-    # 테이블 렌더링 (종목명 고정)
-    disabled_cols = [c for c in result_df.columns if c != "선택"]
-    edited_df = st.data_editor(
-        result_df,
-        column_config={
-            "선택": st.column_config.CheckboxColumn("선택", default=False, width="small", pinned=True),
-            "종목명": st.column_config.TextColumn("종목명", pinned=True),
-        },
-        disabled=disabled_cols,
-        hide_index=True,
-        use_container_width=True,
-        key="stock_editor"
-    )
+    # --- 3. 탭(Tab) 기반 화면 분리 ---
+    tab1, tab2, tab3 = st.tabs(["📊 기본 & 시세", "📈 실적 & 성장성", "💰 주당 가치"])
 
-    # --- 3. 표 바로 아래 컨트롤 영역 ---
+    with tab1:
+        # 기본 및 밸류에이션 (체크박스 포함)
+        df_basic = result_df[["선택", "종목명", "종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "배당수익률"]]
+        disabled_cols1 = [c for c in df_basic.columns if c != "선택"]
+        
+        edited_df = st.data_editor(
+            df_basic,
+            column_config={
+                "선택": st.column_config.CheckboxColumn("선택", default=False, width="small", pinned=True),
+                "종목명": st.column_config.TextColumn("종목명", pinned=True),
+            },
+            disabled=disabled_cols1,
+            hide_index=True,
+            use_container_width=True,
+            key="tab1_editor"
+        )
+
+    with tab2:
+        # 실적 및 성장성
+        df_perf = result_df[["종목명", "기준실적", "매출액(억)", "매출 YoY", "영업이익(억)", "당기순익(억)"]]
+        st.dataframe(df_perf, hide_index=True, use_container_width=True)
+
+    with tab3:
+        # 주당 지표 (EPS/BPS/DPS)
+        df_share = result_df[["종목명", "기준실적", "EPS(원)", "BPS(원)", "DPS(원)", "배당수익률"]]
+        st.dataframe(df_share, hide_index=True, use_container_width=True)
+
+    # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
     with btn_col2:
+        # 전체 통합 데이터 CSV 다운로드
         csv_data = result_df.drop(columns=["선택"]).to_csv(index=False).encode('utf-8-sig')
         st.download_button(
-            "📥 조회 결과 CSV 다운로드",
+            "📥 전체 결과 CSV 다운로드",
             data=csv_data,
-            file_name="종목Scan_결과.csv",
+            file_name="종목Scan_전체결과.csv",
             mime="text/csv",
             use_container_width=True
         )
@@ -261,11 +278,11 @@ if current_codes:
             st.success(f"{len(selected_codes)}개 종목 삭제 완료")
             st.rerun()
         else:
-            st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
+            st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요. (기본 & 시세 탭)")
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
-# --- 4. 하단 종목 추가 영역 ---
+# --- 5. 하단 종목 추가 영역 ---
 st.write("")
 col_add, col_btn = st.columns([3, 1])
 with col_add:
@@ -281,5 +298,5 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# --- 5. 맨 하단 출처 안내 캡션 ---
+# --- 6. 맨 하단 출처 안내 캡션 ---
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
