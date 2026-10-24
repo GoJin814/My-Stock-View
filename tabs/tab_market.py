@@ -13,7 +13,13 @@ def load_market_cache():
     if os.path.exists(MARKET_CACHE_FILE):
         try:
             with open(MARKET_CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                raw_cache = json.load(f)
+                cleaned_cache = {}
+                for k, v in raw_cache.items():
+                    norm_k = normalize_date(k)
+                    if norm_k:
+                        cleaned_cache[norm_k] = v
+                return cleaned_cache
         except Exception:
             return {}
     return {}
@@ -22,12 +28,12 @@ def save_market_cache(data):
     with open(MARKET_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def render_tab_market():
-    st.subheader("📝 국내지수 및 자금동향 관리")
+def render_market_inputs():
+    """종목 추가 영역 밑에 배치되는 파일 업로드 및 수기 입력 폼"""
     market_cache = load_market_cache()
 
-    # 1. 파일 일괄 가져오기 (CSV / JSON) - 기본 숨김
-    with st.expander("📂 기존 데이터 일괄 불러오기 (CSV / JSON 파일 업로드)", expanded=False):
+    # 1. 파일 일괄 가져오기 (CSV / JSON)
+    with st.expander("📂 국내지수 데이터 일괄 불러오기 (CSV / JSON 파일 업로드)", expanded=False):
         uploaded_file = st.file_uploader("파일 선택", type=["csv", "json"], key="market_file_uploader")
         if uploaded_file is not None:
             if st.button("📥 데이터 병합하여 저장하기", type="primary"):
@@ -70,13 +76,13 @@ def render_tab_market():
                             }
                             count += 1
                     save_market_cache(market_cache)
-                    st.success(f"총 {count}건의 데이터가 성공적으로 병합되었습니다.")
+                    st.success(f"총 {count}건의 지수 데이터가 성공적으로 병합되었습니다.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"파일 불러오기 중 오류가 발생했습니다: {e}")
 
-    # 2. 신규 값 직접 입력 폼 - 기본 숨김(expanded=False)
-    with st.expander("➕ 새로운 지표 데이터 직접 입력 / 갱신", expanded=False):
+    # 2. 신규 값 직접 입력 폼
+    with st.expander("➕ 국내지수 지표 데이터 직접 입력 / 갱신", expanded=False):
         with st.form("market_input_form", clear_on_submit=False):
             r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
             with r1_c1:
@@ -104,7 +110,7 @@ def render_tab_market():
             with f_btn2:
                 del_manual_btn = st.form_submit_button("🗑️ 해당 일자 삭제", use_container_width=True)
 
-        target_dt_str = in_date.strftime("%Y-%m-%d")
+        target_dt_str = normalize_date(in_date)
 
         if save_manual_btn:
             k_val = to_num(in_kospi)
@@ -134,9 +140,18 @@ def render_tab_market():
             else:
                 st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
-    # 3. 테이블 렌더링
+def render_tab_market():
+    """국내지수 Monitor 탭 내부: 저장된 지표 표만 깔끔하게 렌더링"""
+    st.subheader("🌐 국내지수 및 자금동향 내역")
+    market_cache = load_market_cache()
+
     if market_cache:
-        sorted_dates = sorted(market_cache.keys(), reverse=True)
+        sorted_dates = sorted(
+            market_cache.keys(),
+            key=lambda x: pd.to_datetime(x, errors='coerce'),
+            reverse=True
+        )
+        
         table_rows = []
         for dt in sorted_dates:
             info = market_cache[dt]
@@ -195,5 +210,5 @@ def render_tab_market():
         )
         return edited_market_df
     else:
-        st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
+        st.info("💡 등록된 지표 데이터가 없습니다. 화면 하단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
         return None
