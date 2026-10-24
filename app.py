@@ -194,36 +194,31 @@ def extract_row_list(obj):
     return []
 
 # 2. 국내지수 & 자금동향 수집 (페이징 확대 파싱)
-def fetch_kospi_history_raw():
-    url = "https://m.stock.naver.com/front-api/marketIndex/prices?category=index&reutersCode=KOSPI&page=1&pageSize=60"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return parse_api_list(res.json())
-    except Exception:
-        pass
-    return []
-
-def fetch_exchange_history_raw():
-    url = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW&page=1&pageSize=60"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return parse_api_list(res.json())
-    except Exception:
-        pass
-    return []
-
-def fetch_deposit_trend_raw():
-    url = "https://m.stock.naver.com/front-api/investor/deposit/trend?page=1&pageSize=60"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return parse_api_list(res.json())
-    except Exception:
-        pass
-    return []
-
+def fetch_item_by_date(base_url, target_date_str, max_pages=6):
+    """지정 날짜가 나올 때까지 페이지를 넘기며 단건 탐색"""
+    for page in range(1, max_pages + 1):
+        sep = "&" if "?" in base_url else "?"
+        url = f"{base_url}{sep}page={page}&pageSize=60"
+        try:
+            res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+            if res.status_code == 200:
+                items = parse_api_list(res.json())
+                if not items:
+                    break
+                for item in items:
+                    d_str = normalize_date(
+                        item.get("localTradedAt") or item.get("tradeDate") or 
+                        item.get("date") or item.get("baseDate") or item.get("tradingDate")
+                    )
+                    if d_str == target_date_str:
+                        return item
+                    # 이미 지정일보다 더 과거로 넘어갔으면 중단
+                    if d_str and d_str < target_date_str:
+                        return None
+        except Exception:
+            break
+    return None
+    
 def fetch_kospi_basic_raw():
     url = "https://m.stock.naver.com/api/index/KOSPI/basic"
     try:
@@ -589,61 +584,56 @@ if current_codes:
 
         if fetch_btn:
             with st.spinner(f"{target_date_str} 증시 데이터를 수집 및 저장하고 있습니다..."):
-                kospi_list = fetch_kospi_history_raw()
-                exchange_list = fetch_exchange_history_raw()
-                deposit_list = fetch_deposit_trend_raw()
+                # 각 API별로 해당 날짜를 페이징 검색
+                k_item = fetch_item_by_date("https://m.stock.naver.com/front-api/marketIndex/prices?category=index&reutersCode=KOSPI", target_date_str)
+                ex_item = fetch_item_by_date("https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW", target_date_str)
+                dep_item = fetch_item_by_date("https://m.stock.naver.com/front-api/investor/deposit/trend", target_date_str)
                 kospi_basic = fetch_kospi_basic_raw()
 
-                # 1. KOSPI 매핑 (nowValue, closePrice 모두 고려)
+                # 1. KOSPI
                 kospi_val = np.nan
-                for item in kospi_list:
-                    d_str = normalize_date(item.get("localTradedAt") or item.get("tradeDate") or item.get("date") or item.get("baseDate"))
-                    if d_str == target_date_str:
-                        raw_k = item.get("closePrice") or item.get("nowValue") or item.get("closeVal")
-                        kospi_val = to_num(raw_k)
-                        break
+                if k_item:
+                    raw_k = k_item.get("closePrice") or k_item.get("nowValue") or k_item.get("closeVal")
+                    kospi_val = to_num(raw_k)
 
-                # 2. 환율 매핑
+                # 2. 환율
                 ex_val = np.nan
-                for item in exchange_list:
-                    d_str = normalize_date(item.get("localTradedAt") or item.get("tradeDate") or item.get("date") or item.get("baseDate"))
-                    if d_str == target_date_str:
-                        raw_ex = item.get("closePrice") or item.get("nowValue")
-                        ex_val = to_num(raw_ex)
-                        break
+                if ex_item:
+                    raw_ex = ex_item.get("closePrice") or ex_item.get("nowValue")
+                    ex_val = to_num(raw_ex)
 
-                # 3. 예탁금 & 신용잔고 매핑 (네이버 증권 자금동향 필드 호환)
+                # 3. 예탁금 & 신용잔고
                 dep_val, dep_diff = np.nan, np.nan
                 crd_val, crd_diff = np.nan, np.nan
-                for item in deposit_list:
-                    d_str = normalize_date(item.get("baseDate") or item.get("date") or item.get("localTradedAt"))
-                    if d_str == target_date_str:
-                        dep_val = to_num(item.get("customerDeposit") or item.get("custDeposit") or item.get("deposit"))
-                        dep_diff = to_num(item.get("customerDepositChange") or item.get("custDepositDiff") or item.get("depositDiff"))
-                        crd_val = to_num(item.get("marginLoan") or item.get("creditTotal") or item.get("creditLoan"))
-                        crd_diff = to_num(item.get("marginLoanChange") or item.get("creditTotalDiff") or item.get("creditLoanDiff"))
-                        break
+                if dep_item:
+                    dep_val = to_num(dep_item.get("customerDeposit") or dep_item.get("custDeposit") or dep_item.get("deposit"))
+                    dep_diff = to_num(dep_item.get("customerDepositChange") or dep_item.get("custDepositDiff") or dep_item.get("depositDiff"))
+                    crd_val = to_num(dep_item.get("marginLoan") or dep_item.get("creditTotal") or dep_item.get("creditLoan"))
+                    crd_diff = to_num(dep_item.get("marginLoanChange") or dep_item.get("creditTotalDiff") or dep_item.get("creditLoanDiff"))
 
-                # 4. KOSPI 밸류에이션 (기본 정보)
+                # 4. KOSPI 밸류에이션 (당일이 아닌 과거 일자는 기본 API에서 제공하지 않으므로 당일 기준만 유지)
                 m_cap = kospi_basic.get("marketValue") or kospi_basic.get("marketCap", "-")
                 per_str = str(kospi_basic.get("per", "-"))
                 pbr_str = str(kospi_basic.get("pbr", "-"))
 
-                # 캐시에 기록
-                market_cache[target_date_str] = {
-                    "KOSPI": kospi_val if pd.notna(kospi_val) else None,
-                    "시가총액(억원)": m_cap,
-                    "PER": per_str,
-                    "PBR": pbr_str,
-                    "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
-                    "증감(억원)": dep_diff if pd.notna(dep_diff) else None,
-                    "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
-                    "증감(신용)(억원)": crd_diff if pd.notna(crd_diff) else None,
-                    "환율": ex_val if pd.notna(ex_val) else None
-                }
-                save_market_cache(market_cache)
-                st.success(f"{target_date_str} 데이터 동기화 및 저장 완료!")
-                st.rerun()
+                # 유효 데이터 확인 후 저장
+                if pd.isna(kospi_val) and pd.isna(ex_val) and pd.isna(dep_val):
+                    st.warning(f"⚠️ {target_date_str}은 휴장일(주말/공휴일)이거나 조회 가능 범위(약 1년)를 벗어난 일자입니다.")
+                else:
+                    market_cache[target_date_str] = {
+                        "KOSPI": kospi_val if pd.notna(kospi_val) else None,
+                        "시가총액(억원)": m_cap if target_date_str == date.today().strftime("%Y-%m-%d") else "-",
+                        "PER": per_str if target_date_str == date.today().strftime("%Y-%m-%d") else "-",
+                        "PBR": pbr_str if target_date_str == date.today().strftime("%Y-%m-%d") else "-",
+                        "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
+                        "증감(억원)": dep_diff if pd.notna(dep_diff) else None,
+                        "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
+                        "증감(신용)(억원)": crd_diff if pd.notna(crd_diff) else None,
+                        "환율": ex_val if pd.notna(ex_val) else None
+                    }
+                    save_market_cache(market_cache)
+                    st.success(f"{target_date_str} 데이터 동기화 및 저장 완료!")
+                    st.rerun()
 
         # 테이블 렌더링 (저장된 캐시 데이터로부터 구성)
         if market_cache:
