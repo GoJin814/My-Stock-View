@@ -2,13 +2,9 @@ import streamlit as st
 import pandas as pd
 
 def apply_custom_styles():
+    # 1. 디자인 스타일 및 모바일 터치 새로고침(Pull-to-Refresh) 자바스크립트 주입
     st.markdown("""
         <style>
-        /* 모바일 브라우저의 기본 pull-to-refresh 제스처 허용 */
-        html, body, [data-testid="stAppViewContainer"] {
-            overscroll-behavior-y: auto !important;
-        }
-
         .block-container {
             padding-top: 1.5rem;
             padding-bottom: 2rem;
@@ -16,13 +12,10 @@ def apply_custom_styles():
             padding-right: 0.8rem;
         }
 
-        /* 테이블 감싸는 가로 스크롤 래퍼: 세로 방향 당김 제스처는 브라우저로 통과 */
+        /* 테이블 감싸는 가로 스크롤 래퍼 */
         .custom-multi-table-wrapper {
             width: 100%;
             overflow-x: auto;
-            overflow-y: visible; /* 세로 스크롤 가둠 해제 */
-            overscroll-behavior-x: contain; /* 가로는 테이블 내부만 스크롤 */
-            overscroll-behavior-y: auto;    /* 세로는 브라우저 당겨서 새로고침 허용 */
             -webkit-overflow-scrolling: touch;
             margin-bottom: 1rem;
             border-radius: 4px;
@@ -68,7 +61,7 @@ def apply_custom_styles():
             border-right: 2px solid rgba(128, 128, 128, 0.4) !important;
         }
 
-        /* 좌측 고정 종목명 데이터 셀 */
+        /* 좌측 고정 종목명 데이터 셀 (불투명 배경) */
         .custom-multi-table tbody td.stock-name-cell {
             text-align: left;
             font-weight: 600;
@@ -132,6 +125,55 @@ def apply_custom_styles():
             }
         }
         </style>
+
+        <script>
+        (function() {
+            let startY = 0;
+            let isAtTop = false;
+
+            const doc = window.parent.document || document;
+            const container = doc.querySelector('[data-testid="stAppViewContainer"]') || window;
+
+            doc.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    startY = e.touches[0].clientY;
+                    // 최상단에 위치해 있는지 확인
+                    const scrollTop = container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
+                    isAtTop = (scrollTop <= 5);
+                }
+            }, { passive: true });
+
+            doc.addEventListener('touchend', function(e) {
+                if (isAtTop && e.changedTouches.length === 1) {
+                    const endY = e.changedTouches[0].clientY;
+                    const diffY = endY - startY;
+
+                    // 화면 최상단에서 아래로 75px 이상 시원하게 당겼을 때 새로고침 실행
+                    if (diffY > 75) {
+                        // 새로고침 표시용 토스트 메시지 생성
+                        const toast = doc.createElement('div');
+                        toast.innerText = '🔄 새로고침 중...';
+                        toast.style.position = 'fixed';
+                        toast.style.top = '20px';
+                        toast.style.left = '50%';
+                        toast.style.transform = 'translateX(-50%)';
+                        toast.style.backgroundColor = '#1f2937';
+                        toast.style.color = '#ffffff';
+                        toast.style.padding = '8px 16px';
+                        toast.style.borderRadius = '20px';
+                        toast.style.fontSize = '14px';
+                        toast.style.zIndex = '999999';
+                        toast.style.boxShadow = '0 4px 6px rgba(0,0,0,0.2)';
+                        doc.body.appendChild(toast);
+
+                        setTimeout(function() {
+                            window.parent.location.reload();
+                        }, 250);
+                    }
+                }
+            }, { passive: true });
+        })();
+        </script>
     """, unsafe_allow_html=True)
 
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list = None):
