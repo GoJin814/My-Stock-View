@@ -7,15 +7,14 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         st.info("표시할 종목 데이터가 없습니다.")
         return
 
-    # 1. 컬럼 순서 재배치 (PER -> PBR -> ROE -> EPS -> BPS)
+    # 컬럼 순서 재배치 (PER -> PBR -> ROE -> EPS -> BPS) + 종목코드 포함
     desired_cols = [
-        "종목명",
+        "종목명", "종목코드",
         "PER_직전", "PBR_직전", "ROE_직전", "EPS_직전", "BPS_직전",
         "PER_최근", "PBR_최근", "ROE_최근", "EPS_최근", "BPS_최근"
     ]
     display_df = df_share[[c for c in desired_cols if c in df_share.columns]]
 
-    # 2. 멀티 헤더 구성
     top_headers_share = [
         ("종목명", 1, False),
         (prev_yr, 5, True),
@@ -30,9 +29,8 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         display_df,
         top_headers=top_headers_share,
         sub_headers=sub_headers_share,
-        divider_indices=[5]
+        divider_indices=[4]
     )
 
-    # 3. 표 하단 참고 수식 표기
     st.caption("※ **순현금성자산** = 현금및현금성자산 + 단기금융상품 (단위: 억원)")
     st.caption("※ **순차입금** = 총차입금(단기차입금 + 유동성장기부채 + 사채 + 장기차입금) - 순현금성자산 (단위: 억원)")
