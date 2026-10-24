@@ -112,7 +112,7 @@ def extract_row_list(obj):
                 return found
     return []
 
-# --- 1. 상단 타이틀 (아이콘 및 모바일 뷰어 문구 제거) ---
+# --- 1. 상단 타이틀 ---
 st.title("Scanning_주식")
 
 current_codes = load_codes()
@@ -204,34 +204,53 @@ if current_codes:
                     elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
                         fin_data["BPS"] = cur_v
 
+            # 3안: 컬럼 통합 및 압축 포맷팅
+            if pd.notna(fin_data['매출액']):
+                rev_str = f"{fin_data['매출액']:,.0f}억"
+                if pd.notna(fin_data['매출YoY']):
+                    rev_str += f" ({fin_data['매출YoY']:+.1f}%)"
+            else:
+                rev_str = "-"
+
+            per_pbr_str = f"{per_val} / {pbr_val}"
+
+            eps_str = f"{fin_data['EPS']:,.0f}원" if pd.notna(fin_data['EPS']) else "-"
+            bps_str = f"{fin_data['BPS']:,.0f}원" if pd.notna(fin_data['BPS']) else "-"
+            eps_bps_str = f"{eps_str} / {bps_str}"
+
+            dps_str = f"{fin_data['DPS']:,.0f}원" if pd.notna(fin_data['DPS']) else "-"
+            if dps_str != "-" and div_val != "-":
+                div_total_str = f"{dps_str} ({div_val})"
+            elif div_val != "-":
+                div_total_str = div_val
+            else:
+                div_total_str = dps_str
+
             scan_results.append({
                 "선택": False,
-                "종목명": stock_name,
-                "종목코드": code,
+                "종목": f"{stock_name} ({code})",
+                "코드": code,  # 삭제 매핑용 (화면 숨김 처리)
                 "현재가": curr_price_str,
                 "시총": market_cap,
-                "기준실적": fin_data["기준연도"],
-                "매출액(억)": f"{fin_data['매출액']:,.0f}억" if pd.notna(fin_data['매출액']) else "-",
-                "매출 YoY": f"{fin_data['매출YoY']:+.1f}%" if pd.notna(fin_data['매출YoY']) else "-",
-                "영업이익(억)": f"{fin_data['영업이익']:,.0f}억" if pd.notna(fin_data['영업이익']) else "-",
-                "당기순익(억)": f"{fin_data['당기순이익']:,.0f}억" if pd.notna(fin_data['당기순이익']) else "-",
-                "DPS(원)": f"{fin_data['DPS']:,.0f}원" if pd.notna(fin_data['DPS']) else "-",
-                "배당수익률": div_val,
-                "EPS(원)": f"{fin_data['EPS']:,.0f}원" if pd.notna(fin_data['EPS']) else "-",
-                "현재 PER": per_val,
-                "BPS(원)": f"{fin_data['BPS']:,.0f}원" if pd.notna(fin_data['BPS']) else "-",
-                "현재 PBR": pbr_val
+                "기준": fin_data["기준연도"],
+                "매출액 (YoY)": rev_str,
+                "영업이익": f"{fin_data['영업이익']:,.0f}억" if pd.notna(fin_data['영업이익']) else "-",
+                "당기순익": f"{fin_data['당기순이익']:,.0f}억" if pd.notna(fin_data['당기순이익']) else "-",
+                "PER / PBR": per_pbr_str,
+                "배당": div_total_str,
+                "EPS / BPS": eps_bps_str
             })
 
     result_df = pd.DataFrame(scan_results)
 
-    # 테이블 렌더링 (최상단 배치)
+    # 테이블 렌더링 ('종목' 열 고정, '코드' 열 숨김)
     disabled_cols = [c for c in result_df.columns if c != "선택"]
     edited_df = st.data_editor(
         result_df,
         column_config={
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small", pinned=True),
-            "종목명": st.column_config.TextColumn("종목명", pinned=True),
+            "종목": st.column_config.TextColumn("종목 (코드)", pinned=True),
+            "코드": None,
         },
         disabled=disabled_cols,
         hide_index=True,
@@ -239,12 +258,12 @@ if current_codes:
         key="stock_editor"
     )
 
-    # --- 3. 표 바로 아래 컨트롤 영역 (삭제 & CSV 다운로드) ---
+    # --- 3. 표 하단 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
     with btn_col2:
-        csv_data = result_df.drop(columns=["선택"]).to_csv(index=False).encode('utf-8-sig')
+        csv_data = result_df.drop(columns=["선택", "코드"]).to_csv(index=False).encode('utf-8-sig')
         st.download_button(
             "📥 조회 결과 CSV 다운로드",
             data=csv_data,
@@ -254,7 +273,7 @@ if current_codes:
         )
 
     if delete_btn:
-        selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
+        selected_codes = edited_df[edited_df["선택"] == True]["코드"].tolist()
         if selected_codes:
             remaining_codes = [c for c in current_codes if c not in selected_codes]
             save_codes(remaining_codes)
