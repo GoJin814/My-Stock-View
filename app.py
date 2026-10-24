@@ -173,15 +173,12 @@ def fetch_all_stock_data(codes_tuple):
         c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
         c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
 
-        # 정렬용 원시 숫자(raw)와 표시 문자열 함께 저장
         scan_share.append({
             "종목명": stock_name,
-            # 포맷 문자열
             "PER_직전": p_per_str, "PBR_직전": p_pbr_str, "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
             "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-", "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
             "PER_최근": c_per_str, "PBR_최근": c_pbr_str, "ROE_최근": f"{fin_info['cur_roe']:.2f}%" if pd.notna(fin_info['cur_roe']) else "-",
             "EPS_최근": f"{fin_info['cur_eps']:,.0f}원" if pd.notna(fin_info['cur_eps']) else "-", "BPS_최근": f"{fin_info['cur_bps']:,.0f}원" if pd.notna(fin_info['cur_bps']) else "-",
-            # 정렬 계산용 수치 필드
             "_num_PER_최근": fin_info['cur_per'], "_num_PBR_최근": fin_info['cur_pbr'], "_num_ROE_최근": fin_info['cur_roe'],
             "_num_EPS_최근": fin_info['cur_eps'], "_num_BPS_최근": fin_info['cur_bps'],
             "_num_PER_직전": fin_info['prev_per'], "_num_PBR_직전": fin_info['prev_pbr'], "_num_ROE_직전": fin_info['prev_roe'],
@@ -249,7 +246,6 @@ if current_codes:
     with sort_col2:
         sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
 
-    # 정렬 키 매핑
     metric_map = {
         f"최근 PER ({most_latest_yr})": "_num_PER_최근",
         f"최근 PBR ({most_latest_yr})": "_num_PBR_최근",
@@ -263,7 +259,6 @@ if current_codes:
         f"직전 BPS ({most_prev_yr})": "_num_BPS_직전",
     }
 
-    # 정렬 수행: 모든 탭의 DataFrame 인덱스를 동일하게 정렬
     if sort_metric in metric_map:
         target_col = metric_map[sort_metric]
         is_asc = (sort_order == "오름차순 (▲)")
@@ -273,10 +268,11 @@ if current_codes:
         df_perf = df_perf.iloc[sorted_indices].reset_index(drop=True)
         df_share = df_share.iloc[sorted_indices].reset_index(drop=True)
 
+    # 탭 생성 (2번째 탭을 주당 가치로 변경)
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
-        "📈 실적 & 성장성 (2개년 비교)", 
         "💰 주당 가치 (2개년 비교)",
+        "📈 실적 & 성장성 (2개년 비교)", 
         "🌐 국내지수 Monitor"
     ])
 
@@ -284,10 +280,10 @@ if current_codes:
         edited_df = render_tab_basic(df_basic)
 
     with tab2:
-        render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
+        render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
     with tab3:
-        render_tab_share(df_share, most_prev_yr, most_latest_yr)
+        render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
     with tab4:
         edited_market_df = render_tab_market()
@@ -427,5 +423,4 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
 st.write("")
 render_market_inputs()
 
-# 출처 안내
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
