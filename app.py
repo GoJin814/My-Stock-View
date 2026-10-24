@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import re
 import json
 from datetime import date
 
@@ -283,6 +284,7 @@ if current_codes:
         st.subheader("📝 국내지수 및 자금동향 관리")
         market_cache = load_market_cache()
 
+        # 1. 파일 일괄 가져오기 (CSV / JSON)
         with st.expander("📂 기존 데이터 일괄 불러오기 (CSV / JSON 파일 업로드)", expanded=False):
             uploaded_file = st.file_uploader("파일 선택", type=["csv", "json"], key="market_file_uploader")
             if uploaded_file is not None:
@@ -298,19 +300,24 @@ if current_codes:
                                     count += 1
                         else:
                             df_up = pd.read_csv(uploaded_file)
+                            # 컬럼명의 공백, 개행(\n, \r), 특수문자 정리
+                            df_up.columns = [re.sub(r'[\s\n\r]+', '', str(c)) for c in df_up.columns]
+
                             for _, row in df_up.iterrows():
-                                dt_raw = row.get("일시") or row.get("날짜") or row.get("Date") or row.iloc[0]
+                                r_dict = {k: v for k, v in row.items()}
+                                
+                                dt_raw = r_dict.get("일시") or r_dict.get("날짜") or r_dict.get("Date") or list(r_dict.values())[0]
                                 dt_norm = normalize_date(dt_raw)
                                 if not dt_norm:
                                     continue
                                 
-                                k_v = to_num(row.get("KOSPI") or row.get("코스피"))
-                                mcap_v = row.get("시가총액(억원)") or row.get("시총") or row.get("시가총액") or "-"
-                                per_v = row.get("PER") or "-"
-                                pbr_v = row.get("PBR") or "-"
-                                dep_v = to_num(row.get("고객예탁금(억원)") or row.get("고객예탁금") or row.get("예탁금"))
-                                crd_v = to_num(row.get("신용잔고(억원)") or row.get("신용잔고") or row.get("신용융자"))
-                                fx_v = to_num(row.get("환율") or row.get("원달러환율"))
+                                k_v = to_num(r_dict.get("KOSPI") or r_dict.get("코스피"))
+                                mcap_v = r_dict.get("시가총액(억원)") or r_dict.get("시총") or r_dict.get("시가총액") or "-"
+                                per_v = r_dict.get("PER") or "-"
+                                pbr_v = r_dict.get("PBR") or "-"
+                                dep_v = to_num(r_dict.get("고객예탁금(억원)") or r_dict.get("고객예탁금") or r_dict.get("예탁금"))
+                                crd_v = to_num(r_dict.get("신용잔고(억원)") or r_dict.get("신용잔고") or r_dict.get("신용융자"))
+                                fx_v = to_num(r_dict.get("환율") or r_dict.get("원달러환율"))
 
                                 market_cache[dt_norm] = {
                                     "KOSPI": k_v if pd.notna(k_v) else None,
@@ -328,6 +335,7 @@ if current_codes:
                     except Exception as e:
                         st.error(f"파일 불러오기 중 오류가 발생했습니다: {e}")
 
+        # 2. 직접 입력 폼
         with st.form("market_input_form", clear_on_submit=False):
             r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
             with r1_c1:
@@ -385,6 +393,7 @@ if current_codes:
             else:
                 st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
+        # 3. 테이블 렌더링
         if market_cache:
             sorted_dates = sorted(market_cache.keys(), reverse=True)
             table_rows = []
@@ -406,6 +415,7 @@ if current_codes:
                 ex_val = info.get("환율")
                 ex_str = f"{float(ex_val):,.1f}원" if (ex_val is not None and not np.isnan(ex_val)) else "-"
 
+                # 고객예탁금 / 시가총액, 신용잔고 / 시가총액 (%)
                 dep_to_mcap_str = "-"
                 crd_to_mcap_str = "-"
                 if pd.notna(mcap_num) and mcap_num > 0:
