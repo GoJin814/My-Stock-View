@@ -37,7 +37,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 (/integration) - 시총 텍스트 원본 추출용
+# 2. 통합 정보 (/integration) - 시총 텍스트 추출용
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -48,8 +48,7 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 (/finance/annual)
-# 연간 재무제표 수집 (최신 프론트 API로 교체)
+# 3. 연간 재무제표 (최신 front-api 적용)
 def fetch_finance(code: str):
     url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
     try:
@@ -70,7 +69,7 @@ def to_num(val):
 
 # --- 화면 렌더링 ---
 st.title("📋 Scanning_주식 (모바일 뷰어)")
-st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
+st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /front-api/annual) 실시간 연동")
 
 current_codes = load_codes()
 
@@ -104,7 +103,7 @@ if current_codes:
             raw_close = basic.get("closePrice", "-")
             curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
             
-            # 시가총액 추출: code="marketValue" 또는 key="시총" 매핑
+            # 시가총액 추출
             total_infos = integration.get("totalInfos", [])
             market_cap = "-"
             integration_dict = {}
@@ -119,7 +118,7 @@ if current_codes:
                 
                 integration_dict[item_key] = item_val
 
-            # 실시간 PER / PBR / 배당수익률 (/basic 우선, 없으면 /integration)
+            # 실시간 PER / PBR / 배당수익률
             raw_per = basic.get("per", integration_dict.get("PER", "-"))
             raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
             raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
@@ -128,19 +127,25 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # 연간 재무제표 rowList 파싱
+            # --- [연간 재무제표 rowList 파싱: result 래핑 완벽 대응] ---
             fin_data = {
                 "기준연도": "-",
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
             }
             
-            row_list = fin_json.get("rowList", [])
-            if not row_list and isinstance(fin_json, dict):
-                for val in fin_json.values():
-                    if isinstance(val, dict) and "rowList" in val:
-                        row_list = val.get("rowList", [])
-                        break
+            # rowList 안전 탐색 (front-api result 키 내부 파싱)
+            row_list = []
+            if isinstance(fin_json, dict):
+                if "rowList" in fin_json:
+                    row_list = fin_json.get("rowList", [])
+                elif "result" in fin_json and isinstance(fin_json["result"], dict):
+                    row_list = fin_json["result"].get("rowList", [])
+                else:
+                    for val in fin_json.values():
+                        if isinstance(val, dict) and "rowList" in val:
+                            row_list = val.get("rowList", [])
+                            break
 
             if row_list:
                 for row in row_list:
@@ -166,6 +171,7 @@ if current_codes:
                     prev_val_str = prev_item.get("value") if isinstance(prev_item, dict) else prev_item
                     prev_v = to_num(prev_val_str)
 
+                    # 엄격한 제목 매핑
                     if raw_title in ["매출액", "수익"]:
                         fin_data["매출액"] = cur_v
                         if pd.notna(cur_v) and pd.notna(prev_v) and prev_v != 0:
@@ -181,7 +187,6 @@ if current_codes:
                     elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
                         fin_data["BPS"] = cur_v
 
-            # 맨 앞에 체크박스용 '선택' 컬럼 추가
             scan_results.append({
                 "선택": False,
                 "종목명": stock_name,
@@ -203,7 +208,7 @@ if current_codes:
 
     result_df = pd.DataFrame(scan_results)
 
-    # 3. 일괄 삭제 및 동작 버튼 영역
+    # 3. 일괄 삭제 버튼 영역
     btn_col1, btn_col2 = st.columns([1.5, 6])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
@@ -223,7 +228,7 @@ if current_codes:
         key="stock_editor"
     )
 
-    # 선택 항목 일괄 삭제 처리
+    # 선택 항목 삭제 처리
     if delete_btn:
         selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
         if selected_codes:
