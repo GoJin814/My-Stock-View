@@ -31,6 +31,7 @@ def render_tab_safety(df_safety: pd.DataFrame, prev_yr: str, latest_yr: str):
         divider_indices=[4]
     )
 
-    # 표 하단 계산 수식 안내
+    # 표 하단 수식 안내
     st.caption("※ **순현금성자산** = 현금및현금성자산 + 단기금융상품 (단위: 억원)")
     st.caption("※ **순차입금** = 총차입금(단기차입금 + 유동성장기부채 + 사채 + 장기차입금) - 순현금성자산 (단위: 억원)")
+    st.caption("※ **FCF (잉여현금흐름)** = 영업활동현금흐름 - 유형자산의취득(CAPEX) (단위: 억원)")
