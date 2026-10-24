@@ -7,8 +7,9 @@ import re
 from styles import apply_custom_styles
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from tabs.tab_basic import render_tab_basic
-from tabs.tab_perf import render_tab_perf
 from tabs.tab_share import render_tab_share
+from tabs.tab_perf import render_tab_perf
+from tabs.tab_safety import render_tab_safety
 from tabs.tab_market import render_tab_market, render_market_inputs, load_market_cache, save_market_cache
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
@@ -33,6 +34,7 @@ def fetch_all_stock_data(codes_tuple):
     scan_basic = []
     scan_perf = []
     scan_share = []
+    scan_safety = []
     full_csv_records = []
     prev_years = []
     latest_years = []
@@ -76,6 +78,11 @@ def fetch_all_stock_data(codes_tuple):
             "cur_roe": np.nan, "prev_roe": np.nan,
             "cur_per": np.nan, "prev_per": np.nan,
             "cur_pbr": np.nan, "prev_pbr": np.nan,
+            # 안전성 & 현금흐름 항목
+            "cur_debt_ratio": np.nan, "prev_debt_ratio": np.nan,
+            "cur_fcf": np.nan, "prev_fcf": np.nan,
+            "cur_cash": np.nan, "prev_cash": np.nan,
+            "cur_debt": np.nan, "prev_debt": np.nan,
         }
 
         row_list = extract_row_list(fin_json)
@@ -135,6 +142,21 @@ def fetch_all_stock_data(codes_tuple):
                 elif raw_title in ["PBR(배)", "PBR"]:
                     fin_info["cur_pbr"] = c_val
                     fin_info["prev_pbr"] = p_val
+                # 부채비율
+                elif raw_title in ["부채비율", "부채비율(%)"]:
+                    fin_info["cur_debt_ratio"] = c_val
+                    fin_info["prev_debt_ratio"] = p_val
+                # FCF
+                elif raw_title in ["FCF", "잉여현금흐름"]:
+                    fin_info["cur_fcf"] = c_val
+                    fin_info["prev_fcf"] = p_val
+                # 현금성자산 및 차입금
+                elif raw_title in ["현금및현금성자산", "현금및단기금융상품"]:
+                    fin_info["cur_cash"] = c_val
+                    fin_info["prev_cash"] = p_val
+                elif raw_title in ["총차입금", "단기차입금"]:
+                    fin_info["cur_debt"] = c_val
+                    fin_info["prev_debt"] = p_val
 
         if fin_info["prev_yr"] != "-":
             prev_years.append(fin_info["prev_yr"])
@@ -143,6 +165,15 @@ def fetch_all_stock_data(codes_tuple):
 
         dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
+        # 순현금성자산 계산 (현금 - 차입금)
+        cur_net_cash = np.nan
+        prev_net_cash = np.nan
+        if pd.notna(fin_info["cur_cash"]):
+            cur_net_cash = fin_info["cur_cash"] - (fin_info["cur_debt"] if pd.notna(fin_info["cur_debt"]) else 0)
+        if pd.notna(fin_info["prev_cash"]):
+            prev_net_cash = fin_info["prev_cash"] - (fin_info["prev_debt"] if pd.notna(fin_info["prev_debt"]) else 0)
+
+        # 1. 기본 & 시세
         scan_basic.append({
             "선택": False,
             "종목명": stock_name,
@@ -155,6 +186,7 @@ def fetch_all_stock_data(codes_tuple):
             "배당수익률": div_val
         })
 
+        # 2. 실적 & 성장성
         scan_perf.append({
             "종목명": stock_name,
             "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
@@ -168,6 +200,7 @@ def fetch_all_stock_data(codes_tuple):
             "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
         })
 
+        # 3. 주당 가치
         p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
         p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
         c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
@@ -185,6 +218,18 @@ def fetch_all_stock_data(codes_tuple):
             "_num_EPS_직전": fin_info['prev_eps'], "_num_BPS_직전": fin_info['prev_bps'],
         })
 
+        # 4. 안전성 & 현금흐름
+        scan_safety.append({
+            "종목명": stock_name,
+            "부채비율_직전": f"{fin_info['prev_debt_ratio']:.1f}%" if pd.notna(fin_info['prev_debt_ratio']) else "-",
+            "순현금_직전": f"{prev_net_cash:,.0f}억" if pd.notna(prev_net_cash) else "-",
+            "FCF_직전": f"{fin_info['prev_fcf']:,.0f}억" if pd.notna(fin_info['prev_fcf']) else "-",
+            "부채비율_최근": f"{fin_info['cur_debt_ratio']:.1f}%" if pd.notna(fin_info['cur_debt_ratio']) else "-",
+            "순현금_최근": f"{cur_net_cash:,.0f}억" if pd.notna(cur_net_cash) else "-",
+            "FCF_최근": f"{fin_info['cur_fcf']:,.0f}억" if pd.notna(fin_info['cur_fcf']) else "-",
+        })
+
+        # 전체 CSV 저장용 레코드
         full_csv_records.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
             "직전연도": fin_info['prev_yr'], "최근연도": fin_info['latest_yr'],
@@ -196,13 +241,16 @@ def fetch_all_stock_data(codes_tuple):
             "ROE_직전": fin_info['prev_roe'], "ROE_최근": fin_info['cur_roe'],
             "PER_직전": fin_info['prev_per'], "PER_최근": fin_info['cur_per'],
             "PBR_직전": fin_info['prev_pbr'], "PBR_최근": fin_info['cur_pbr'],
+            "부채비율_직전": fin_info['prev_debt_ratio'], "부채비율_최근": fin_info['cur_debt_ratio'],
+            "FCF_직전": fin_info['prev_fcf'], "FCF_최근": fin_info['cur_fcf'],
+            "순현금_직전": prev_net_cash, "순현금_최근": cur_net_cash,
             "DPS": fin_info['cur_dps'], "현재PER": per_val, "현재PBR": pbr_val, "배당수익률": div_val
         })
 
     most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
     most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
 
-    return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
+    return scan_basic, scan_perf, scan_share, scan_safety, full_csv_records, most_prev_yr, most_latest_yr
 
 # 상단 헤더
 title_col, sync_col = st.columns([5, 1])
@@ -217,14 +265,15 @@ with sync_col:
 current_codes = load_codes()
 
 if current_codes:
-    scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = fetch_all_stock_data(tuple(current_codes))
+    scan_basic, scan_perf, scan_share, scan_safety, full_csv_records, most_prev_yr, most_latest_yr = fetch_all_stock_data(tuple(current_codes))
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
+    df_safety = pd.DataFrame(scan_safety)
 
-    # --- 1. 주당 가치 기준 정렬 제어 영역 ---
-    sort_col1, sort_col2, sort_col3 = st.columns([2, 1.5, 3.5])
+    # 1. 정렬 제어 영역
+    sort_col1, sort_col2, _ = st.columns([2, 1.5, 3.5])
     with sort_col1:
         sort_metric = st.selectbox(
             "🔽 정렬 기준 지표 (모든 탭 동기화)",
@@ -246,7 +295,7 @@ if current_codes:
     with sort_col2:
         sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
 
-    # --- 2. PER / PBR 조건 필터링 영역 ---
+    # 2. PER / PBR 조건 필터링 영역
     with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):
         f_c1, f_c2, f_c3 = st.columns(3)
         with f_c1:
@@ -260,25 +309,23 @@ if current_codes:
             pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
             pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
 
-    # 필터링 수행
+    # 필터링 적용
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
     target_per_col = f"_num_PER{filter_prefix}"
     target_pbr_col = f"_num_PBR{filter_prefix}"
 
     valid_mask = pd.Series(True, index=df_share.index)
-
     if use_per_filter:
         valid_mask &= (df_share[target_per_col] >= per_min) & (df_share[target_per_col] <= per_max)
-
     if use_pbr_filter:
         valid_mask &= (df_share[target_pbr_col] >= pbr_min) & (df_share[target_pbr_col] <= pbr_max)
 
-    # 필터 적용된 인덱스로 데이터 슬라이싱
     df_basic = df_basic[valid_mask].copy()
     df_perf = df_perf[valid_mask].copy()
     df_share = df_share[valid_mask].copy()
+    df_safety = df_safety[valid_mask].copy()
 
-    # 정렬 수행: 필터링 후 남은 데이터 대상
+    # 정렬 수행
     metric_map = {
         f"최근 PER ({most_latest_yr})": "_num_PER_최근",
         f"최근 PBR ({most_latest_yr})": "_num_PBR_최근",
@@ -300,16 +347,19 @@ if current_codes:
         df_basic = df_basic.loc[sorted_indices].reset_index(drop=True)
         df_perf = df_perf.loc[sorted_indices].reset_index(drop=True)
         df_share = df_share.loc[sorted_indices].reset_index(drop=True)
+        df_safety = df_safety.loc[sorted_indices].reset_index(drop=True)
     else:
         df_basic = df_basic.reset_index(drop=True)
         df_perf = df_perf.reset_index(drop=True)
         df_share = df_share.reset_index(drop=True)
+        df_safety = df_safety.reset_index(drop=True)
 
-    # 탭 생성 (2번째 탭: 주당 가치)
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # 탭 구성 (총 5개 탭)
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 기본 & 시세", 
         "💰 주당 가치 (2개년 비교)",
         "📈 실적 & 성장성 (2개년 비교)", 
+        "🛡️ 안전성 & 현금흐름 (2개년 비교)",
         "🌐 국내지수 Monitor"
     ])
 
@@ -323,6 +373,9 @@ if current_codes:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
     with tab4:
+        render_tab_safety(df_safety, most_prev_yr, most_latest_yr)
+
+    with tab5:
         edited_market_df = render_tab_market()
 
     # 하단 컨트롤 (선택 항목 삭제 & CSV 다운로드)
@@ -342,7 +395,6 @@ if current_codes:
     if delete_btn:
         deleted_anything = False
 
-        # 1. 종목 삭제 판별
         if edited_df is not None and not edited_df.empty:
             selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
             if selected_codes:
@@ -352,7 +404,6 @@ if current_codes:
                 st.success(f"종목 {len(selected_codes)}개 삭제 완료")
                 deleted_anything = True
 
-        # 2. 국내지수 일자 삭제 판별
         if edited_market_df is not None and not edited_market_df.empty:
             selected_dates = edited_market_df[edited_market_df["선택"] == True]["일시"].tolist()
             if selected_dates:
@@ -370,12 +421,11 @@ if current_codes:
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
-# 1. 종목 추가 영역 (단건 추가 + 파일/텍스트 일괄 등록)
+# 종목코드 추가 및 일괄 등록
 st.write("")
 with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", expanded=False):
     tab_single, tab_bulk_text, tab_bulk_file = st.tabs(["단건 추가", "텍스트 일괄 붙여넣기", "파일 일괄 업로드(TXT/CSV/XLSX)"])
 
-    # 1) 단건 추가
     with tab_single:
         c_code, c_btn = st.columns([3, 1])
         with c_code:
@@ -392,7 +442,6 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                         st.success(f"{formatted} 추가 완료")
                         st.rerun()
 
-    # 2) 텍스트 일괄 붙여넣기
     with tab_bulk_text:
         bulk_text = st.text_area(
             "종목코드 목록 붙여넣기 (줄바꿈, 쉼표, 공백 구분)",
@@ -415,7 +464,6 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                 else:
                     st.warning("유효한 6자리 종목코드를 찾을 수 없습니다.")
 
-    # 3) 파일 일괄 업로드
     with tab_bulk_file:
         up_file = st.file_uploader(
             "종목코드가 포함된 파일 업로드",
@@ -457,7 +505,7 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                 except Exception as e:
                     st.error(f"파일 처리 중 오류 발생: {e}")
 
-# 2. 국내지수 파일 업로드 및 수기 입력 영역
+# 국내지수 파일 업로드 및 수기 입력 영역
 st.write("")
 render_market_inputs()
 
