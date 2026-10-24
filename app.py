@@ -49,8 +49,9 @@ def fetch_integration(code: str):
     return {}
 
 # 3. 연간 재무제표 (/finance/annual)
+# 연간 재무제표 수집 (최신 프론트 API로 교체)
 def fetch_finance(code: str):
-    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/quarter?code=095660"
+    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
     try:
         res = requests.get(url, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
