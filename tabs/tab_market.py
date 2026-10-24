@@ -155,4 +155,44 @@ def render_tab_market():
             ex_val = info.get("환율")
             ex_str = f"{float(ex_val):,.1f}원" if (ex_val is not None and not np.isnan(ex_val)) else "-"
 
-            dep_
+            dep_to_mcap_str = "-"
+            crd_to_mcap_str = "-"
+            if pd.notna(mcap_num) and mcap_num > 0:
+                if dep_val is not None and not np.isnan(dep_val):
+                    dep_to_mcap_str = f"{(float(dep_val) / mcap_num) * 100:.2f}%"
+                if crd_val is not None and not np.isnan(crd_val):
+                    crd_to_mcap_str = f"{(float(crd_val) / mcap_num) * 100:.2f}%"
+
+            table_rows.append({
+                "일시": dt,
+                "KOSPI": kospi_str,
+                "시가총액(억원)": mcap_str,
+                "PER": str(info.get("PER", "-")),
+                "PBR": str(info.get("PBR", "-")),
+                "고객예탁금(억원)": cust_dep_str,
+                "신용잔고(억원)": credit_tot_str,
+                "환율": ex_str,
+                "고객예탁금/시가총액": dep_to_mcap_str,
+                "신용잔고/시가총액": crd_to_mcap_str
+            })
+
+        df_market_rendered = pd.DataFrame(table_rows)
+        df_market_rendered.insert(0, "선택", False)
+        st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
+
+        disabled_cols = [c for c in df_market_rendered.columns if c != "선택"]
+        edited_market_df = st.data_editor(
+            df_market_rendered,
+            column_config={
+                "선택": st.column_config.CheckboxColumn("선택", default=False, width="small", pinned=True),
+                "일시": st.column_config.TextColumn("일시", pinned=True),
+            },
+            disabled=disabled_cols,
+            hide_index=True,
+            use_container_width=True,
+            key="market_editor"
+        )
+        return edited_market_df
+    else:
+        st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
+        return None
