@@ -20,13 +20,18 @@ def save_codes(codes):
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
+# 모바일 브라우저 표준 헤더 (403/차단 방지)
 REQ_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
     "Referer": "https://m.stock.naver.com/",
-    "Accept": "application/json, text/plain, */*"
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin"
 }
 
-# 1. 실시간 시세 및 밸류에이션 (/basic)
+# 1. 실시간 시세 (/basic)
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -37,7 +42,7 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 (/integration) - 시총 텍스트 추출용
+# 2. 통합 정보 (/integration)
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -48,11 +53,23 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 (최신 front-api 적용)
+# 3. 연간 재무제표 (front-api 실패 시 구형 api로 자동 폴백)
 def fetch_finance(code: str):
-    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
+    # 1순위: 프론트 API
+    url_front = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
     try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        res = requests.get(url_front, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            if data:
+                return data
+    except Exception:
+        pass
+        
+    # 2순위 (폴백): 기존 백엔드 API
+    url_legacy = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
+    try:
+        res = requests.get(url_legacy, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
             return res.json()
     except Exception:
@@ -67,9 +84,25 @@ def to_num(val):
     except:
         return np.nan
 
+# 딕셔너리 내부 어떤 깊이에 있든 rowList를 찾아내는 재귀 함수
+def extract_row_list(obj):
+    if isinstance(obj, dict):
+        if "rowList" in obj and isinstance(obj["rowList"], list):
+            return obj["rowList"]
+        for v in obj.values():
+            found = extract_row_list(v)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = extract_row_list(item)
+            if found:
+                return found
+    return []
+
 # --- 화면 렌더링 ---
 st.title("📋 Scanning_주식 (모바일 뷰어)")
-st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /front-api/annual) 실시간 연동")
+st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
 
 current_codes = load_codes()
 
@@ -127,25 +160,14 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # --- [연간 재무제표 rowList 파싱: result 래핑 완벽 대응] ---
+            # 재무제표 데이터 추출
             fin_data = {
                 "기준연도": "-",
                 "매출액": np.nan, "매출YoY": np.nan, "영업이익": np.nan,
                 "당기순이익": np.nan, "DPS": np.nan, "EPS": np.nan, "BPS": np.nan
             }
             
-            # rowList 안전 탐색 (front-api result 키 내부 파싱)
-            row_list = []
-            if isinstance(fin_json, dict):
-                if "rowList" in fin_json:
-                    row_list = fin_json.get("rowList", [])
-                elif "result" in fin_json and isinstance(fin_json["result"], dict):
-                    row_list = fin_json["result"].get("rowList", [])
-                else:
-                    for val in fin_json.values():
-                        if isinstance(val, dict) and "rowList" in val:
-                            row_list = val.get("rowList", [])
-                            break
+            row_list = extract_row_list(fin_json)
 
             if row_list:
                 for row in row_list:
@@ -171,7 +193,6 @@ if current_codes:
                     prev_val_str = prev_item.get("value") if isinstance(prev_item, dict) else prev_item
                     prev_v = to_num(prev_val_str)
 
-                    # 엄격한 제목 매핑
                     if raw_title in ["매출액", "수익"]:
                         fin_data["매출액"] = cur_v
                         if pd.notna(cur_v) and pd.notna(prev_v) and prev_v != 0:
@@ -208,12 +229,12 @@ if current_codes:
 
     result_df = pd.DataFrame(scan_results)
 
-    # 3. 일괄 삭제 버튼 영역
+    # 3. 일괄 삭제 버튼
     btn_col1, btn_col2 = st.columns([1.5, 6])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
 
-    # 4. 체크박스 지원 데이터 에디터 테이블 렌더링
+    # 4. 데이터 에디터 테이블
     disabled_cols = [c for c in result_df.columns if c != "선택"]
     
     edited_df = st.data_editor(
@@ -228,7 +249,6 @@ if current_codes:
         key="stock_editor"
     )
 
-    # 선택 항목 삭제 처리
     if delete_btn:
         selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
         if selected_codes:
@@ -239,7 +259,6 @@ if current_codes:
         else:
             st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
-    # CSV 다운로드
     csv_data = result_df.drop(columns=["선택"]).to_csv(index=False).encode('utf-8-sig')
     st.download_button(
         "📥 조회 결과 CSV 다운로드",
