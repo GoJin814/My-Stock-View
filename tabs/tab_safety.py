@@ -9,8 +9,8 @@ def render_tab_safety(df_safety: pd.DataFrame, prev_yr: str, latest_yr: str):
 
     desired_cols = [
         "종목명",
-        "부채비율_직전", "순현금_직전", "순차입금_직전", "FCF_직전",
-        "부채비율_최근", "순현금_최근", "순차입금_최근", "FCF_최근"
+        "부채비율_직전", "당좌비율_직전", "유보율_직전", "영업현금_직전",
+        "부채비율_최근", "당좌비율_최근", "유보율_최근", "영업현금_최근"
     ]
     display_df = df_safety[[c for c in desired_cols if c in df_safety.columns]]
 
@@ -20,8 +20,8 @@ def render_tab_safety(df_safety: pd.DataFrame, prev_yr: str, latest_yr: str):
         (latest_yr, 4, False)
     ]
     sub_headers_safety = [
-        "부채비율", "순현금성자산", "순차입금", "FCF",
-        "부채비율", "순현금성자산", "순차입금", "FCF"
+        "부채비율", "당좌비율", "유보율", "영업현금흐름",
+        "부채비율", "당좌비율", "유보율", "영업현금흐름"
     ]
 
     render_multi_header_table(
@@ -31,7 +31,6 @@ def render_tab_safety(df_safety: pd.DataFrame, prev_yr: str, latest_yr: str):
         divider_indices=[4]
     )
 
-    # 표 하단 수식 안내
+    # 표 하단 참고 수식 표기 유지
     st.caption("※ **순현금성자산** = 현금및현금성자산 + 단기금융상품 (단위: 억원)")
     st.caption("※ **순차입금** = 총차입금(단기차입금 + 유동성장기부채 + 사채 + 장기차입금) - 순현금성자산 (단위: 억원)")
-    st.caption("※ **FCF (잉여현금흐름)** = 영업활동현금흐름 - 유형자산의취득(CAPEX) (단위: 억원)")
