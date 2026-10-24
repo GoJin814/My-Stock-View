@@ -165,9 +165,9 @@ def extract_row_list(obj):
                 return found
     return []
 
-# 상단 2단 헤더를 지원하는 맞춤형 테이블 렌더러
-def render_multi_header_table(df: pd.DataFrame, top_headers: list, divider_col_idx: int):
-    # 1행: 상단 그룹 헤더
+# 상단 2단 헤더를 지원하며 위치 기반(iloc)으로 안전하게 값을 꺼내는 렌더러
+def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_col_idx: int):
+    # 1행: 상단 그룹 헤더 (연도)
     top_th_html = ""
     for title, colspan, is_divider in top_headers:
         divider_cls = " year-divider" if is_divider else ""
@@ -176,23 +176,23 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, divider_col_i
         else:
             top_th_html += f'<th colspan="{colspan}" class="group-header{divider_cls}">{title}</th>'
 
-    # 2행: 하위 컬럼 헤더
+    # 2행: 하위 컬럼 헤더 (지표명)
     sub_th_html = ""
-    cols = list(df.columns)[1:]  # '종목명' 제외
-    for idx, col in enumerate(cols, start=1):
+    for idx, col_title in enumerate(sub_headers, start=1):
         divider_cls = " year-divider" if idx == divider_col_idx else ""
-        sub_th_html += f'<th class="{divider_cls}">{col}</th>'
+        sub_th_html += f'<th class="{divider_cls}">{col_title}</th>'
 
-    # 본문 행 생성
+    # 본문 행 생성 (컬럼명 중복 버그 방지를 위해 위치 iloc 기반 순회)
+    num_cols = len(df.columns)
     tb_html = ""
-    for _, row in df.iterrows():
+    for row_idx in range(len(df)):
         tb_html += "<tr>"
-        for idx, col in enumerate(df.columns):
-            val = row[col]
+        for col_idx in range(num_cols):
+            val = df.iloc[row_idx, col_idx]
             classes = []
-            if idx == 0:
+            if col_idx == 0:
                 classes.append("sticky-col")
-            if idx == divider_col_idx:
+            if col_idx == divider_col_idx:
                 classes.append("year-divider")
             cls_attr = f' class="{" ".join(classes)}"' if classes else ""
             tb_html += f"<td{cls_attr}>{val}</td>"
@@ -223,7 +223,6 @@ if current_codes:
     scan_share = []
     full_csv_records = []
     
-    # 대표 연도 헤더 파악용 리스트
     prev_years = []
     latest_years = []
 
@@ -256,7 +255,6 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # 재무제표 직전 연도/마지막 연도 추출
             fin_info = {
                 "latest_yr": "-", "prev_yr": "-",
                 "cur_rev": np.nan, "prev_rev": np.nan, "rev_yoy": np.nan,
@@ -334,28 +332,28 @@ if current_codes:
                 "배당수익률": div_val
             })
 
-            # 2) 실적 탭 (개별 컬럼명에 연도 없이 단독 지표명 부여)
+            # 2) 실적 탭 (컬럼 키를 고유하게 지정하여 판다스 중복 방지)
             scan_perf.append({
                 "종목명": stock_name,
-                "매출액(직전)": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
-                "영업이익(직전)": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
-                "당기순익(직전)": f"{fin_info['prev_np']:,.0f}억" if pd.notna(fin_info['prev_np']) else "-",
-                "매출액(마지막)": f"{fin_info['cur_rev']:,.0f}억" if pd.notna(fin_info['cur_rev']) else "-",
-                "매출 YoY": f"{fin_info['rev_yoy']:+.1f}%" if pd.notna(fin_info['rev_yoy']) else "-",
-                "영업이익(마지막)": f"{fin_info['cur_op']:,.0f}억" if pd.notna(fin_info['cur_op']) else "-",
-                "영업익 YoY": f"{fin_info['op_yoy']:+.1f}%" if pd.notna(fin_info['op_yoy']) else "-",
-                "당기순익(마지막)": f"{fin_info['cur_np']:,.0f}억" if pd.notna(fin_info['cur_np']) else "-"
+                "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
+                "영업익_직전": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
+                "순익_직전": f"{fin_info['prev_np']:,.0f}억" if pd.notna(fin_info['prev_np']) else "-",
+                "매출_최근": f"{fin_info['cur_rev']:,.0f}억" if pd.notna(fin_info['cur_rev']) else "-",
+                "매출_YoY": f"{fin_info['rev_yoy']:+.1f}%" if pd.notna(fin_info['rev_yoy']) else "-",
+                "영업익_최근": f"{fin_info['cur_op']:,.0f}억" if pd.notna(fin_info['cur_op']) else "-",
+                "영업익_YoY": f"{fin_info['op_yoy']:+.1f}%" if pd.notna(fin_info['op_yoy']) else "-",
+                "순익_최근": f"{fin_info['cur_np']:,.0f}억" if pd.notna(fin_info['cur_np']) else "-"
             })
 
-            # 3) 주당 가치 탭
+            # 3) 주당 가치 탭 (컬럼 키 고유 지정)
             scan_share.append({
                 "종목명": stock_name,
-                "EPS(직전)": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-",
-                "BPS(직전)": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
-                "DPS(직전)": f"{fin_info['prev_dps']:,.0f}원" if pd.notna(fin_info['prev_dps']) else "-",
-                "EPS(마지막)": f"{fin_info['cur_eps']:,.0f}원" if pd.notna(fin_info['cur_eps']) else "-",
-                "BPS(마지막)": f"{fin_info['cur_bps']:,.0f}원" if pd.notna(fin_info['cur_bps']) else "-",
-                "DPS(마지막)": f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-",
+                "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-",
+                "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
+                "DPS_직전": f"{fin_info['prev_dps']:,.0f}원" if pd.notna(fin_info['prev_dps']) else "-",
+                "EPS_최근": f"{fin_info['cur_eps']:,.0f}원" if pd.notna(fin_info['cur_eps']) else "-",
+                "BPS_최근": f"{fin_info['cur_bps']:,.0f}원" if pd.notna(fin_info['cur_bps']) else "-",
+                "DPS_최근": f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-",
                 "배당수익률": div_val
             })
 
@@ -372,19 +370,12 @@ if current_codes:
                 "PER": per_val, "PBR": pbr_val, "배당수익률": div_val
             })
 
-    # 최빈 연도 자동 산출 (기본값: 2025년 / 2026년)
     most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
     most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
 
     df_basic = pd.DataFrame(scan_basic)
-    
-    # 실적 탭 컬럼명 다듬기 (하단 행에는 순수 지표명만 표시)
     df_perf = pd.DataFrame(scan_perf)
-    df_perf.columns = ["종목명", "매출액", "영업이익", "당기순익", "매출액", "매출 YoY", "영업이익", "영업익 YoY", "당기순익"]
-
-    # 주당 가치 탭 컬럼명 다듬기
     df_share = pd.DataFrame(scan_share)
-    df_share.columns = ["종목명", "EPS", "BPS", "DPS", "EPS", "BPS", "DPS", "배당수익률"]
 
     # --- 3. 탭 렌더링 ---
     tab1, tab2, tab3 = st.tabs(["📊 기본 & 시세", "📈 실적 & 성장성 (2개년 비교)", "💰 주당 가치 (2개년 비교)"])
@@ -404,24 +395,24 @@ if current_codes:
         )
 
     with tab2:
-        # 실적 탭 2단 상단 헤더: 종목명(1) | 2025년(3) | 2026년(5)
         top_headers_perf = [
             ("종목명", 1, False),
-            (f"{most_prev_yr} (직전)", 3, True),   # 3칸 차지 후 굵은 경계선
-            (f"{most_latest_yr} (마지막)", 5, False) # 5칸 차지
+            (f"{most_prev_yr} (직전)", 3, True),
+            (f"{most_latest_yr} (마지막)", 5, False)
         ]
-        render_multi_header_table(df_perf, top_headers=top_headers_perf, divider_col_idx=3)
+        sub_headers_perf = ["매출액", "영업이익", "당기순익", "매출액", "매출 YoY", "영업이익", "영업익 YoY", "당기순익"]
+        render_multi_header_table(df_perf, top_headers=top_headers_perf, sub_headers=sub_headers_perf, divider_col_idx=3)
 
     with tab3:
-        # 주당 가치 탭 2단 상단 헤더: 종목명(1) | 2025년(3) | 2026년(4)
         top_headers_share = [
             ("종목명", 1, False),
-            (f"{most_prev_yr} (직전)", 3, True),   # 3칸 차지 후 굵은 경계선
-            (f"{most_latest_yr} (마지막)", 4, False) # 4칸 차지
+            (f"{most_prev_yr} (직전)", 3, True),
+            (f"{most_latest_yr} (마지막)", 4, False)
         ]
-        render_multi_header_table(df_share, top_headers=top_headers_share, divider_col_idx=3)
+        sub_headers_share = ["EPS", "BPS", "DPS", "EPS", "BPS", "DPS", "배당수익률"]
+        render_multi_header_table(df_share, top_headers=top_headers_share, sub_headers=sub_headers_share, divider_col_idx=3)
 
-    # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
+    # --- 4. 컨트롤 영역 ---
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
