@@ -5,7 +5,6 @@ import json
 import os
 import re
 from datetime import date
-from styles import render_single_header_table
 from api import to_num, normalize_date
 
 MARKET_CACHE_FILE = "market_history.json"
@@ -134,7 +133,7 @@ def render_tab_market():
         else:
             st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
-    # 3. 테이블 렌더링
+    # 3. 테이블 렌더링 (체크박스 선택 데이터 에디터)
     if market_cache:
         sorted_dates = sorted(market_cache.keys(), reverse=True)
         table_rows = []
@@ -156,29 +155,4 @@ def render_tab_market():
             ex_val = info.get("환율")
             ex_str = f"{float(ex_val):,.1f}원" if (ex_val is not None and not np.isnan(ex_val)) else "-"
 
-            dep_to_mcap_str = "-"
-            crd_to_mcap_str = "-"
-            if pd.notna(mcap_num) and mcap_num > 0:
-                if dep_val is not None and not np.isnan(dep_val):
-                    dep_to_mcap_str = f"{(float(dep_val) / mcap_num) * 100:.2f}%"
-                if crd_val is not None and not np.isnan(crd_val):
-                    crd_to_mcap_str = f"{(float(crd_val) / mcap_num) * 100:.2f}%"
-
-            table_rows.append({
-                "일시": dt,
-                "KOSPI": kospi_str,
-                "시가총액(억원)": mcap_str,
-                "PER": str(info.get("PER", "-")),
-                "PBR": str(info.get("PBR", "-")),
-                "고객예탁금(억원)": cust_dep_str,
-                "신용잔고(억원)": credit_tot_str,
-                "환율": ex_str,
-                "고객예탁금/시가총액": dep_to_mcap_str,
-                "신용잔고/시가총액": crd_to_mcap_str
-            })
-
-        df_market_rendered = pd.DataFrame(table_rows)
-        st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
-        render_single_header_table(df_market_rendered, divider_indices=[4, 6])
-    else:
-        st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
+            dep_
