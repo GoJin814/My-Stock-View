@@ -1,78 +1,15 @@
 import streamlit as st
-import requests
 import pandas as pd
 import numpy as np
 import os
-import re
 import json
 from datetime import date
 
+from styles import apply_custom_styles, render_multi_header_table, render_single_header_table
+from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num, normalize_date
+
 st.set_page_config(page_title="Scanning_주식", layout="wide")
-
-st.markdown("""
-<style>
-div[data-testid="stDataEditor"] {
-    font-size: 13px !important;
-}
-div[data-testid="stDataEditor"] [role="gridcell"],
-div[data-testid="stDataEditor"] [role="columnheader"] {
-    font-size: 13px !important;
-}
-div[data-testid="stDataEditor"] .dvn-scroller {
-    line-height: 1.2 !important;
-}
-
-.styled-table-container {
-    width: 100%;
-    overflow-x: auto;
-    border: 1px solid #374151;
-    border-radius: 8px;
-    margin-bottom: 1.2rem;
-    background-color: #1f2937;
-}
-.compare-table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 13px;
-    text-align: center;
-    white-space: nowrap;
-    color: #f3f4f6;
-}
-.compare-table th, .compare-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #374151;
-    border-right: 1px solid #374151;
-}
-.compare-table th {
-    background-color: #111827;
-    font-weight: 600;
-}
-.compare-table th.group-header {
-    background-color: #0f172a;
-    font-size: 14px;
-    color: #93c5fd;
-    letter-spacing: 0.5px;
-}
-.compare-table tr:hover td {
-    background-color: #374151;
-}
-.compare-table .year-divider {
-    border-right: 3px solid #9ca3af !important;
-}
-.compare-table .sticky-col {
-    position: sticky;
-    left: 0;
-    background-color: #1f2937;
-    z-index: 2;
-    font-weight: bold;
-    border-right: 2px solid #4b5563;
-}
-.compare-table th.sticky-header {
-    background-color: #111827;
-    z-index: 3;
-}
-</style>
-""", unsafe_allow_html=True)
+apply_custom_styles()
 
 SAVE_FILE = "saved_codes.txt"
 MARKET_CACHE_FILE = "market_history.json"
@@ -102,169 +39,14 @@ def save_market_cache(data):
     with open(MARKET_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-REQ_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-    "Referer": "https://m.stock.naver.com/",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-origin"
-}
-
-def to_num(val):
-    if val is None or val in ["", "-", "N/A"]:
-        return np.nan
-    try:
-        return float(str(val).replace(",", "").replace("+", "").strip())
-    except:
-        return np.nan
-
-# 개별 종목 API
-def fetch_basic(code: str):
-    url = f"https://m.stock.naver.com/api/stock/{code}/basic"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return {}
-
-def fetch_integration(code: str):
-    url = f"https://m.stock.naver.com/api/stock/{code}/integration"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return {}
-
-def fetch_finance(code: str):
-    url_front = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
-    try:
-        res = requests.get(url_front, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            if data:
-                return data
-    except Exception:
-        pass
-        
-    url_legacy = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
-    try:
-        res = requests.get(url_legacy, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return {}
-
-def extract_row_list(obj):
-    if isinstance(obj, dict):
-        if "rowList" in obj and isinstance(obj["rowList"], list):
-            return obj["rowList"]
-        for v in obj.values():
-            found = extract_row_list(v)
-            if found:
-                return found
-    elif isinstance(obj, list):
-        for item in obj:
-            found = extract_row_list(item)
-            if found:
-                return found
-    return []
-
-def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
-    top_th_html = ""
-    for title, colspan, is_divider in top_headers:
-        divider_cls = " year-divider" if is_divider else ""
-        if title in ["종목명", "일시"]:
-            top_th_html += f'<th rowspan="2" class="sticky-col sticky-header">{title}</th>'
-        else:
-            top_th_html += f'<th colspan="{colspan}" class="group-header{divider_cls}">{title}</th>'
-
-    sub_th_html = ""
-    for idx, col_title in enumerate(sub_headers, start=1):
-        divider_cls = " year-divider" if idx in divider_indices else ""
-        sub_th_html += f'<th class="{divider_cls}">{col_title}</th>'
-
-    num_cols = len(df.columns)
-    tb_html = ""
-    for row_idx in range(len(df)):
-        tb_html += "<tr>"
-        for col_idx in range(num_cols):
-            val = df.iloc[row_idx, col_idx]
-            classes = []
-            if col_idx == 0:
-                classes.append("sticky-col")
-            if col_idx in divider_indices:
-                classes.append("year-divider")
-            cls_attr = f' class="{" ".join(classes)}"' if classes else ""
-            tb_html += f"<td{cls_attr}>{val}</td>"
-        tb_html += "</tr>"
-
-    html_code = f"""
-    <div class="styled-table-container">
-        <table class="compare-table">
-            <thead>
-                <tr>{top_th_html}</tr>
-                <tr>{sub_th_html}</tr>
-            </thead>
-            <tbody>{tb_html}</tbody>
-        </table>
-    </div>
-    """
-    st.markdown(html_code, unsafe_allow_html=True)
-
-def render_single_header_table(df: pd.DataFrame, divider_indices: list):
-    th_html = ""
-    for idx, col in enumerate(df.columns):
-        classes = []
-        if idx == 0:
-            classes.append("sticky-col sticky-header")
-        if idx in divider_indices:
-            classes.append("year-divider")
-        cls_attr = f' class="{" ".join(classes)}"' if classes else ""
-        th_html += f"<th{cls_attr}>{col}</th>"
-
-    tb_html = ""
-    for row_idx in range(len(df)):
-        tb_html += "<tr>"
-        for col_idx in range(len(df.columns)):
-            val = df.iloc[row_idx, col_idx]
-            classes = []
-            if col_idx == 0:
-                classes.append("sticky-col")
-            if col_idx in divider_indices:
-                classes.append("year-divider")
-            cls_attr = f' class="{" ".join(classes)}"' if classes else ""
-            tb_html += f"<td{cls_attr}>{val}</td>"
-        tb_html += "</tr>"
-
-    html_code = f"""
-    <div class="styled-table-container">
-        <table class="compare-table">
-            <thead><tr>{th_html}</tr></thead>
-            <tbody>{tb_html}</tbody>
-        </table>
-    </div>
-    """
-    st.markdown(html_code, unsafe_allow_html=True)
-
-# 1. 상단 타이틀
 st.title("Scanning_주식")
-
 current_codes = load_codes()
 
-# 2. 종목 데이터 파싱
 if current_codes:
     scan_basic = []
     scan_perf = []
     scan_share = []
     full_csv_records = []
-    
     prev_years = []
     latest_years = []
 
@@ -317,21 +99,18 @@ if current_codes:
                     columns = row.get("columns", {})
                     if not columns:
                         continue
-                    
                     sorted_years = sorted(list(columns.keys()))
                     if not sorted_years:
                         continue
                         
                     latest_k = sorted_years[-1]
                     prev_k = sorted_years[-2] if len(sorted_years) >= 2 else None
-                    
                     fin_info["latest_yr"] = f"{latest_k[:4]}년"
                     if prev_k:
                         fin_info["prev_yr"] = f"{prev_k[:4]}년"
 
                     c_item = columns.get(latest_k, {})
                     c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
-                    
                     p_val = np.nan
                     if prev_k:
                         p_item = columns.get(prev_k, {})
@@ -443,7 +222,6 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 3. 탭 렌더링
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "📈 실적 & 성장성 (2개년 비교)", 
@@ -501,12 +279,10 @@ if current_codes:
             divider_indices=[5]
         )
 
-with tab4:
+    with tab4:
         st.subheader("📝 국내지수 및 자금동향 관리")
-        
         market_cache = load_market_cache()
 
-        # 1. 파일 일괄 가져오기 (CSV / JSON)
         with st.expander("📂 기존 데이터 일괄 불러오기 (CSV / JSON 파일 업로드)", expanded=False):
             uploaded_file = st.file_uploader("파일 선택", type=["csv", "json"], key="market_file_uploader")
             if uploaded_file is not None:
@@ -522,7 +298,6 @@ with tab4:
                                     count += 1
                         else:
                             df_up = pd.read_csv(uploaded_file)
-                            # 컬럼명 유연 매핑
                             for _, row in df_up.iterrows():
                                 dt_raw = row.get("일시") or row.get("날짜") or row.get("Date") or row.iloc[0]
                                 dt_norm = normalize_date(dt_raw)
@@ -553,7 +328,6 @@ with tab4:
                     except Exception as e:
                         st.error(f"파일 불러오기 중 오류가 발생했습니다: {e}")
 
-        # 2. 직접 입력 폼 (증감 항목 제외, 시총/예탁금/신용 배치)
         with st.form("market_input_form", clear_on_submit=False):
             r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
             with r1_c1:
@@ -611,13 +385,11 @@ with tab4:
             else:
                 st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
-        # 3. 테이블 렌더링 (고객예탁금/시가총액, 신용잔고/시가총액 비율 계산)
         if market_cache:
             sorted_dates = sorted(market_cache.keys(), reverse=True)
             table_rows = []
             for dt in sorted_dates:
                 info = market_cache[dt]
-                
                 k_val = info.get("KOSPI")
                 kospi_str = f"{float(k_val):,.2f}" if (k_val is not None and not np.isnan(k_val)) else "-"
 
@@ -634,7 +406,6 @@ with tab4:
                 ex_val = info.get("환율")
                 ex_str = f"{float(ex_val):,.1f}원" if (ex_val is not None and not np.isnan(ex_val)) else "-"
 
-                # 고객예탁금 / 시가총액, 신용잔고 / 시가총액 (%)
                 dep_to_mcap_str = "-"
                 crd_to_mcap_str = "-"
                 if pd.notna(mcap_num) and mcap_num > 0:
@@ -661,8 +432,7 @@ with tab4:
             render_single_header_table(df_market_rendered, divider_indices=[4, 6])
         else:
             st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하거나 CSV/JSON 파일을 불러와주세요.")
-            
-    # 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드)
+
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
@@ -688,7 +458,6 @@ with tab4:
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
-# 5. 종목 추가 영역
 st.write("")
 col_add, col_btn = st.columns([3, 1])
 with col_add:
@@ -704,5 +473,4 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# 6. 맨 하단 출처 안내
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
