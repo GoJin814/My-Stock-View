@@ -1,5 +1,6 @@
 import requests
 import numpy as np
+import pandas as pd
 import re
 
 REQ_HEADERS = {
@@ -21,12 +22,16 @@ def to_num(val):
         return np.nan
 
 def normalize_date(val):
-    if not val:
+    if not val or pd.isna(val):
         return ""
-    digits = re.sub(r'[^0-9]', '', str(val))
+    val_str = str(val).strip()
+    parsed = pd.to_datetime(val_str, errors='coerce')
+    if pd.notnull(parsed):
+        return parsed.strftime('%Y-%m-%d')
+    digits = re.sub(r'[^0-9]', '', val_str)
     if len(digits) >= 8:
         return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
-    return str(val).strip()
+    return val_str
 
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
@@ -62,6 +67,17 @@ def fetch_finance(code: str):
     url_legacy = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
     try:
         res = requests.get(url_legacy, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return {}
+
+def fetch_balance_sheet(code: str):
+    """재무분석 -> [재무상태표] 상세 연간 데이터 호출"""
+    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual/financialStatement?code={code}"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
             return res.json()
     except Exception:
