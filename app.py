@@ -5,7 +5,7 @@ import numpy as np
 import os
 import re
 import json
-from datetime import datetime, date
+from datetime import date
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 
@@ -120,24 +120,7 @@ def to_num(val):
     except:
         return np.nan
 
-def normalize_date(val):
-    if not val:
-        return ""
-    digits = re.sub(r'[^0-9]', '', str(val))
-    if len(digits) >= 8:
-        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
-    return str(val).strip()
-
-def parse_api_list(res_json):
-    if isinstance(res_json, list):
-        return res_json
-    if isinstance(res_json, dict):
-        for key in ["result", "stocks", "items", "data", "history"]:
-            if key in res_json and isinstance(res_json[key], list):
-                return res_json[key]
-    return []
-
-# 1. 개별 종목 API
+# 개별 종목 API
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -192,42 +175,6 @@ def extract_row_list(obj):
             if found:
                 return found
     return []
-
-# 2. 국내지수 & 자금동향 수집 (페이징 확대 파싱)
-def fetch_item_by_date(base_url, target_date_str, max_pages=6):
-    """지정 날짜가 나올 때까지 페이지를 넘기며 단건 탐색"""
-    for page in range(1, max_pages + 1):
-        sep = "&" if "?" in base_url else "?"
-        url = f"{base_url}{sep}page={page}&pageSize=60"
-        try:
-            res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-            if res.status_code == 200:
-                items = parse_api_list(res.json())
-                if not items:
-                    break
-                for item in items:
-                    d_str = normalize_date(
-                        item.get("localTradedAt") or item.get("tradeDate") or 
-                        item.get("date") or item.get("baseDate") or item.get("tradingDate")
-                    )
-                    if d_str == target_date_str:
-                        return item
-                    # 이미 지정일보다 더 과거로 넘어갔으면 중단
-                    if d_str and d_str < target_date_str:
-                        return None
-        except Exception:
-            break
-    return None
-    
-def fetch_kospi_basic_raw():
-    url = "https://m.stock.naver.com/api/index/KOSPI/basic"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return {}
 
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
     top_th_html = ""
@@ -306,12 +253,12 @@ def render_single_header_table(df: pd.DataFrame, divider_indices: list):
     """
     st.markdown(html_code, unsafe_allow_html=True)
 
-# --- 1. 상단 타이틀 ---
+# 1. 상단 타이틀
 st.title("Scanning_주식")
 
 current_codes = load_codes()
 
-# --- 2. 종목 데이터 파싱 ---
+# 2. 종목 데이터 파싱
 if current_codes:
     scan_basic = []
     scan_perf = []
@@ -496,7 +443,7 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # --- 3. 탭 렌더링 ---
+    # 3. 탭 렌더링
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "📈 실적 & 성장성 (2개년 비교)", 
@@ -555,87 +502,76 @@ if current_codes:
         )
 
     with tab4:
-        st.subheader("📅 일자별 지표 수집 및 관리")
+        st.subheader("📝 국내지수 및 자금동향 직접 입력 / 관리")
         
-        # 캐시 불러오기
         market_cache = load_market_cache()
-        
-        c_date, c_action, c_del = st.columns([2, 2, 2])
-        with c_date:
-            target_date = st.date_input("조회할 날짜 선택", value=date.today())
-            target_date_str = target_date.strftime("%Y-%m-%d")
 
-        with c_action:
-            st.write("")
-            fetch_btn = st.button("📥 해당 일자 데이터 수집 / 갱신", use_container_width=True)
+        with st.form("market_input_form", clear_on_submit=False):
+            r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
+            with r1_c1:
+                in_date = st.date_input("기준일자", value=date.today())
+            with r1_c2:
+                in_kospi = st.text_input("KOSPI (포인트)", placeholder="예: 2650.50")
+            with r1_c3:
+                in_mcap = st.text_input("시가총액(억원)", placeholder="예: 2,150,000")
+            with r1_c4:
+                in_per = st.text_input("PER (배)", placeholder="예: 12.50")
+            with r1_c5:
+                in_pbr = st.text_input("PBR (배)", placeholder="예: 0.95")
 
-        with c_del:
-            st.write("")
-            del_cache_btn = st.button("🗑️ 선택 일자 캐시 삭제", use_container_width=True)
+            r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
+            with r2_c1:
+                in_dep = st.text_input("고객예탁금(억원)", placeholder="예: 54000")
+            with r2_c2:
+                in_dep_diff = st.text_input("예탁금 증감(억원)", placeholder="예: +1200")
+            with r2_c3:
+                in_credit = st.text_input("신용잔고(억원)", placeholder="예: 18000")
+            with r2_c4:
+                in_credit_diff = st.text_input("신용 증감(억원)", placeholder="예: -350")
+            with r2_c5:
+                in_fx = st.text_input("환율 (원)", placeholder="예: 1350.5")
 
-        if del_cache_btn:
-            if target_date_str in market_cache:
-                del market_cache[target_date_str]
+            f_btn1, f_btn2, _ = st.columns([1.5, 1.5, 3])
+            with f_btn1:
+                save_manual_btn = st.form_submit_button("💾 데이터 저장 / 갱신", type="primary", use_container_width=True)
+            with f_btn2:
+                del_manual_btn = st.form_submit_button("🗑️ 해당 일자 삭제", use_container_width=True)
+
+        target_dt_str = in_date.strftime("%Y-%m-%d")
+
+        if save_manual_btn:
+            k_val = to_num(in_kospi)
+            dep_val = to_num(in_dep)
+            dep_d_val = to_num(in_dep_diff)
+            crd_val = to_num(in_credit)
+            crd_d_val = to_num(in_credit_diff)
+            fx_val = to_num(in_fx)
+
+            market_cache[target_dt_str] = {
+                "KOSPI": k_val if pd.notna(k_val) else None,
+                "시가총액(억원)": in_mcap.strip() if in_mcap.strip() else "-",
+                "PER": in_per.strip() if in_per.strip() else "-",
+                "PBR": in_pbr.strip() if in_pbr.strip() else "-",
+                "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
+                "증감(억원)": dep_d_val if pd.notna(dep_d_val) else None,
+                "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
+                "증감(신용)(억원)": crd_d_val if pd.notna(crd_d_val) else None,
+                "환율": fx_val if pd.notna(fx_val) else None
+            }
+            save_market_cache(market_cache)
+            st.success(f"{target_dt_str} 지표가 저장되었습니다.")
+            st.rerun()
+
+        if del_manual_btn:
+            if target_dt_str in market_cache:
+                del market_cache[target_dt_str]
                 save_market_cache(market_cache)
-                st.success(f"{target_date_str} 캐시 데이터 삭제 완료")
+                st.success(f"{target_dt_str} 기록이 삭제되었습니다.")
                 st.rerun()
             else:
-                st.info(f"{target_date_str}에 저장된 데이터가 없습니다.")
+                st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
-        if fetch_btn:
-            with st.spinner(f"{target_date_str} 증시 데이터를 수집 및 저장하고 있습니다..."):
-                # 각 API별로 해당 날짜를 페이징 검색
-                k_item = fetch_item_by_date("https://m.stock.naver.com/front-api/marketIndex/prices?category=index&reutersCode=KOSPI", target_date_str)
-                ex_item = fetch_item_by_date("https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW", target_date_str)
-                dep_item = fetch_item_by_date("https://m.stock.naver.com/front-api/investor/deposit/trend", target_date_str)
-                kospi_basic = fetch_kospi_basic_raw()
-
-                # 1. KOSPI
-                kospi_val = np.nan
-                if k_item:
-                    raw_k = k_item.get("closePrice") or k_item.get("nowValue") or k_item.get("closeVal")
-                    kospi_val = to_num(raw_k)
-
-                # 2. 환율
-                ex_val = np.nan
-                if ex_item:
-                    raw_ex = ex_item.get("closePrice") or ex_item.get("nowValue")
-                    ex_val = to_num(raw_ex)
-
-                # 3. 예탁금 & 신용잔고
-                dep_val, dep_diff = np.nan, np.nan
-                crd_val, crd_diff = np.nan, np.nan
-                if dep_item:
-                    dep_val = to_num(dep_item.get("customerDeposit") or dep_item.get("custDeposit") or dep_item.get("deposit"))
-                    dep_diff = to_num(dep_item.get("customerDepositChange") or dep_item.get("custDepositDiff") or dep_item.get("depositDiff"))
-                    crd_val = to_num(dep_item.get("marginLoan") or dep_item.get("creditTotal") or dep_item.get("creditLoan"))
-                    crd_diff = to_num(dep_item.get("marginLoanChange") or dep_item.get("creditTotalDiff") or dep_item.get("creditLoanDiff"))
-
-                # 4. KOSPI 밸류에이션 (당일이 아닌 과거 일자는 기본 API에서 제공하지 않으므로 당일 기준만 유지)
-                m_cap = kospi_basic.get("marketValue") or kospi_basic.get("marketCap", "-")
-                per_str = str(kospi_basic.get("per", "-"))
-                pbr_str = str(kospi_basic.get("pbr", "-"))
-
-                # 유효 데이터 확인 후 저장
-                if pd.isna(kospi_val) and pd.isna(ex_val) and pd.isna(dep_val):
-                    st.warning(f"⚠️ {target_date_str}은 휴장일(주말/공휴일)이거나 조회 가능 범위(약 1년)를 벗어난 일자입니다.")
-                else:
-                    market_cache[target_date_str] = {
-                        "KOSPI": kospi_val if pd.notna(kospi_val) else None,
-                        "시가총액(억원)": m_cap if target_date_str == date.today().strftime("%Y-%m-%d") else "-",
-                        "PER": per_str if target_date_str == date.today().strftime("%Y-%m-%d") else "-",
-                        "PBR": pbr_str if target_date_str == date.today().strftime("%Y-%m-%d") else "-",
-                        "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
-                        "증감(억원)": dep_diff if pd.notna(dep_diff) else None,
-                        "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
-                        "증감(신용)(억원)": crd_diff if pd.notna(crd_diff) else None,
-                        "환율": ex_val if pd.notna(ex_val) else None
-                    }
-                    save_market_cache(market_cache)
-                    st.success(f"{target_date_str} 데이터 동기화 및 저장 완료!")
-                    st.rerun()
-
-        # 테이블 렌더링 (저장된 캐시 데이터로부터 구성)
+        # 테이블 렌더링
         if market_cache:
             sorted_dates = sorted(market_cache.keys(), reverse=True)
             table_rows = []
@@ -685,9 +621,9 @@ if current_codes:
             st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
             render_single_header_table(df_market_rendered, divider_indices=[4, 6, 8])
         else:
-            st.info("💡 아직 저장된 증시 지표가 없습니다. 위 날짜를 선택한 뒤 [해당 일자 데이터 수집 / 갱신]을 눌러주세요.")
+            st.info("💡 등록된 지표 데이터가 없습니다. 상단 입력란에 수치를 입력하고 [데이터 저장 / 갱신]을 눌러주세요.")
 
-    # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
+    # 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드)
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
@@ -713,7 +649,7 @@ if current_codes:
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
-# --- 5. 종목 추가 영역 ---
+# 5. 종목 추가 영역
 st.write("")
 col_add, col_btn = st.columns([3, 1])
 with col_add:
@@ -729,5 +665,5 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
-# --- 6. 맨 하단 출처 안내 ---
-st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual, /marketIndex) 실시간 연동")
+# 6. 맨 하단 출처 안내
+st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
