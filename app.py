@@ -4,10 +4,11 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import json
+from datetime import datetime, date
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 
-# 표 글자 크기, 컴팩트 스타일 및 세로 굵은 구분선
 st.markdown("""
 <style>
 div[data-testid="stDataEditor"] {
@@ -74,6 +75,7 @@ div[data-testid="stDataEditor"] .dvn-scroller {
 """, unsafe_allow_html=True)
 
 SAVE_FILE = "saved_codes.txt"
+MARKET_CACHE_FILE = "market_history.json"
 
 def load_codes():
     if os.path.exists(SAVE_FILE):
@@ -87,6 +89,19 @@ def save_codes(codes):
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
+def load_market_cache():
+    if os.path.exists(MARKET_CACHE_FILE):
+        try:
+            with open(MARKET_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_market_cache(data):
+    with open(MARKET_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
 REQ_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
     "Referer": "https://m.stock.naver.com/",
@@ -96,6 +111,31 @@ REQ_HEADERS = {
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-origin"
 }
+
+def to_num(val):
+    if val is None or val in ["", "-", "N/A"]:
+        return np.nan
+    try:
+        return float(str(val).replace(",", "").replace("+", "").strip())
+    except:
+        return np.nan
+
+def normalize_date(val):
+    if not val:
+        return ""
+    digits = re.sub(r'[^0-9]', '', str(val))
+    if len(digits) >= 8:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+    return str(val).strip()
+
+def parse_api_list(res_json):
+    if isinstance(res_json, list):
+        return res_json
+    if isinstance(res_json, dict):
+        for key in ["result", "stocks", "items", "data", "history"]:
+            if key in res_json and isinstance(res_json[key], list):
+                return res_json[key]
+    return []
 
 # 1. 개별 종목 API
 def fetch_basic(code: str):
@@ -138,72 +178,6 @@ def fetch_finance(code: str):
         pass
     return {}
 
-# 2. 국내지수 Monitor API
-def parse_api_list(res_json):
-    if isinstance(res_json, list):
-        return res_json
-    if isinstance(res_json, dict):
-        for key in ["result", "stocks", "items", "data"]:
-            if key in res_json and isinstance(res_json[key], list):
-                return res_json[key]
-    return []
-
-def fetch_kospi_history():
-    url = "https://m.stock.naver.com/front-api/marketIndex/prices?category=index&reutersCode=KOSPI&page=1&pageSize=20"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return parse_api_list(res.json())
-    except Exception:
-        pass
-    return []
-
-def fetch_exchange_history():
-    url = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW&page=1&pageSize=20"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return parse_api_list(res.json())
-    except Exception:
-        pass
-    return []
-
-def fetch_deposit_trend():
-    url = "https://m.stock.naver.com/front-api/investor/deposit/trend?page=1&pageSize=20"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return parse_api_list(res.json())
-    except Exception:
-        pass
-    return []
-
-def fetch_kospi_basic():
-    url = "https://m.stock.naver.com/api/index/KOSPI/basic"
-    try:
-        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return {}
-
-def normalize_date(val):
-    if not val:
-        return ""
-    digits = re.sub(r'[^0-9]', '', str(val))
-    if len(digits) >= 8:
-        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
-    return str(val).strip()
-
-def to_num(val):
-    if val is None or val in ["", "-", "N/A"]:
-        return np.nan
-    try:
-        return float(str(val).replace(",", "").replace("+", "").strip())
-    except:
-        return np.nan
-
 def extract_row_list(obj):
     if isinstance(obj, dict):
         if "rowList" in obj and isinstance(obj["rowList"], list):
@@ -218,6 +192,47 @@ def extract_row_list(obj):
             if found:
                 return found
     return []
+
+# 2. 국내지수 & 자금동향 수집 (페이징 확대 파싱)
+def fetch_kospi_history_raw():
+    url = "https://m.stock.naver.com/front-api/marketIndex/prices?category=index&reutersCode=KOSPI&page=1&pageSize=60"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return parse_api_list(res.json())
+    except Exception:
+        pass
+    return []
+
+def fetch_exchange_history_raw():
+    url = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW&page=1&pageSize=60"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return parse_api_list(res.json())
+    except Exception:
+        pass
+    return []
+
+def fetch_deposit_trend_raw():
+    url = "https://m.stock.naver.com/front-api/investor/deposit/trend?page=1&pageSize=60"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return parse_api_list(res.json())
+    except Exception:
+        pass
+    return []
+
+def fetch_kospi_basic_raw():
+    url = "https://m.stock.naver.com/api/index/KOSPI/basic"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return {}
 
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
     top_th_html = ""
@@ -545,101 +560,142 @@ if current_codes:
         )
 
     with tab4:
-        with st.spinner("국내 증시 및 자금동향 지표를 수집하고 있습니다..."):
-            kospi_list = fetch_kospi_history()
-            exchange_list = fetch_exchange_history()
-            deposit_list = fetch_deposit_trend()
-            kospi_basic = fetch_kospi_basic()
+        st.subheader("📅 일자별 지표 수집 및 관리")
+        
+        # 캐시 불러오기
+        market_cache = load_market_cache()
+        
+        c_date, c_action, c_del = st.columns([2, 2, 2])
+        with c_date:
+            target_date = st.date_input("조회할 날짜 선택", value=date.today())
+            target_date_str = target_date.strftime("%Y-%m-%d")
 
-            # 날짜를 YYYY-MM-DD 규격으로 정규화하여 매핑
-            kospi_map = {}
-            for item in kospi_list:
-                dt_key = normalize_date(item.get("localTradedAt") or item.get("date") or item.get("baseDate"))
-                if dt_key:
-                    kospi_map[dt_key] = item
+        with c_action:
+            st.write("")
+            fetch_btn = st.button("📥 해당 일자 데이터 수집 / 갱신", use_container_width=True)
 
-            exchange_map = {}
-            for item in exchange_list:
-                dt_key = normalize_date(item.get("localTradedAt") or item.get("date") or item.get("baseDate"))
-                if dt_key:
-                    exchange_map[dt_key] = item
+        with c_del:
+            st.write("")
+            del_cache_btn = st.button("🗑️ 선택 일자 캐시 삭제", use_container_width=True)
 
-            deposit_map = {}
-            for item in deposit_list:
-                dt_key = normalize_date(item.get("baseDate") or item.get("date") or item.get("localTradedAt"))
-                if dt_key:
-                    deposit_map[dt_key] = item
+        if del_cache_btn:
+            if target_date_str in market_cache:
+                del market_cache[target_date_str]
+                save_market_cache(market_cache)
+                st.success(f"{target_date_str} 캐시 데이터 삭제 완료")
+                st.rerun()
+            else:
+                st.info(f"{target_date_str}에 저장된 데이터가 없습니다.")
 
-            all_dates = sorted(list(set(list(kospi_map.keys()) + list(deposit_map.keys()) + list(exchange_map.keys()))), reverse=True)
+        if fetch_btn:
+            with st.spinner(f"{target_date_str} 증시 데이터를 수집 및 저장하고 있습니다..."):
+                kospi_list = fetch_kospi_history_raw()
+                exchange_list = fetch_exchange_history_raw()
+                deposit_list = fetch_deposit_trend_raw()
+                kospi_basic = fetch_kospi_basic_raw()
 
-            market_rows = []
-            for dt in all_dates[:15]:
-                k_data = kospi_map.get(dt, {})
-                ex_data = exchange_map.get(dt, {})
-                dep_data = deposit_map.get(dt, {})
+                # 1. KOSPI 매핑 (nowValue, closePrice 모두 고려)
+                kospi_val = np.nan
+                for item in kospi_list:
+                    d_str = normalize_date(item.get("localTradedAt") or item.get("tradeDate") or item.get("date") or item.get("baseDate"))
+                    if d_str == target_date_str:
+                        raw_k = item.get("closePrice") or item.get("nowValue") or item.get("closeVal")
+                        kospi_val = to_num(raw_k)
+                        break
 
-                # 1. KOSPI
-                raw_kospi = k_data.get("closePrice") or k_data.get("nowValue")
-                kospi_num = to_num(raw_kospi)
-                kospi_str = f"{kospi_num:,.2f}" if pd.notna(kospi_num) else "-"
+                # 2. 환율 매핑
+                ex_val = np.nan
+                for item in exchange_list:
+                    d_str = normalize_date(item.get("localTradedAt") or item.get("tradeDate") or item.get("date") or item.get("baseDate"))
+                    if d_str == target_date_str:
+                        raw_ex = item.get("closePrice") or item.get("nowValue")
+                        ex_val = to_num(raw_ex)
+                        break
 
-                # 2. 시총, PER, PBR
-                m_cap = kospi_basic.get("marketValue", "-")
+                # 3. 예탁금 & 신용잔고 매핑 (네이버 증권 자금동향 필드 호환)
+                dep_val, dep_diff = np.nan, np.nan
+                crd_val, crd_diff = np.nan, np.nan
+                for item in deposit_list:
+                    d_str = normalize_date(item.get("baseDate") or item.get("date") or item.get("localTradedAt"))
+                    if d_str == target_date_str:
+                        dep_val = to_num(item.get("customerDeposit") or item.get("custDeposit") or item.get("deposit"))
+                        dep_diff = to_num(item.get("customerDepositChange") or item.get("custDepositDiff") or item.get("depositDiff"))
+                        crd_val = to_num(item.get("marginLoan") or item.get("creditTotal") or item.get("creditLoan"))
+                        crd_diff = to_num(item.get("marginLoanChange") or item.get("creditTotalDiff") or item.get("creditLoanDiff"))
+                        break
+
+                # 4. KOSPI 밸류에이션 (기본 정보)
+                m_cap = kospi_basic.get("marketValue") or kospi_basic.get("marketCap", "-")
                 per_str = str(kospi_basic.get("per", "-"))
                 pbr_str = str(kospi_basic.get("pbr", "-"))
 
-                # 3. 고객예탁금
-                cust_dep = to_num(dep_data.get("custDeposit") or dep_data.get("customerDeposit"))
-                cust_diff = to_num(dep_data.get("custDepositDiff") or dep_data.get("customerDepositChange"))
-                cust_dep_str = f"{cust_dep:,.0f}" if pd.notna(cust_dep) else "-"
-                cust_diff_str = f"{cust_diff:+,.0f}" if pd.notna(cust_diff) else "-"
-
-                # 4. 신용잔고
-                credit_tot = to_num(dep_data.get("creditTotal") or dep_data.get("creditLoan"))
-                credit_diff = to_num(dep_data.get("creditTotalDiff") or dep_data.get("creditLoanChange"))
-                credit_tot_str = f"{credit_tot:,.0f}" if pd.notna(credit_tot) else "-"
-                credit_diff_str = f"{credit_diff:+,.0f}" if pd.notna(credit_diff) else "-"
-
-                # 5. 환율
-                raw_ex = ex_data.get("closePrice") or ex_data.get("nowValue")
-                ex_num = to_num(raw_ex)
-                ex_str = f"{ex_num:,.1f}원" if pd.notna(ex_num) else "-"
-
-                # 6. 유동성 비율
-                dep_ratio_str = "-"
-                credit_ratio_str = "-"
-                if pd.notna(cust_dep) and pd.notna(kospi_num) and kospi_num > 0:
-                    dep_ratio_str = f"{(cust_dep / kospi_num):.2f}"
-                if pd.notna(credit_tot) and pd.notna(kospi_num) and kospi_num > 0:
-                    credit_ratio_str = f"{(credit_tot / kospi_num):.2f}"
-
-                market_rows.append({
-                    "일시": dt,
-                    "KOSPI": kospi_str,
+                # 캐시에 기록
+                market_cache[target_date_str] = {
+                    "KOSPI": kospi_val if pd.notna(kospi_val) else None,
                     "시가총액(억원)": m_cap,
                     "PER": per_str,
                     "PBR": pbr_str,
+                    "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
+                    "증감(억원)": dep_diff if pd.notna(dep_diff) else None,
+                    "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
+                    "증감(신용)(억원)": crd_diff if pd.notna(crd_diff) else None,
+                    "환율": ex_val if pd.notna(ex_val) else None
+                }
+                save_market_cache(market_cache)
+                st.success(f"{target_date_str} 데이터 동기화 및 저장 완료!")
+                st.rerun()
+
+        # 테이블 렌더링 (저장된 캐시 데이터로부터 구성)
+        if market_cache:
+            sorted_dates = sorted(market_cache.keys(), reverse=True)
+            table_rows = []
+            for dt in sorted_dates:
+                info = market_cache[dt]
+                
+                k_val = info.get("KOSPI")
+                kospi_str = f"{float(k_val):,.2f}" if (k_val is not None and not np.isnan(k_val)) else "-"
+
+                dep_val = info.get("고객예탁금(억원)")
+                dep_diff = info.get("증감(억원)")
+                cust_dep_str = f"{float(dep_val):,.0f}" if (dep_val is not None and not np.isnan(dep_val)) else "-"
+                cust_diff_str = f"{float(dep_diff):+,.0f}" if (dep_diff is not None and not np.isnan(dep_diff)) else "-"
+
+                crd_val = info.get("신용잔고(억원)")
+                crd_diff = info.get("증감(신용)(억원)")
+                credit_tot_str = f"{float(crd_val):,.0f}" if (crd_val is not None and not np.isnan(crd_val)) else "-"
+                credit_diff_str = f"{float(crd_diff):+,.0f}" if (crd_diff is not None and not np.isnan(crd_diff)) else "-"
+
+                ex_val = info.get("환율")
+                ex_str = f"{float(ex_val):,.1f}원" if (ex_val is not None and not np.isnan(ex_val)) else "-"
+
+                # 유동성 비율 계산
+                dep_ratio_str = "-"
+                credit_ratio_str = "-"
+                if k_val and dep_val and float(k_val) > 0:
+                    dep_ratio_str = f"{(float(dep_val) / float(k_val)):.2f}"
+                if k_val and crd_val and float(k_val) > 0:
+                    credit_ratio_str = f"{(float(crd_val) / float(k_val)):.2f}"
+
+                table_rows.append({
+                    "일시": dt,
+                    "KOSPI": kospi_str,
+                    "시가총액(억원)": str(info.get("시가총액(억원)", "-")),
+                    "PER": str(info.get("PER", "-")),
+                    "PBR": str(info.get("PBR", "-")),
                     "고객예탁금(억원)": cust_dep_str,
                     "증감(억원)": cust_diff_str,
                     "신용잔고(억원)": credit_tot_str,
-                    "증감(신용)(억원)": credit_diff_str,
+                    "증감(억원)": credit_diff_str,
                     "환율": ex_str,
                     "고객예탁금/지수": dep_ratio_str,
                     "신용잔고/지수": credit_ratio_str
                 })
 
-            df_market = pd.DataFrame(market_rows)
-            if not df_market.empty:
-                df_market.columns = [
-                    "일시", "KOSPI", "시가총액(억원)", "PER", "PBR", 
-                    "고객예탁금(억원)", "증감(억원)", 
-                    "신용잔고(억원)", "증감(억원)", 
-                    "환율", "고객예탁금/지수", "신용잔고/지수"
-                ]
-                render_single_header_table(df_market, divider_indices=[4, 6, 8])
-            else:
-                # 외부 API 차단 등 응답 지연 시 폴백 안내 및 기본 구조 출력
-                st.warning("⚠️ 네이버 증시 지표 API 응답을 동기화하지 못했습니다. 일시적 통신 제한일 수 있습니다.")
+            df_market_rendered = pd.DataFrame(table_rows)
+            st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
+            render_single_header_table(df_market_rendered, divider_indices=[4, 6, 8])
+        else:
+            st.info("💡 아직 저장된 증시 지표가 없습니다. 위 날짜를 선택한 뒤 [해당 일자 데이터 수집 / 갱신]을 눌러주세요.")
 
     # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
