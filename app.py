@@ -27,10 +27,9 @@ def save_codes(codes):
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
-st.title("Scanning_주식")
-current_codes = load_codes()
-
-if current_codes:
+# 10분(600초) 동안 캐시 유지 (체크박스 클릭 시 재호출 방지)
+@st.cache_data(ttl=600, show_spinner="증권 데이터를 동기화하고 있습니다...")
+def fetch_all_stock_data(codes_tuple):
     scan_basic = []
     scan_perf = []
     scan_share = []
@@ -38,173 +37,190 @@ if current_codes:
     prev_years = []
     latest_years = []
 
-    with st.spinner("증권 데이터를 동기화하고 있습니다..."):
-        for code in current_codes:
-            basic = fetch_basic(code)
-            integration = fetch_integration(code)
-            fin_json = fetch_finance(code)
-            
-            stock_name = basic.get("stockName", "-")
-            raw_close = basic.get("closePrice", "-")
-            curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
-            
-            total_infos = integration.get("totalInfos", [])
-            market_cap = "-"
-            integration_dict = {}
-            for item in total_infos:
-                item_code = str(item.get("code", "")).strip()
-                item_key = str(item.get("key", "")).strip()
-                item_val = str(item.get("value", "")).strip()
-                if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
-                    market_cap = item_val
-                integration_dict[item_key] = item_val
+    for code in codes_tuple:
+        basic = fetch_basic(code)
+        integration = fetch_integration(code)
+        fin_json = fetch_finance(code)
+        
+        stock_name = basic.get("stockName", "-")
+        raw_close = basic.get("closePrice", "-")
+        curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
+        
+        total_infos = integration.get("totalInfos", [])
+        market_cap = "-"
+        integration_dict = {}
+        for item in total_infos:
+            item_code = str(item.get("code", "")).strip()
+            item_key = str(item.get("key", "")).strip()
+            item_val = str(item.get("value", "")).strip()
+            if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
+                market_cap = item_val
+            integration_dict[item_key] = item_val
 
-            raw_per = basic.get("per", integration_dict.get("PER", "-"))
-            raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
-            raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
-            
-            per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
-            pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
-            div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
+        raw_per = basic.get("per", integration_dict.get("PER", "-"))
+        raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
+        raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
+        
+        per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
+        pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
+        div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            fin_info = {
-                "latest_yr": "-", "prev_yr": "-",
-                "cur_rev": np.nan, "prev_rev": np.nan, "rev_yoy": np.nan,
-                "cur_op": np.nan,  "prev_op": np.nan,  "op_yoy": np.nan,
-                "cur_np": np.nan,  "prev_np": np.nan,  "np_yoy": np.nan,
-                "cur_eps": np.nan, "prev_eps": np.nan,
-                "cur_bps": np.nan, "prev_bps": np.nan,
-                "cur_dps": np.nan, "prev_dps": np.nan,
-                "cur_roe": np.nan, "prev_roe": np.nan,
-                "cur_per": np.nan, "prev_per": np.nan,
-                "cur_pbr": np.nan, "prev_pbr": np.nan,
-            }
+        fin_info = {
+            "latest_yr": "-", "prev_yr": "-",
+            "cur_rev": np.nan, "prev_rev": np.nan, "rev_yoy": np.nan,
+            "cur_op": np.nan,  "prev_op": np.nan,  "op_yoy": np.nan,
+            "cur_np": np.nan,  "prev_np": np.nan,  "np_yoy": np.nan,
+            "cur_eps": np.nan, "prev_eps": np.nan,
+            "cur_bps": np.nan, "prev_bps": np.nan,
+            "cur_dps": np.nan, "prev_dps": np.nan,
+            "cur_roe": np.nan, "prev_roe": np.nan,
+            "cur_per": np.nan, "prev_per": np.nan,
+            "cur_pbr": np.nan, "prev_pbr": np.nan,
+        }
 
-            row_list = extract_row_list(fin_json)
-            if row_list:
-                for row in row_list:
-                    raw_title = row.get("title", "").strip()
-                    columns = row.get("columns", {})
-                    if not columns:
-                        continue
-                    sorted_years = sorted(list(columns.keys()))
-                    if not sorted_years:
-                        continue
-                        
-                    latest_k = sorted_years[-1]
-                    prev_k = sorted_years[-2] if len(sorted_years) >= 2 else None
-                    fin_info["latest_yr"] = f"{latest_k[:4]}년"
-                    if prev_k:
-                        fin_info["prev_yr"] = f"{prev_k[:4]}년"
+        row_list = extract_row_list(fin_json)
+        if row_list:
+            for row in row_list:
+                raw_title = row.get("title", "").strip()
+                columns = row.get("columns", {})
+                if not columns:
+                    continue
+                sorted_years = sorted(list(columns.keys()))
+                if not sorted_years:
+                    continue
+                    
+                latest_k = sorted_years[-1]
+                prev_k = sorted_years[-2] if len(sorted_years) >= 2 else None
+                fin_info["latest_yr"] = f"{latest_k[:4]}년"
+                if prev_k:
+                    fin_info["prev_yr"] = f"{prev_k[:4]}년"
 
-                    c_item = columns.get(latest_k, {})
-                    c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
-                    p_val = np.nan
-                    if prev_k:
-                        p_item = columns.get(prev_k, {})
-                        p_val = to_num(p_item.get("value") if isinstance(p_item, dict) else p_item)
+                c_item = columns.get(latest_k, {})
+                c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
+                p_val = np.nan
+                if prev_k:
+                    p_item = columns.get(prev_k, {})
+                    p_val = to_num(p_item.get("value") if isinstance(p_item, dict) else p_item)
 
-                    if raw_title in ["매출액", "수익"]:
-                        fin_info["cur_rev"] = c_val
-                        fin_info["prev_rev"] = p_val
-                        if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
-                            fin_info["rev_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
-                    elif raw_title == "영업이익":
-                        fin_info["cur_op"] = c_val
-                        fin_info["prev_op"] = p_val
-                        if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
-                            fin_info["op_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
-                    elif raw_title in ["당기순이익", "당기순익"]:
-                        fin_info["cur_np"] = c_val
-                        fin_info["prev_np"] = p_val
-                        if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
-                            fin_info["np_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
-                    elif raw_title in ["수정주당순이익(원)", "주당순이익(원)", "EPS"]:
-                        fin_info["cur_eps"] = c_val
-                        fin_info["prev_eps"] = p_val
-                    elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
-                        fin_info["cur_bps"] = c_val
-                        fin_info["prev_bps"] = p_val
-                    elif raw_title in ["주당배당금(원)", "주당배당금", "DPS"]:
-                        fin_info["cur_dps"] = c_val
-                        fin_info["prev_dps"] = p_val
-                    elif raw_title in ["ROE(%)", "ROE"]:
-                        fin_info["cur_roe"] = c_val
-                        fin_info["prev_roe"] = p_val
-                    elif raw_title in ["PER(배)", "PER"]:
-                        fin_info["cur_per"] = c_val
-                        fin_info["prev_per"] = p_val
-                    elif raw_title in ["PBR(배)", "PBR"]:
-                        fin_info["cur_pbr"] = c_val
-                        fin_info["prev_pbr"] = p_val
+                if raw_title in ["매출액", "수익"]:
+                    fin_info["cur_rev"] = c_val
+                    fin_info["prev_rev"] = p_val
+                    if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
+                        fin_info["rev_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
+                elif raw_title == "영업이익":
+                    fin_info["cur_op"] = c_val
+                    fin_info["prev_op"] = p_val
+                    if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
+                        fin_info["op_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
+                elif raw_title in ["당기순이익", "당기순익"]:
+                    fin_info["cur_np"] = c_val
+                    fin_info["prev_np"] = p_val
+                    if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
+                        fin_info["np_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
+                elif raw_title in ["수정주당순이익(원)", "주당순이익(원)", "EPS"]:
+                    fin_info["cur_eps"] = c_val
+                    fin_info["prev_eps"] = p_val
+                elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
+                    fin_info["cur_bps"] = c_val
+                    fin_info["prev_bps"] = p_val
+                elif raw_title in ["주당배당금(원)", "주당배당금", "DPS"]:
+                    fin_info["cur_dps"] = c_val
+                    fin_info["prev_dps"] = p_val
+                elif raw_title in ["ROE(%)", "ROE"]:
+                    fin_info["cur_roe"] = c_val
+                    fin_info["prev_roe"] = p_val
+                elif raw_title in ["PER(배)", "PER"]:
+                    fin_info["cur_per"] = c_val
+                    fin_info["prev_per"] = p_val
+                elif raw_title in ["PBR(배)", "PBR"]:
+                    fin_info["cur_pbr"] = c_val
+                    fin_info["prev_pbr"] = p_val
 
-            if fin_info["prev_yr"] != "-":
-                prev_years.append(fin_info["prev_yr"])
-            if fin_info["latest_yr"] != "-":
-                latest_years.append(fin_info["latest_yr"])
+        if fin_info["prev_yr"] != "-":
+            prev_years.append(fin_info["prev_yr"])
+        if fin_info["latest_yr"] != "-":
+            latest_years.append(fin_info["latest_yr"])
 
-            dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
+        dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
-            scan_basic.append({
-                "선택": False,
-                "종목명": stock_name,
-                "종목코드": code,
-                "현재가": curr_price_str,
-                "시총": market_cap,
-                "현재 PER": per_val,
-                "현재 PBR": pbr_val,
-                "DPS(원)": dps_display,
-                "배당수익률": div_val
-            })
+        scan_basic.append({
+            "선택": False,
+            "종목명": stock_name,
+            "종목코드": code,
+            "현재가": curr_price_str,
+            "시총": market_cap,
+            "현재 PER": per_val,
+            "현재 PBR": pbr_val,
+            "DPS(원)": dps_display,
+            "배당수익률": div_val
+        })
 
-            scan_perf.append({
-                "종목명": stock_name,
-                "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
-                "영업익_직전": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
-                "순익_직전": f"{fin_info['prev_np']:,.0f}억" if pd.notna(fin_info['prev_np']) else "-",
-                "매출_최근": f"{fin_info['cur_rev']:,.0f}억" if pd.notna(fin_info['cur_rev']) else "-",
-                "영업익_최근": f"{fin_info['cur_op']:,.0f}억" if pd.notna(fin_info['cur_op']) else "-",
-                "순익_최근": f"{fin_info['cur_np']:,.0f}억" if pd.notna(fin_info['cur_np']) else "-",
-                "매출_YoY": f"{fin_info['rev_yoy']:+.1f}%" if pd.notna(fin_info['rev_yoy']) else "-",
-                "영업익_YoY": f"{fin_info['op_yoy']:+.1f}%" if pd.notna(fin_info['op_yoy']) else "-",
-                "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
-            })
+        scan_perf.append({
+            "종목명": stock_name,
+            "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
+            "영업익_직전": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
+            "순익_직전": f"{fin_info['prev_np']:,.0f}억" if pd.notna(fin_info['prev_np']) else "-",
+            "매출_최근": f"{fin_info['cur_rev']:,.0f}억" if pd.notna(fin_info['cur_rev']) else "-",
+            "영업익_최근": f"{fin_info['cur_op']:,.0f}억" if pd.notna(fin_info['cur_op']) else "-",
+            "순익_최근": f"{fin_info['cur_np']:,.0f}억" if pd.notna(fin_info['cur_np']) else "-",
+            "매출_YoY": f"{fin_info['rev_yoy']:+.1f}%" if pd.notna(fin_info['rev_yoy']) else "-",
+            "영업익_YoY": f"{fin_info['op_yoy']:+.1f}%" if pd.notna(fin_info['op_yoy']) else "-",
+            "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
+        })
 
-            p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
-            p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
-            c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
-            c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
+        p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
+        p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
+        c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
+        c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
 
-            scan_share.append({
-                "종목명": stock_name,
-                "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-",
-                "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
-                "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
-                "PER_직전": p_per_str,
-                "PBR_직전": p_pbr_str,
-                "EPS_최근": f"{fin_info['cur_eps']:,.0f}원" if pd.notna(fin_info['cur_eps']) else "-",
-                "BPS_최근": f"{fin_info['cur_bps']:,.0f}원" if pd.notna(fin_info['cur_bps']) else "-",
-                "ROE_최근": f"{fin_info['cur_roe']:.2f}%" if pd.notna(fin_info['cur_roe']) else "-",
-                "PER_최근": c_per_str,
-                "PBR_최근": c_pbr_str
-            })
+        scan_share.append({
+            "종목명": stock_name,
+            "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-",
+            "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
+            "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
+            "PER_직전": p_per_str,
+            "PBR_직전": p_pbr_str,
+            "EPS_최근": f"{fin_info['cur_eps']:,.0f}원" if pd.notna(fin_info['cur_eps']) else "-",
+            "BPS_최근": f"{fin_info['cur_bps']:,.0f}원" if pd.notna(fin_info['cur_bps']) else "-",
+            "ROE_최근": f"{fin_info['cur_roe']:.2f}%" if pd.notna(fin_info['cur_roe']) else "-",
+            "PER_최근": c_per_str,
+            "PBR_최근": c_pbr_str
+        })
 
-            full_csv_records.append({
-                "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-                "직전연도": fin_info['prev_yr'], "최근연도": fin_info['latest_yr'],
-                "매출액_직전": fin_info['prev_rev'], "매출액_최근": fin_info['cur_rev'], "매출_YoY": fin_info['rev_yoy'],
-                "영업익_직전": fin_info['prev_op'], "영업익_최근": fin_info['cur_op'], "영업익_YoY": fin_info['op_yoy'],
-                "순이익_직전": fin_info['prev_np'], "순이익_최근": fin_info['cur_np'], "순이익_YoY": fin_info['np_yoy'],
-                "EPS_직전": fin_info['prev_eps'], "EPS_최근": fin_info['cur_eps'],
-                "BPS_직전": fin_info['prev_bps'], "BPS_최근": fin_info['cur_bps'],
-                "ROE_직전": fin_info['prev_roe'], "ROE_최근": fin_info['cur_roe'],
-                "PER_직전": fin_info['prev_per'], "PER_최근": fin_info['cur_per'],
-                "PBR_직전": fin_info['prev_pbr'], "PBR_최근": fin_info['cur_pbr'],
-                "DPS": fin_info['cur_dps'], "현재PER": per_val, "현재PBR": pbr_val, "배당수익률": div_val
-            })
+        full_csv_records.append({
+            "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+            "직전연도": fin_info['prev_yr'], "최근연도": fin_info['latest_yr'],
+            "매출액_직전": fin_info['prev_rev'], "매출액_최근": fin_info['cur_rev'], "매출_YoY": fin_info['rev_yoy'],
+            "영업익_직전": fin_info['prev_op'], "영업익_최근": fin_info['cur_op'], "영업익_YoY": fin_info['op_yoy'],
+            "순이익_직전": fin_info['prev_np'], "순이익_최근": fin_info['cur_np'], "순이익_YoY": fin_info['np_yoy'],
+            "EPS_직전": fin_info['prev_eps'], "EPS_최근": fin_info['cur_eps'],
+            "BPS_직전": fin_info['prev_bps'], "BPS_최근": fin_info['cur_bps'],
+            "ROE_직전": fin_info['prev_roe'], "ROE_최근": fin_info['cur_roe'],
+            "PER_직전": fin_info['prev_per'], "PER_최근": fin_info['cur_per'],
+            "PBR_직전": fin_info['prev_pbr'], "PBR_최근": fin_info['cur_pbr'],
+            "DPS": fin_info['cur_dps'], "현재PER": per_val, "현재PBR": pbr_val, "배당수익률": div_val
+        })
 
     most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
     most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
+
+    return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
+
+# 상단 타이틀 및 수동 동기화 버튼
+title_col, sync_col = st.columns([5, 1])
+with title_col:
+    st.title("Scanning_주식")
+with sync_col:
+    st.write("")
+    if st.button("🔄 실시간 시세 동기화", use_container_width=True):
+        fetch_all_stock_data.clear()
+        st.rerun()
+
+current_codes = load_codes()
+
+if current_codes:
+    # 튜플로 전달하여 캐시 키 생성
+    scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = fetch_all_stock_data(tuple(current_codes))
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
@@ -251,6 +267,7 @@ if current_codes:
         if selected_codes:
             remaining_codes = [c for c in current_codes if c not in selected_codes]
             save_codes(remaining_codes)
+            fetch_all_stock_data.clear()
             st.success(f"종목 {len(selected_codes)}개 삭제 완료")
             deleted_anything = True
 
@@ -285,6 +302,7 @@ with col_btn:
             if formatted not in current_codes:
                 current_codes.append(formatted)
                 save_codes(current_codes)
+                fetch_all_stock_data.clear()
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
