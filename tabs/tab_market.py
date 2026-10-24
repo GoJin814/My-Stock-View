@@ -26,7 +26,7 @@ def render_tab_market():
     st.subheader("📝 국내지수 및 자금동향 관리")
     market_cache = load_market_cache()
 
-    # 1. 파일 일괄 가져오기 (CSV / JSON)
+    # 1. 파일 일괄 가져오기 (CSV / JSON) - 기본 숨김
     with st.expander("📂 기존 데이터 일괄 불러오기 (CSV / JSON 파일 업로드)", expanded=False):
         uploaded_file = st.file_uploader("파일 선택", type=["csv", "json"], key="market_file_uploader")
         if uploaded_file is not None:
@@ -75,65 +75,66 @@ def render_tab_market():
                 except Exception as e:
                     st.error(f"파일 불러오기 중 오류가 발생했습니다: {e}")
 
-    # 2. 직접 입력 폼
-    with st.form("market_input_form", clear_on_submit=False):
-        r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
-        with r1_c1:
-            in_date = st.date_input("기준일자", value=date.today())
-        with r1_c2:
-            in_kospi = st.text_input("KOSPI (포인트)", placeholder="예: 2650.50")
-        with r1_c3:
-            in_mcap = st.text_input("시가총액(억원)", placeholder="예: 2150000")
-        with r1_c4:
-            in_fx = st.text_input("환율 (원)", placeholder="예: 1350.5")
+    # 2. 신규 값 직접 입력 폼 - 기본 숨김(expanded=False)
+    with st.expander("➕ 새로운 지표 데이터 직접 입력 / 갱신", expanded=False):
+        with st.form("market_input_form", clear_on_submit=False):
+            r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
+            with r1_c1:
+                in_date = st.date_input("기준일자", value=date.today())
+            with r1_c2:
+                in_kospi = st.text_input("KOSPI (포인트)", placeholder="예: 2650.50")
+            with r1_c3:
+                in_mcap = st.text_input("시가총액(억원)", placeholder="예: 2150000")
+            with r1_c4:
+                in_fx = st.text_input("환율 (원)", placeholder="예: 1350.5")
 
-        r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
-        with r2_c1:
-            in_per = st.text_input("PER (배)", placeholder="예: 12.50")
-        with r2_c2:
-            in_pbr = st.text_input("PBR (배)", placeholder="예: 0.95")
-        with r2_c3:
-            in_dep = st.text_input("고객예탁금(억원)", placeholder="예: 54000")
-        with r2_c4:
-            in_credit = st.text_input("신용잔고(억원)", placeholder="예: 18000")
+            r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+            with r2_c1:
+                in_per = st.text_input("PER (배)", placeholder="예: 12.50")
+            with r2_c2:
+                in_pbr = st.text_input("PBR (배)", placeholder="예: 0.95")
+            with r2_c3:
+                in_dep = st.text_input("고객예탁금(억원)", placeholder="예: 54000")
+            with r2_c4:
+                in_credit = st.text_input("신용잔고(억원)", placeholder="예: 18000")
 
-        f_btn1, f_btn2, _ = st.columns([1.5, 1.5, 3])
-        with f_btn1:
-            save_manual_btn = st.form_submit_button("💾 데이터 저장 / 갱신", type="primary", use_container_width=True)
-        with f_btn2:
-            del_manual_btn = st.form_submit_button("🗑️ 해당 일자 삭제", use_container_width=True)
+            f_btn1, f_btn2, _ = st.columns([1.5, 1.5, 3])
+            with f_btn1:
+                save_manual_btn = st.form_submit_button("💾 데이터 저장 / 갱신", type="primary", use_container_width=True)
+            with f_btn2:
+                del_manual_btn = st.form_submit_button("🗑️ 해당 일자 삭제", use_container_width=True)
 
-    target_dt_str = in_date.strftime("%Y-%m-%d")
+        target_dt_str = in_date.strftime("%Y-%m-%d")
 
-    if save_manual_btn:
-        k_val = to_num(in_kospi)
-        dep_val = to_num(in_dep)
-        crd_val = to_num(in_credit)
-        fx_val = to_num(in_fx)
+        if save_manual_btn:
+            k_val = to_num(in_kospi)
+            dep_val = to_num(in_dep)
+            crd_val = to_num(in_credit)
+            fx_val = to_num(in_fx)
 
-        market_cache[target_dt_str] = {
-            "KOSPI": k_val if pd.notna(k_val) else None,
-            "시가총액(억원)": in_mcap.strip() if in_mcap.strip() else "-",
-            "PER": in_per.strip() if in_per.strip() else "-",
-            "PBR": in_pbr.strip() if in_pbr.strip() else "-",
-            "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
-            "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
-            "환율": fx_val if pd.notna(fx_val) else None
-        }
-        save_market_cache(market_cache)
-        st.success(f"{target_dt_str} 지표가 저장되었습니다.")
-        st.rerun()
-
-    if del_manual_btn:
-        if target_dt_str in market_cache:
-            del market_cache[target_dt_str]
+            market_cache[target_dt_str] = {
+                "KOSPI": k_val if pd.notna(k_val) else None,
+                "시가총액(억원)": in_mcap.strip() if in_mcap.strip() else "-",
+                "PER": in_per.strip() if in_per.strip() else "-",
+                "PBR": in_pbr.strip() if in_pbr.strip() else "-",
+                "고객예탁금(억원)": dep_val if pd.notna(dep_val) else None,
+                "신용잔고(억원)": crd_val if pd.notna(crd_val) else None,
+                "환율": fx_val if pd.notna(fx_val) else None
+            }
             save_market_cache(market_cache)
-            st.success(f"{target_dt_str} 기록이 삭제되었습니다.")
+            st.success(f"{target_dt_str} 지표가 저장되었습니다.")
             st.rerun()
-        else:
-            st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
-    # 3. 테이블 렌더링 (체크박스 선택 데이터 에디터)
+        if del_manual_btn:
+            if target_dt_str in market_cache:
+                del market_cache[target_dt_str]
+                save_market_cache(market_cache)
+                st.success(f"{target_dt_str} 기록이 삭제되었습니다.")
+                st.rerun()
+            else:
+                st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
+
+    # 3. 테이블 렌더링
     if market_cache:
         sorted_dates = sorted(market_cache.keys(), reverse=True)
         table_rows = []
