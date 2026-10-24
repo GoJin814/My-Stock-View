@@ -1,8 +1,9 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 
 def apply_custom_styles():
-    # 1. 디자인 스타일 및 모바일 터치 새로고침(Pull-to-Refresh) 자바스크립트 주입
+    # 1. 디자인 CSS 적용
     st.markdown("""
         <style>
         .block-container {
@@ -16,6 +17,9 @@ def apply_custom_styles():
         .custom-multi-table-wrapper {
             width: 100%;
             overflow-x: auto;
+            overflow-y: visible;
+            overscroll-behavior-x: contain;
+            overscroll-behavior-y: auto;
             -webkit-overflow-scrolling: touch;
             margin-bottom: 1rem;
             border-radius: 4px;
@@ -125,56 +129,68 @@ def apply_custom_styles():
             }
         }
         </style>
+    """, unsafe_allow_html=True)
 
+    # 2. components.html을 통해 부모 창에 터치 새로고침(Pull-to-refresh) 리스너 강제 주입
+    components.html("""
         <script>
         (function() {
-            let startY = 0;
-            let isAtTop = false;
+            try {
+                const parentWin = window.parent;
+                const parentDoc = parentWin.document;
 
-            const doc = window.parent.document || document;
-            const container = doc.querySelector('[data-testid="stAppViewContainer"]') || window;
+                // 이미 등록되어 있는지 확인
+                if (parentWin.__pull_to_refresh_injected__) return;
+                parentWin.__pull_to_refresh_injected__ = true;
 
-            doc.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) {
-                    startY = e.touches[0].clientY;
-                    // 최상단에 위치해 있는지 확인
-                    const scrollTop = container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
-                    isAtTop = (scrollTop <= 5);
-                }
-            }, { passive: true });
+                let startY = 0;
+                let isAtTop = false;
 
-            doc.addEventListener('touchend', function(e) {
-                if (isAtTop && e.changedTouches.length === 1) {
-                    const endY = e.changedTouches[0].clientY;
-                    const diffY = endY - startY;
-
-                    // 화면 최상단에서 아래로 75px 이상 시원하게 당겼을 때 새로고침 실행
-                    if (diffY > 75) {
-                        // 새로고침 표시용 토스트 메시지 생성
-                        const toast = doc.createElement('div');
-                        toast.innerText = '🔄 새로고침 중...';
-                        toast.style.position = 'fixed';
-                        toast.style.top = '20px';
-                        toast.style.left = '50%';
-                        toast.style.transform = 'translateX(-50%)';
-                        toast.style.backgroundColor = '#1f2937';
-                        toast.style.color = '#ffffff';
-                        toast.style.padding = '8px 16px';
-                        toast.style.borderRadius = '20px';
-                        toast.style.fontSize = '14px';
-                        toast.style.zIndex = '999999';
-                        toast.style.boxShadow = '0 4px 6px rgba(0,0,0,0.2)';
-                        doc.body.appendChild(toast);
-
-                        setTimeout(function() {
-                            window.parent.location.reload();
-                        }, 250);
+                parentDoc.addEventListener('touchstart', function(e) {
+                    if (e.touches.length === 1) {
+                        startY = e.touches[0].clientY;
+                        const scrollY = parentWin.scrollY || parentDoc.documentElement.scrollTop || parentDoc.body.scrollTop;
+                        const container = parentDoc.querySelector('[data-testid="stAppViewContainer"]');
+                        const containerScroll = container ? container.scrollTop : 0;
+                        isAtTop = (scrollY <= 5 && containerScroll <= 5);
                     }
-                }
-            }, { passive: true });
+                }, { passive: true });
+
+                parentDoc.addEventListener('touchend', function(e) {
+                    if (isAtTop && e.changedTouches.length === 1) {
+                        const endY = e.changedTouches[0].clientY;
+                        const diffY = endY - startY;
+
+                        // 화면 최상단에서 아래로 70px 이상 당겼을 때 동작
+                        if (diffY > 70) {
+                            const toast = parentDoc.createElement('div');
+                            toast.innerText = '🔄 새로고침 중...';
+                            toast.style.position = 'fixed';
+                            toast.style.top = '25px';
+                            toast.style.left = '50%';
+                            toast.style.transform = 'translateX(-50%)';
+                            toast.style.backgroundColor = '#1f2937';
+                            toast.style.color = '#ffffff';
+                            toast.style.padding = '8px 18px';
+                            toast.style.borderRadius = '20px';
+                            toast.style.fontSize = '14px';
+                            toast.style.fontWeight = 'bold';
+                            toast.style.zIndex = '9999999';
+                            toast.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
+                            parentDoc.body.appendChild(toast);
+
+                            setTimeout(function() {
+                                parentWin.location.reload();
+                            }, 200);
+                        }
+                    }
+                }, { passive: true });
+            } catch (err) {
+                console.error("Pull-to-refresh injection failed:", err);
+            }
         })();
         </script>
-    """, unsafe_allow_html=True)
+    """, height=0, width=0)
 
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list = None):
     if df.empty:
