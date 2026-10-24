@@ -6,7 +6,7 @@ import os
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 
-# 표 글자 크기, 컴팩트 스타일 및 2단 헤더 연도 구분 스타일 적용
+# 표 글자 크기, 컴팩트 스타일 및 2단 헤더/구분선 스타일 적용
 st.markdown("""
 <style>
 div[data-testid="stDataEditor"] {
@@ -20,7 +20,7 @@ div[data-testid="stDataEditor"] .dvn-scroller {
     line-height: 1.2 !important;
 }
 
-/* 2단 헤더 HTML 테이블 스타일 */
+/* 2단 헤더 및 국내지수 모니터 테이블 스타일 */
 .styled-table-container {
     width: 100%;
     overflow-x: auto;
@@ -59,7 +59,7 @@ div[data-testid="stDataEditor"] .dvn-scroller {
 .compare-table .year-divider {
     border-right: 3px solid #9ca3af !important;
 }
-/* 종목명 열 고정(Sticky) */
+/* 종목명 및 일시 열 고정(Sticky) */
 .compare-table .sticky-col {
     position: sticky;
     left: 0;
@@ -167,22 +167,19 @@ def extract_row_list(obj):
 
 # 상단 2단 헤더 테이블 렌더러
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
-    # 1행: 상단 그룹 헤더
     top_th_html = ""
     for title, colspan, is_divider in top_headers:
         divider_cls = " year-divider" if is_divider else ""
-        if title == "종목명":
+        if title in ["종목명", "일시"]:
             top_th_html += f'<th rowspan="2" class="sticky-col sticky-header">{title}</th>'
         else:
             top_th_html += f'<th colspan="{colspan}" class="group-header{divider_cls}">{title}</th>'
 
-    # 2행: 하위 컬럼 헤더
     sub_th_html = ""
     for idx, col_title in enumerate(sub_headers, start=1):
         divider_cls = " year-divider" if idx in divider_indices else ""
         sub_th_html += f'<th class="{divider_cls}">{col_title}</th>'
 
-    # 본문 행 생성
     num_cols = len(df.columns)
     tb_html = ""
     for row_idx in range(len(df)):
@@ -205,6 +202,42 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
                 <tr>{top_th_html}</tr>
                 <tr>{sub_th_html}</tr>
             </thead>
+            <tbody>{tb_html}</tbody>
+        </table>
+    </div>
+    """
+    st.markdown(html_code, unsafe_allow_html=True)
+
+# 단일 헤더 테이블 렌더러 (구분선 지원)
+def render_single_header_table(df: pd.DataFrame, divider_indices: list):
+    th_html = ""
+    for idx, col in enumerate(df.columns):
+        classes = []
+        if idx == 0:
+            classes.append("sticky-col sticky-header")
+        if idx in divider_indices:
+            classes.append("year-divider")
+        cls_attr = f' class="{" ".join(classes)}"' if classes else ""
+        th_html += f"<th{cls_attr}>{col}</th>"
+
+    tb_html = ""
+    for row_idx in range(len(df)):
+        tb_html += "<tr>"
+        for col_idx in range(len(df.columns)):
+            val = df.iloc[row_idx, col_idx]
+            classes = []
+            if col_idx == 0:
+                classes.append("sticky-col")
+            if col_idx in divider_indices:
+                classes.append("year-divider")
+            cls_attr = f' class="{" ".join(classes)}"' if classes else ""
+            tb_html += f"<td{cls_attr}>{val}</td>"
+        tb_html += "</tr>"
+
+    html_code = f"""
+    <div class="styled-table-container">
+        <table class="compare-table">
+            <thead><tr>{th_html}</tr></thead>
             <tbody>{tb_html}</tbody>
         </table>
     </div>
@@ -255,7 +288,6 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
-            # 재무제표 항목 (실적, ROE, PER, PBR, 주당가치)
             fin_info = {
                 "latest_yr": "-", "prev_yr": "-",
                 "cur_rev": np.nan, "prev_rev": np.nan, "rev_yoy": np.nan,
@@ -335,10 +367,8 @@ if current_codes:
             if fin_info["latest_yr"] != "-":
                 latest_years.append(fin_info["latest_yr"])
 
-            # 최신 DPS(원)
             dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
-            # 1) 기본 & 시세 탭 (DPS 이동 배치)
             scan_basic.append({
                 "선택": False,
                 "종목명": stock_name,
@@ -351,7 +381,6 @@ if current_codes:
                 "배당수익률": div_val
             })
 
-            # 2) 실적 탭
             scan_perf.append({
                 "종목명": stock_name,
                 "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
@@ -365,16 +394,11 @@ if current_codes:
                 "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
             })
 
-            # 직전/최근 PER/PBR 문자열 포맷
             p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
             p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
-            prev_per_pbr = f"{p_per_str} / {p_pbr_str}"
-
             c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
             c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
-            cur_per_pbr = f"{c_per_str} / {c_pbr_str}"
 
-            # 3) 주당 가치 탭 (EPS, BPS, ROE, PER, PBR)
             scan_share.append({
                 "종목명": stock_name,
                 "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-",
@@ -389,7 +413,6 @@ if current_codes:
                 "PBR_최근": c_pbr_str
             })
 
-            # 통합 CSV 레코드
             full_csv_records.append({
                 "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
                 "직전연도": fin_info['prev_yr'], "최근연도": fin_info['latest_yr'],
@@ -411,8 +434,13 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # --- 3. 탭 렌더링 ---
-    tab1, tab2, tab3 = st.tabs(["📊 기본 & 시세", "📈 실적 & 성장성 (2개년 비교)", "💰 주당 가치 (2개년 비교)"])
+    # --- 3. 탭 렌더링 (국내지수 Monitor 탭 추가) ---
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 기본 & 시세", 
+        "📈 실적 & 성장성 (2개년 비교)", 
+        "💰 주당 가치 (2개년 비교)",
+        "🌐 국내지수 Monitor"
+    ])
 
     with tab1:
         disabled_cols = [c for c in df_basic.columns if c != "선택"]
@@ -431,8 +459,8 @@ if current_codes:
     with tab2:
         top_headers_perf = [
             ("종목명", 1, False),
-            (most_prev_yr, 3, True),       # 3열 뒤 구분선
-            (most_latest_yr, 3, True),     # 6열 뒤 구분선
+            (most_prev_yr, 3, True),
+            (most_latest_yr, 3, True),
             ("성장률 (YoY)", 3, False)
         ]
         sub_headers_perf = [
@@ -448,10 +476,9 @@ if current_codes:
         )
 
     with tab3:
-        # 상단 헤더: 종목명(1) | 2025년(5개 지표) | 2026년(5개 지표)
         top_headers_share = [
             ("종목명", 1, False),
-            (most_prev_yr, 5, True),       # 5열 뒤 구분선
+            (most_prev_yr, 5, True),
             (most_latest_yr, 5, False)
         ]
         sub_headers_share = [
@@ -464,6 +491,63 @@ if current_codes:
             sub_headers=sub_headers_share,
             divider_indices=[5]
         )
+
+    with tab4:
+        # [신규] 국내 주식시장 지수 및 유동성 모니터링 테스트 데이터
+        market_records = [
+            {
+                "일시": "2026-07-24",
+                "KOSPI": "2,785.40",
+                "시가총액 (억원)": "2,264,120",
+                "PER": "12.45",
+                "PBR": "0.98",
+                "고객예탁금 (억원)": "574,820",
+                "증감 (억원)": "+4,150",
+                "신용잔고 (억원)": "201,300",
+                "증감(신용) (억원)": "-820",
+                "환율": "1,348.5원",
+                "고객예탁금/지수": "206.37",
+                "신용잔고/지수": "72.27"
+            },
+            {
+                "일시": "2026-07-10",
+                "KOSPI": "2,822.15",
+                "시가총액 (억원)": "2,298,450",
+                "PER": "12.60",
+                "PBR": "0.99",
+                "고객예탁금 (억원)": "570,670",
+                "증감 (억원)": "-2,300",
+                "신용잔고 (억원)": "202,120",
+                "증감(신용) (억원)": "+1,450",
+                "환율": "1,355.2원",
+                "고객예탁금/지수": "202.21",
+                "신용잔고/지수": "71.62"
+            },
+            {
+                "일시": "2026-06-15",
+                "KOSPI": "2,758.42",
+                "시가총액 (억원)": "2,241,800",
+                "PER": "12.18",
+                "PBR": "0.95",
+                "고객예탁금 (억원)": "563,400",
+                "증감 (억원)": "+6,800",
+                "신용잔고 (억원)": "198,700",
+                "증감(신용) (억원)": "+3,100",
+                "환율": "1,372.0원",
+                "고객예탁금/지수": "204.25",
+                "신용잔고/지수": "72.03"
+            }
+        ]
+        df_market = pd.DataFrame(market_records)
+        df_market.columns = [
+            "일시", "KOSPI", "시가총액(억원)", "PER", "PBR", 
+            "고객예탁금(억원)", "증감(억원)", 
+            "신용잔고(억원)", "증감(억원)", 
+            "환율", "고객예탁금/지수", "신용잔고/지수"
+        ]
+        
+        # 이미지에 표기된 대로 블록별 굵은 세로선 적용: PBR 뒤(4열), 예탁금 증감 뒤(6열), 신용잔고 증감 뒤(8열)
+        render_single_header_table(df_market, divider_indices=[4, 6, 8])
 
     # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
