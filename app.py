@@ -4,12 +4,11 @@ import pandas as pd
 import numpy as np
 import os
 
-st.set_page_config(page_title="종목Scan 대시보드", layout="wide")
+st.set_page_config(page_title="Scanning_주식", layout="wide")
 
 # 표 글자 크기 및 컴팩트 스타일 적용
 st.markdown("""
 <style>
-/* Streamlit data_editor 내부 폰트 및 패딩 축소 */
 div[data-testid="stDataEditor"] {
     font-size: 13px !important;
 }
@@ -17,7 +16,6 @@ div[data-testid="stDataEditor"] [role="gridcell"],
 div[data-testid="stDataEditor"] [role="columnheader"] {
     font-size: 13px !important;
 }
-/* 행 간격 컴팩트화 */
 div[data-testid="stDataEditor"] .dvn-scroller {
     line-height: 1.2 !important;
 }
@@ -114,28 +112,12 @@ def extract_row_list(obj):
                 return found
     return []
 
-# --- 화면 렌더링 ---
-st.title("📋 Scanning_주식 (모바일 뷰어)")
-st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
+# --- 1. 상단 타이틀 (아이콘 및 모바일 뷰어 문구 제거) ---
+st.title("Scanning_주식")
 
 current_codes = load_codes()
 
-# 1. 종목 추가 영역
-col_add, col_btn = st.columns([3, 1])
-with col_add:
-    new_code = st.text_input("➕ 추가할 종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6)
-with col_btn:
-    st.write("")
-    if st.button("종목 추가", use_container_width=True):
-        if new_code.strip():
-            formatted = new_code.strip().zfill(6)
-            if formatted not in current_codes:
-                current_codes.append(formatted)
-                save_codes(current_codes)
-                st.success(f"{formatted} 추가 완료")
-                st.rerun()
-
-# 2. 테이블 데이터 집계
+# --- 2. 테이블 데이터 수집 및 렌더링 ---
 if current_codes:
     scan_results = []
     
@@ -243,14 +225,8 @@ if current_codes:
 
     result_df = pd.DataFrame(scan_results)
 
-    # 3. 일괄 삭제 버튼
-    btn_col1, btn_col2 = st.columns([1.5, 6])
-    with btn_col1:
-        delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
-
-    # 4. 데이터 에디터 테이블 (컴팩트 뷰)
+    # 테이블 렌더링 (최상단 배치)
     disabled_cols = [c for c in result_df.columns if c != "선택"]
-    
     edited_df = st.data_editor(
         result_df,
         column_config={
@@ -263,6 +239,20 @@ if current_codes:
         key="stock_editor"
     )
 
+    # --- 3. 표 바로 아래 컨트롤 영역 (삭제 & CSV 다운로드) ---
+    btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
+    with btn_col1:
+        delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
+    with btn_col2:
+        csv_data = result_df.drop(columns=["선택"]).to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            "📥 조회 결과 CSV 다운로드",
+            data=csv_data,
+            file_name="종목Scan_결과.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
     if delete_btn:
         selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
         if selected_codes:
@@ -272,13 +262,24 @@ if current_codes:
             st.rerun()
         else:
             st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
-
-    csv_data = result_df.drop(columns=["선택"]).to_csv(index=False).encode('utf-8-sig')
-    st.download_button(
-        "📥 조회 결과 CSV 다운로드",
-        data=csv_data,
-        file_name="종목Scan_결과.csv",
-        mime="text/csv"
-    )
 else:
-    st.info("등록된 종목이 없습니다. 상단에서 종목코드를 추가해 주세요.")
+    st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
+
+# --- 4. 하단 종목 추가 영역 ---
+st.write("")
+col_add, col_btn = st.columns([3, 1])
+with col_add:
+    new_code = st.text_input("➕ 추가할 종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6)
+with col_btn:
+    st.write("")
+    if st.button("종목 추가", use_container_width=True):
+        if new_code.strip():
+            formatted = new_code.strip().zfill(6)
+            if formatted not in current_codes:
+                current_codes.append(formatted)
+                save_codes(current_codes)
+                st.success(f"{formatted} 추가 완료")
+                st.rerun()
+
+# --- 5. 맨 하단 출처 안내 캡션 ---
+st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
