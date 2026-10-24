@@ -223,11 +223,11 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # --- 주당 가치 기준 정렬 제어 영역 ---
-    sort_col1, sort_col2, sort_col3, _ = st.columns([2, 1.5, 1.5, 3])
+    # --- 1. 주당 가치 기준 정렬 제어 영역 ---
+    sort_col1, sort_col2, sort_col3 = st.columns([2, 1.5, 3.5])
     with sort_col1:
         sort_metric = st.selectbox(
-            "🔽 정렬 기준 지표 (주당 가치 & 기본시세 동기화)",
+            "🔽 정렬 기준 지표 (모든 탭 동기화)",
             options=[
                 "기본 순서 (등록순)",
                 f"최근 PER ({most_latest_yr})",
@@ -246,6 +246,39 @@ if current_codes:
     with sort_col2:
         sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
 
+    # --- 2. PER / PBR 조건 필터링 영역 ---
+    with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):
+        f_c1, f_c2, f_c3 = st.columns(3)
+        with f_c1:
+            filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
+        with f_c2:
+            use_per_filter = st.checkbox("PER 범위 필터 적용")
+            per_min = st.number_input("PER 최소값", value=0.0, step=1.0, disabled=not use_per_filter)
+            per_max = st.number_input("PER 최대값", value=30.0, step=1.0, disabled=not use_per_filter)
+        with f_c3:
+            use_pbr_filter = st.checkbox("PBR 범위 필터 적용")
+            pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
+            pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
+
+    # 필터링 수행
+    filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
+    target_per_col = f"_num_PER{filter_prefix}"
+    target_pbr_col = f"_num_PBR{filter_prefix}"
+
+    valid_mask = pd.Series(True, index=df_share.index)
+
+    if use_per_filter:
+        valid_mask &= (df_share[target_per_col] >= per_min) & (df_share[target_per_col] <= per_max)
+
+    if use_pbr_filter:
+        valid_mask &= (df_share[target_pbr_col] >= pbr_min) & (df_share[target_pbr_col] <= pbr_max)
+
+    # 필터 적용된 인덱스로 데이터 슬라이싱
+    df_basic = df_basic[valid_mask].copy()
+    df_perf = df_perf[valid_mask].copy()
+    df_share = df_share[valid_mask].copy()
+
+    # 정렬 수행: 필터링 후 남은 데이터 대상
     metric_map = {
         f"최근 PER ({most_latest_yr})": "_num_PER_최근",
         f"최근 PBR ({most_latest_yr})": "_num_PBR_최근",
@@ -259,16 +292,20 @@ if current_codes:
         f"직전 BPS ({most_prev_yr})": "_num_BPS_직전",
     }
 
-    if sort_metric in metric_map:
+    if sort_metric in metric_map and not df_share.empty:
         target_col = metric_map[sort_metric]
         is_asc = (sort_order == "오름차순 (▲)")
         sorted_indices = df_share[target_col].sort_values(ascending=is_asc, na_position='last').index
         
-        df_basic = df_basic.iloc[sorted_indices].reset_index(drop=True)
-        df_perf = df_perf.iloc[sorted_indices].reset_index(drop=True)
-        df_share = df_share.iloc[sorted_indices].reset_index(drop=True)
+        df_basic = df_basic.loc[sorted_indices].reset_index(drop=True)
+        df_perf = df_perf.loc[sorted_indices].reset_index(drop=True)
+        df_share = df_share.loc[sorted_indices].reset_index(drop=True)
+    else:
+        df_basic = df_basic.reset_index(drop=True)
+        df_perf = df_perf.reset_index(drop=True)
+        df_share = df_share.reset_index(drop=True)
 
-    # 탭 생성 (2번째 탭을 주당 가치로 변경)
+    # 탭 생성 (2번째 탭: 주당 가치)
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "💰 주당 가치 (2개년 비교)",
@@ -306,13 +343,14 @@ if current_codes:
         deleted_anything = False
 
         # 1. 종목 삭제 판별
-        selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
-        if selected_codes:
-            remaining_codes = [c for c in current_codes if c not in selected_codes]
-            save_codes(remaining_codes)
-            fetch_all_stock_data.clear()
-            st.success(f"종목 {len(selected_codes)}개 삭제 완료")
-            deleted_anything = True
+        if edited_df is not None and not edited_df.empty:
+            selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
+            if selected_codes:
+                remaining_codes = [c for c in current_codes if c not in selected_codes]
+                save_codes(remaining_codes)
+                fetch_all_stock_data.clear()
+                st.success(f"종목 {len(selected_codes)}개 삭제 완료")
+                deleted_anything = True
 
         # 2. 국내지수 일자 삭제 판별
         if edited_market_df is not None and not edited_market_df.empty:
