@@ -17,54 +17,55 @@ def apply_custom_styles():
             -webkit-overflow-scrolling: touch;
             margin-bottom: 1rem;
             border-radius: 4px;
-            /* 라이트/다크 양쪽에서 확실히 보이는 테두리 */
             border: 1px solid rgba(128, 128, 128, 0.25);
-            background-color: var(--background-color);
+            background-color: var(--background-color, #ffffff);
         }
-        /* 기본 탭(st.data_editor)과 일치하는 표 본체 */
+        /* 테이블 기본 */
         .custom-multi-table {
             width: max-content;
             border-collapse: collapse;
             font-size: 0.82rem;
-            color: var(--text-color);
-            background-color: var(--background-color);
+            color: var(--text-color, #31333F);
+            background-color: var(--background-color, #ffffff);
             font-family: var(--font, sans-serif);
         }
-        /* 모든 셀 테두리: 라이트 모드에서도 또렷하게 보이는 회색 격자선 */
+        /* 셀 테두리 및 패딩 */
         .custom-multi-table th, .custom-multi-table td {
             padding: 6px 12px;
             border: 1px solid rgba(128, 128, 128, 0.2) !important;
             white-space: nowrap !important;
             word-break: keep-all !important;
             text-align: right;
+            background-color: var(--background-color, #ffffff);
         }
-        /* 헤더 스타일: 기본 탭의 헤더 배경 톤 일치 */
+        /* 상단 일반 헤더 */
         .custom-multi-table thead th {
-            background-color: rgba(128, 128, 128, 0.08) !important;
-            color: var(--text-color);
+            background-color: #f0f2f6 !important;
+            color: var(--text-color, #31333F);
             text-align: center;
             font-weight: 600;
             border-bottom: 2px solid rgba(128, 128, 128, 0.3) !important;
         }
-        /* 마우스 호버 효과 */
-        .custom-multi-table tbody tr:hover {
-            background-color: rgba(128, 128, 128, 0.05);
+        /* 좌측 고정 종목명 헤더 (100% 불투명 연회색) */
+        .custom-multi-table thead th.stock-name-cell {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            background-color: #f0f2f6 !important;
+            border-right: 2px solid rgba(128, 128, 128, 0.4) !important;
         }
-        /* 종목명 고정 컬럼 */
-        .custom-multi-table .stock-name-cell {
+        /* 좌측 고정 종목명 데이터 셀 (100% 불투명 흰색으로 뒤쪽 글자 완전 차단) */
+        .custom-multi-table tbody td.stock-name-cell {
             text-align: left;
             font-weight: 600;
             position: sticky;
             left: 0;
-            background-color: var(--background-color) !important;
-            z-index: 2;
+            z-index: 5;
+            background-color: #ffffff !important;
             min-width: 85px !important;
-            border-right: 2px solid rgba(128, 128, 128, 0.3) !important;
+            border-right: 2px solid rgba(128, 128, 128, 0.4) !important;
         }
-        .custom-multi-table thead th.stock-name-cell {
-            background-color: rgba(128, 128, 128, 0.08) !important;
-        }
-        /* 링크: 라이트/다크 모두 선명한 블루 유지 */
+        /* 링크 색상 */
         .custom-multi-table .stock-link,
         .custom-multi-table .stock-link:visited,
         .custom-multi-table .stock-link:active,
@@ -74,9 +75,45 @@ def apply_custom_styles():
             cursor: pointer;
             white-space: nowrap !important;
         }
-        /* 연도 구분선: 굵은 회색선 */
+        /* 연도 구분선 */
         .custom-multi-table .divider-col {
             border-right: 2px solid rgba(128, 128, 128, 0.45) !important;
+        }
+
+        /* --- 다크 모드 감지 시 완벽한 불투명 어두운 배경 적용 --- */
+        @media (prefers-color-scheme: dark) {
+            .custom-multi-table-wrapper {
+                background-color: #0e1117 !important;
+            }
+            .custom-multi-table {
+                background-color: #0e1117 !important;
+                color: #fafafa !important;
+            }
+            .custom-multi-table th, .custom-multi-table td {
+                background-color: #0e1117 !important;
+                border-color: rgba(250, 250, 250, 0.12) !important;
+            }
+            .custom-multi-table thead th {
+                background-color: #1a1c24 !important;
+                border-bottom-color: rgba(250, 250, 250, 0.25) !important;
+            }
+            .custom-multi-table thead th.stock-name-cell {
+                background-color: #1a1c24 !important;
+                border-right-color: rgba(250, 250, 250, 0.3) !important;
+            }
+            .custom-multi-table tbody td.stock-name-cell {
+                background-color: #0e1117 !important; /* 다크 모드에서도 불투명하게 가려줌 */
+                border-right-color: rgba(250, 250, 250, 0.3) !important;
+            }
+            .custom-multi-table .stock-link,
+            .custom-multi-table .stock-link:visited,
+            .custom-multi-table .stock-link:active,
+            .custom-multi-table .stock-link:hover {
+                color: #58a6ff !important;
+            }
+            .custom-multi-table .divider-col {
+                border-right-color: rgba(250, 250, 250, 0.35) !important;
+            }
         }
         </style>
     """, unsafe_allow_html=True)
@@ -111,7 +148,6 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
         code = str(row.get("종목코드", "")).strip()
         stock_name = str(row.get("종목명", "-"))
         
-        # PC 버전 링크 연결
         if code and code != "-":
             link_url = f"https://finance.naver.com/item/coinfo.naver?code={code}"
             name_cell = f'<td class="stock-name-cell"><a class="stock-link" href="{link_url}" target="_blank">{stock_name}</a></td>'
