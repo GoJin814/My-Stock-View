@@ -8,7 +8,7 @@ from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list,
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_perf import render_tab_perf
 from tabs.tab_share import render_tab_share
-from tabs.tab_market import render_tab_market, load_market_cache, save_market_cache
+from tabs.tab_market import render_tab_market, render_market_inputs, load_market_cache, save_market_cache
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 apply_custom_styles()
@@ -27,7 +27,6 @@ def save_codes(codes):
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
-# 10분(600초) 동안 캐시 유지 (체크박스 클릭 시 재호출 방지)
 @st.cache_data(ttl=600, show_spinner="증권 데이터를 동기화하고 있습니다...")
 def fetch_all_stock_data(codes_tuple):
     scan_basic = []
@@ -206,7 +205,7 @@ def fetch_all_stock_data(codes_tuple):
 
     return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
-# 상단 타이틀 및 수동 동기화 버튼
+# 상단 헤더
 title_col, sync_col = st.columns([5, 1])
 with title_col:
     st.title("Scanning_주식")
@@ -219,7 +218,6 @@ with sync_col:
 current_codes = load_codes()
 
 if current_codes:
-    # 튜플로 전달하여 캐시 키 생성
     scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = fetch_all_stock_data(tuple(current_codes))
 
     df_basic = pd.DataFrame(scan_basic)
@@ -289,7 +287,7 @@ if current_codes:
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
-# 종목 추가
+# 1. 종목 추가 영역
 st.write("")
 col_add, col_btn = st.columns([3, 1])
 with col_add:
@@ -306,4 +304,9 @@ with col_btn:
                 st.success(f"{formatted} 추가 완료")
                 st.rerun()
 
+# 2. 국내지수 파일 업로드 및 수기 입력 영역 (종목 추가 바로 밑으로 이동)
+st.write("")
+render_market_inputs()
+
+# 출처 안내
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
