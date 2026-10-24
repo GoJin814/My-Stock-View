@@ -167,7 +167,7 @@ def extract_row_list(obj):
 
 # 상단 2단 헤더 테이블 렌더러
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
-    # 1행: 상단 그룹 헤더 (연도)
+    # 1행: 상단 그룹 헤더
     top_th_html = ""
     for title, colspan, is_divider in top_headers:
         divider_cls = " year-divider" if is_divider else ""
@@ -176,13 +176,13 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
         else:
             top_th_html += f'<th colspan="{colspan}" class="group-header{divider_cls}">{title}</th>'
 
-    # 2행: 하위 컬럼 헤더 (지표명)
+    # 2행: 하위 컬럼 헤더
     sub_th_html = ""
     for idx, col_title in enumerate(sub_headers, start=1):
         divider_cls = " year-divider" if idx in divider_indices else ""
         sub_th_html += f'<th class="{divider_cls}">{col_title}</th>'
 
-    # 본문 행 생성 (위치 인덱스 기반으로 추출)
+    # 본문 행 생성
     num_cols = len(df.columns)
     tb_html = ""
     for row_idx in range(len(df)):
@@ -216,7 +216,7 @@ st.title("Scanning_주식")
 
 current_codes = load_codes()
 
-# --- 2. 데이터 수집 및 2개 연도 파싱 ---
+# --- 2. 데이터 수집 및 지표 파싱 ---
 if current_codes:
     scan_basic = []
     scan_perf = []
@@ -255,6 +255,7 @@ if current_codes:
             pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
             div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
+            # 재무제표 항목 (실적, ROE, PER, PBR, 주당가치)
             fin_info = {
                 "latest_yr": "-", "prev_yr": "-",
                 "cur_rev": np.nan, "prev_rev": np.nan, "rev_yoy": np.nan,
@@ -262,7 +263,10 @@ if current_codes:
                 "cur_np": np.nan,  "prev_np": np.nan,  "np_yoy": np.nan,
                 "cur_eps": np.nan, "prev_eps": np.nan,
                 "cur_bps": np.nan, "prev_bps": np.nan,
-                "cur_dps": np.nan, "prev_dps": np.nan
+                "cur_dps": np.nan, "prev_dps": np.nan,
+                "cur_roe": np.nan, "prev_roe": np.nan,
+                "cur_per": np.nan, "prev_per": np.nan,
+                "cur_pbr": np.nan, "prev_pbr": np.nan,
             }
 
             row_list = extract_row_list(fin_json)
@@ -316,13 +320,25 @@ if current_codes:
                     elif raw_title in ["주당배당금(원)", "주당배당금", "DPS"]:
                         fin_info["cur_dps"] = c_val
                         fin_info["prev_dps"] = p_val
+                    elif raw_title in ["ROE(%)", "ROE"]:
+                        fin_info["cur_roe"] = c_val
+                        fin_info["prev_roe"] = p_val
+                    elif raw_title in ["PER(배)", "PER"]:
+                        fin_info["cur_per"] = c_val
+                        fin_info["prev_per"] = p_val
+                    elif raw_title in ["PBR(배)", "PBR"]:
+                        fin_info["cur_pbr"] = c_val
+                        fin_info["prev_pbr"] = p_val
 
             if fin_info["prev_yr"] != "-":
                 prev_years.append(fin_info["prev_yr"])
             if fin_info["latest_yr"] != "-":
                 latest_years.append(fin_info["latest_yr"])
 
-            # 1) 기본 탭
+            # 최신 DPS(원)
+            dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
+
+            # 1) 기본 & 시세 탭 (DPS 이동 배치)
             scan_basic.append({
                 "선택": False,
                 "종목명": stock_name,
@@ -331,10 +347,11 @@ if current_codes:
                 "시총": market_cap,
                 "현재 PER": per_val,
                 "현재 PBR": pbr_val,
+                "DPS(원)": dps_display,
                 "배당수익률": div_val
             })
 
-            # 2) 실적 탭: 직전 연도 3개 -> 마지막 연도 3개 -> YoY 성장률 3개
+            # 2) 실적 탭
             scan_perf.append({
                 "종목명": stock_name,
                 "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
@@ -348,16 +365,28 @@ if current_codes:
                 "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
             })
 
-            # 3) 주당 가치 탭
+            # 직전/최근 PER/PBR 문자열 포맷
+            p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
+            p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
+            prev_per_pbr = f"{p_per_str} / {p_pbr_str}"
+
+            c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
+            c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
+            cur_per_pbr = f"{c_per_str} / {c_pbr_str}"
+
+            # 3) 주당 가치 탭 (EPS, BPS, ROE, PER, PBR)
             scan_share.append({
                 "종목명": stock_name,
                 "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-",
                 "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
-                "DPS_직전": f"{fin_info['prev_dps']:,.0f}원" if pd.notna(fin_info['prev_dps']) else "-",
+                "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
+                "PER_직전": p_per_str,
+                "PBR_직전": p_pbr_str,
                 "EPS_최근": f"{fin_info['cur_eps']:,.0f}원" if pd.notna(fin_info['cur_eps']) else "-",
                 "BPS_최근": f"{fin_info['cur_bps']:,.0f}원" if pd.notna(fin_info['cur_bps']) else "-",
-                "DPS_최근": f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-",
-                "배당수익률": div_val
+                "ROE_최근": f"{fin_info['cur_roe']:.2f}%" if pd.notna(fin_info['cur_roe']) else "-",
+                "PER_최근": c_per_str,
+                "PBR_최근": c_pbr_str
             })
 
             # 통합 CSV 레코드
@@ -369,11 +398,12 @@ if current_codes:
                 "순이익_직전": fin_info['prev_np'], "순이익_최근": fin_info['cur_np'], "순이익_YoY": fin_info['np_yoy'],
                 "EPS_직전": fin_info['prev_eps'], "EPS_최근": fin_info['cur_eps'],
                 "BPS_직전": fin_info['prev_bps'], "BPS_최근": fin_info['cur_bps'],
-                "DPS_직전": fin_info['prev_dps'], "DPS_최근": fin_info['cur_dps'],
-                "PER": per_val, "PBR": pbr_val, "배당수익률": div_val
+                "ROE_직전": fin_info['prev_roe'], "ROE_최근": fin_info['cur_roe'],
+                "PER_직전": fin_info['prev_per'], "PER_최근": fin_info['cur_per'],
+                "PBR_직전": fin_info['prev_pbr'], "PBR_최근": fin_info['cur_pbr'],
+                "DPS": fin_info['cur_dps'], "현재PER": per_val, "현재PBR": pbr_val, "배당수익률": div_val
             })
 
-    # 대표 연도 산출 (기본값: 2025년 / 2026년)
     most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
     most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
 
@@ -399,11 +429,10 @@ if current_codes:
         )
 
     with tab2:
-        # 상단 헤더: (직전), (마지막) 텍스트 제거하고 연도만 표기
         top_headers_perf = [
             ("종목명", 1, False),
-            (most_prev_yr, 3, True),       # 3번째 열 뒤 구분선
-            (most_latest_yr, 3, True),     # 6번째 열 뒤 구분선
+            (most_prev_yr, 3, True),       # 3열 뒤 구분선
+            (most_latest_yr, 3, True),     # 6열 뒤 구분선
             ("성장률 (YoY)", 3, False)
         ]
         sub_headers_perf = [
@@ -419,18 +448,21 @@ if current_codes:
         )
 
     with tab3:
-        # 상단 헤더: (직전), (마지막) 텍스트 제거하고 연도만 표기
+        # 상단 헤더: 종목명(1) | 2025년(5개 지표) | 2026년(5개 지표)
         top_headers_share = [
             ("종목명", 1, False),
-            (most_prev_yr, 3, True),
-            (most_latest_yr, 4, False)
+            (most_prev_yr, 5, True),       # 5열 뒤 구분선
+            (most_latest_yr, 5, False)
         ]
-        sub_headers_share = ["EPS", "BPS", "DPS", "EPS", "BPS", "DPS", "배당수익률"]
+        sub_headers_share = [
+            "EPS", "BPS", "ROE", "PER", "PBR",
+            "EPS", "BPS", "ROE", "PER", "PBR"
+        ]
         render_multi_header_table(
             df_share,
             top_headers=top_headers_share,
             sub_headers=sub_headers_share,
-            divider_indices=[3]
+            divider_indices=[5]
         )
 
     # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
