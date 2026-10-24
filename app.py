@@ -50,7 +50,7 @@ def fetch_integration(code: str):
 
 # 3. 연간 재무제표 (/finance/annual)
 def fetch_finance(code: str):
-    url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
+    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/quarter?code=095660"
     try:
         res = requests.get(url, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
