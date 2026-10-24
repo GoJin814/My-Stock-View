@@ -6,6 +6,24 @@ import os
 
 st.set_page_config(page_title="종목Scan 대시보드", layout="wide")
 
+# 표 글자 크기 및 컴팩트 스타일 적용
+st.markdown("""
+<style>
+/* Streamlit data_editor 내부 폰트 및 패딩 축소 */
+div[data-testid="stDataEditor"] {
+    font-size: 13px !important;
+}
+div[data-testid="stDataEditor"] [role="gridcell"],
+div[data-testid="stDataEditor"] [role="columnheader"] {
+    font-size: 13px !important;
+}
+/* 행 간격 컴팩트화 */
+div[data-testid="stDataEditor"] .dvn-scroller {
+    line-height: 1.2 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 SAVE_FILE = "saved_codes.txt"
 
 def load_codes():
@@ -20,7 +38,6 @@ def save_codes(codes):
         for c in codes:
             f.write(f"{c.strip().zfill(6)}\n")
 
-# 모바일 브라우저 표준 헤더 (403/차단 방지)
 REQ_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
     "Referer": "https://m.stock.naver.com/",
@@ -53,9 +70,8 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 (front-api 실패 시 구형 api로 자동 폴백)
+# 3. 연간 재무제표 (2단계 자동 폴백)
 def fetch_finance(code: str):
-    # 1순위: 프론트 API
     url_front = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
     try:
         res = requests.get(url_front, headers=REQ_HEADERS, timeout=5)
@@ -66,7 +82,6 @@ def fetch_finance(code: str):
     except Exception:
         pass
         
-    # 2순위 (폴백): 기존 백엔드 API
     url_legacy = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
     try:
         res = requests.get(url_legacy, headers=REQ_HEADERS, timeout=5)
@@ -84,7 +99,6 @@ def to_num(val):
     except:
         return np.nan
 
-# 딕셔너리 내부 어떤 깊이에 있든 rowList를 찾아내는 재귀 함수
 def extract_row_list(obj):
     if isinstance(obj, dict):
         if "rowList" in obj and isinstance(obj["rowList"], list):
@@ -234,7 +248,7 @@ if current_codes:
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True)
 
-    # 4. 데이터 에디터 테이블
+    # 4. 데이터 에디터 테이블 (컴팩트 뷰)
     disabled_cols = [c for c in result_df.columns if c != "선택"]
     
     edited_df = st.data_editor(
