@@ -5,7 +5,15 @@ import os
 import re
 
 from styles import apply_custom_styles
-from api import fetch_basic, fetch_integration, fetch_finance, fetch_balance_sheet, extract_row_list, to_num
+from api import (
+    fetch_basic,
+    fetch_integration,
+    fetch_finance,
+    fetch_balance_sheet,
+    fetch_fcf_from_fnguide,
+    extract_row_list,
+    to_num
+)
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_perf import render_tab_perf
 from tabs.tab_share import render_tab_share
@@ -44,6 +52,7 @@ def fetch_all_stock_data(codes_tuple):
         integration = fetch_integration(code)
         fin_json = fetch_finance(code)
         bs_json = fetch_balance_sheet(code)
+        fcf_map = fetch_fcf_from_fnguide(code)  # FnGuide Financial Summary FCF 연동
         
         stock_name = basic.get("stockName", "-")
         raw_close = basic.get("closePrice", "-")
@@ -80,7 +89,6 @@ def fetch_all_stock_data(codes_tuple):
             "cur_roe": np.nan, "prev_roe": np.nan,
             "cur_per": np.nan, "prev_per": np.nan,
             "cur_pbr": np.nan, "prev_pbr": np.nan,
-            # 요약 재무제표의 부채비율 & FCF
             "cur_debt_ratio": np.nan, "prev_debt_ratio": np.nan,
             "cur_fcf": np.nan, "prev_fcf": np.nan,
         }
@@ -148,9 +156,15 @@ def fetch_all_stock_data(codes_tuple):
                 elif "부채비율" in raw_title:
                     fin_info["cur_debt_ratio"] = c_val
                     fin_info["prev_debt_ratio"] = p_val
-                elif any(k in raw_title for k in ["FCF", "잉여현금"]):
-                    fin_info["cur_fcf"] = c_val
-                    fin_info["prev_fcf"] = p_val
+
+        # FnGuide FCF 매핑 (연도 4자리 기준)
+        latest_y_num = fin_info["latest_yr"][:4] if fin_info["latest_yr"] != "-" else None
+        prev_y_num = fin_info["prev_yr"][:4] if fin_info["prev_yr"] != "-" else None
+
+        if latest_y_num and latest_y_num in fcf_map:
+            fin_info["cur_fcf"] = fcf_map[latest_y_num]
+        if prev_y_num and prev_y_num in fcf_map:
+            fin_info["prev_fcf"] = fcf_map[prev_y_num]
 
         if fin_info["prev_yr"] != "-":
             prev_years.append(fin_info["prev_yr"])
@@ -174,7 +188,6 @@ def fetch_all_stock_data(codes_tuple):
                 if not cols:
                     continue
 
-                # 해당 연도 키 매칭
                 c_val_bs = to_num(cols.get(lk, {}).get("value") if isinstance(cols.get(lk, {}), dict) else cols.get(lk))
                 p_val_bs = to_num(cols.get(pk, {}).get("value") if isinstance(cols.get(pk, {}), dict) else cols.get(pk))
 
@@ -192,10 +205,8 @@ def fetch_all_stock_data(codes_tuple):
                     prev_borrowings += p_val_bs if pd.notna(p_val_bs) else 0.0
 
         if has_bs_data:
-            # 순현금성자산 = 현금및현금성자산 + 단기금융상품
             cur_net_cash = cur_cash_eq + cur_st_fin
             prev_net_cash = prev_cash_eq + prev_st_fin
-            # 순차입금 = 총차입금 - 순현금성자산
             cur_net_debt = cur_borrowings - cur_net_cash
             prev_net_debt = prev_borrowings - prev_net_cash
         else:
@@ -249,7 +260,7 @@ def fetch_all_stock_data(codes_tuple):
             "_num_EPS_직전": fin_info['prev_eps'], "_num_BPS_직전": fin_info['prev_bps'],
         })
 
-        # 4. 안전성 & 현금흐름 (부채비율, 순현금성자산, 순차입금, FCF)
+        # 4. 안전성 & 현금흐름
         scan_safety.append({
             "종목명": stock_name,
             "부채비율_직전": f"{fin_info['prev_debt_ratio']:.1f}%" if pd.notna(fin_info['prev_debt_ratio']) else "-",
