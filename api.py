@@ -51,7 +51,29 @@ def fetch_integration(code: str):
     return {}
 
 def fetch_finance(code: str):
-    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
+    """연간 요약 재무 (매출액, 영업이익, 부채비율 등)"""
+    url_front = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
+    try:
+        res = requests.get(url_front, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            if data:
+                return data
+    except Exception:
+        pass
+        
+    url_legacy = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
+    try:
+        res = requests.get(url_legacy, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return {}
+
+def fetch_balance_sheet(code: str):
+    """연간 재무상태표 (현금및현금성자산, 단기금융상품, 차입금 등)"""
+    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual/balanceSheet?code={code}"
     try:
         res = requests.get(url, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
@@ -60,9 +82,9 @@ def fetch_finance(code: str):
         pass
     return {}
 
-def fetch_financial_statement(code: str):
-    """재무상태표 및 현금흐름표 상세 API (순현금, 순차입금, FCF 산출용)"""
-    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual/financialStatement?code={code}"
+def fetch_cash_flow(code: str):
+    """연간 현금흐름표 (영업활동현금흐름, 유형자산의취득 등)"""
+    url = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual/cashFlowStatement?code={code}"
     try:
         res = requests.get(url, headers=REQ_HEADERS, timeout=5)
         if res.status_code == 200:
