@@ -4,22 +4,32 @@ import pandas as pd
 def apply_custom_styles():
     st.markdown("""
         <style>
+        /* 모바일 브라우저의 기본 pull-to-refresh 제스처 허용 */
+        html, body, [data-testid="stAppViewContainer"] {
+            overscroll-behavior-y: auto !important;
+        }
+
         .block-container {
             padding-top: 1.5rem;
             padding-bottom: 2rem;
             padding-left: 0.8rem;
             padding-right: 0.8rem;
         }
-        /* 테이블 감싸는 가로 스크롤 래퍼 */
+
+        /* 테이블 감싸는 가로 스크롤 래퍼: 세로 방향 당김 제스처는 브라우저로 통과 */
         .custom-multi-table-wrapper {
             width: 100%;
             overflow-x: auto;
+            overflow-y: visible; /* 세로 스크롤 가둠 해제 */
+            overscroll-behavior-x: contain; /* 가로는 테이블 내부만 스크롤 */
+            overscroll-behavior-y: auto;    /* 세로는 브라우저 당겨서 새로고침 허용 */
             -webkit-overflow-scrolling: touch;
             margin-bottom: 1rem;
             border-radius: 4px;
             border: 1px solid rgba(128, 128, 128, 0.25);
             background-color: var(--background-color, #ffffff);
         }
+
         /* 테이블 기본 */
         .custom-multi-table {
             width: max-content;
@@ -29,6 +39,7 @@ def apply_custom_styles():
             background-color: var(--background-color, #ffffff);
             font-family: var(--font, sans-serif);
         }
+
         /* 셀 테두리 및 패딩 */
         .custom-multi-table th, .custom-multi-table td {
             padding: 6px 12px;
@@ -38,6 +49,7 @@ def apply_custom_styles():
             text-align: right;
             background-color: var(--background-color, #ffffff);
         }
+
         /* 상단 일반 헤더 */
         .custom-multi-table thead th {
             background-color: #f0f2f6 !important;
@@ -46,7 +58,8 @@ def apply_custom_styles():
             font-weight: 600;
             border-bottom: 2px solid rgba(128, 128, 128, 0.3) !important;
         }
-        /* 좌측 고정 종목명 헤더 (100% 불투명 연회색) */
+
+        /* 좌측 고정 종목명 헤더 */
         .custom-multi-table thead th.stock-name-cell {
             position: sticky;
             left: 0;
@@ -54,7 +67,8 @@ def apply_custom_styles():
             background-color: #f0f2f6 !important;
             border-right: 2px solid rgba(128, 128, 128, 0.4) !important;
         }
-        /* 좌측 고정 종목명 데이터 셀 (100% 불투명 흰색으로 뒤쪽 글자 완전 차단) */
+
+        /* 좌측 고정 종목명 데이터 셀 */
         .custom-multi-table tbody td.stock-name-cell {
             text-align: left;
             font-weight: 600;
@@ -65,6 +79,7 @@ def apply_custom_styles():
             min-width: 85px !important;
             border-right: 2px solid rgba(128, 128, 128, 0.4) !important;
         }
+
         /* 링크 색상 */
         .custom-multi-table .stock-link,
         .custom-multi-table .stock-link:visited,
@@ -75,12 +90,13 @@ def apply_custom_styles():
             cursor: pointer;
             white-space: nowrap !important;
         }
+
         /* 연도 구분선 */
         .custom-multi-table .divider-col {
             border-right: 2px solid rgba(128, 128, 128, 0.45) !important;
         }
 
-        /* --- 다크 모드 감지 시 완벽한 불투명 어두운 배경 적용 --- */
+        /* 다크 모드 스타일 */
         @media (prefers-color-scheme: dark) {
             .custom-multi-table-wrapper {
                 background-color: #0e1117 !important;
@@ -102,7 +118,7 @@ def apply_custom_styles():
                 border-right-color: rgba(250, 250, 250, 0.3) !important;
             }
             .custom-multi-table tbody td.stock-name-cell {
-                background-color: #0e1117 !important; /* 다크 모드에서도 불투명하게 가려줌 */
+                background-color: #0e1117 !important;
                 border-right-color: rgba(250, 250, 250, 0.3) !important;
             }
             .custom-multi-table .stock-link,
@@ -127,7 +143,6 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
     
     html = ['<div class="custom-multi-table-wrapper"><table class="custom-multi-table"><thead><tr>']
     
-    # 1층 상단 헤더: 종목명은 rowspan="2"로 병합
     for title, colspan, has_border in top_headers:
         border_cls = ' class="divider-col"' if has_border else ''
         if title == "종목명":
@@ -136,13 +151,11 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
             html.append(f'<th colspan="{colspan}"{border_cls}>{title}</th>')
     html.append('</tr><tr>')
     
-    # 2층 서브 헤더
     for idx, sub in enumerate(sub_headers):
         border_cls = ' class="divider-col"' if idx in divider_indices else ''
         html.append(f'<th{border_cls}>{sub}</th>')
     html.append('</tr></thead><tbody>')
     
-    # 본문 데이터
     for _, row in df.iterrows():
         html.append('<tr>')
         code = str(row.get("종목코드", "")).strip()
