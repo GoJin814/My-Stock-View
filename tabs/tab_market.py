@@ -29,7 +29,6 @@ def save_market_cache(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def render_market_inputs():
-    """종목 추가 영역 밑에 배치되는 파일 업로드 및 수기 입력 폼"""
     market_cache = load_market_cache()
 
     # 1. 파일 일괄 가져오기 (CSV / JSON)
@@ -141,7 +140,6 @@ def render_market_inputs():
                 st.info(f"{target_dt_str}에 저장된 데이터가 없습니다.")
 
 def render_tab_market():
-    """국내지수 Monitor 탭 내부: 저장된 지표 표만 깔끔하게 렌더링"""
     st.subheader("🌐 국내지수 및 자금동향 내역")
     market_cache = load_market_cache()
 
@@ -193,8 +191,22 @@ def render_tab_market():
             })
 
         df_market_rendered = pd.DataFrame(table_rows)
-        df_market_rendered.insert(0, "선택", False)
-        st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
+
+        # 세션 상태 기반 전체 선택 초기화
+        if "select_all_market" not in st.session_state:
+            st.session_state["select_all_market"] = False
+
+        c_info, c_sel_all = st.columns([5, 2])
+        with c_info:
+            st.write(f"📊 저장된 지표 내역 (총 {len(df_market_rendered)}영업일)")
+        with c_sel_all:
+            select_all_m = st.checkbox("☑️ 전체 선택 / 해제", key="select_all_market_checkbox")
+
+        if select_all_m != st.session_state["select_all_market"]:
+            st.session_state["select_all_market"] = select_all_m
+            df_market_rendered.insert(0, "선택", select_all_m)
+        else:
+            df_market_rendered.insert(0, "선택", st.session_state["select_all_market"])
 
         disabled_cols = [c for c in df_market_rendered.columns if c != "선택"]
         edited_market_df = st.data_editor(
@@ -206,7 +218,7 @@ def render_tab_market():
             disabled=disabled_cols,
             hide_index=True,
             use_container_width=True,
-            key="market_editor"
+            key=f"market_editor_{st.session_state['select_all_market']}"
         )
         return edited_market_df
     else:
