@@ -5,10 +5,10 @@ import os
 import re
 
 from styles import apply_custom_styles
-from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from api import fetch_basic, fetch_integration, fetch_finance, fetch_balance_sheet, extract_row_list, to_num
 from tabs.tab_basic import render_tab_basic
-from tabs.tab_share import render_tab_share
 from tabs.tab_perf import render_tab_perf
+from tabs.tab_share import render_tab_share
 from tabs.tab_safety import render_tab_safety
 from tabs.tab_market import render_tab_market, render_market_inputs, load_market_cache, save_market_cache
 
@@ -43,6 +43,7 @@ def fetch_all_stock_data(codes_tuple):
         basic = fetch_basic(code)
         integration = fetch_integration(code)
         fin_json = fetch_finance(code)
+        bs_json = fetch_balance_sheet(code)
         
         stock_name = basic.get("stockName", "-")
         raw_close = basic.get("closePrice", "-")
@@ -69,6 +70,7 @@ def fetch_all_stock_data(codes_tuple):
 
         fin_info = {
             "latest_yr": "-", "prev_yr": "-",
+            "latest_k": None, "prev_k": None,
             "cur_rev": np.nan, "prev_rev": np.nan, "rev_yoy": np.nan,
             "cur_op": np.nan,  "prev_op": np.nan,  "op_yoy": np.nan,
             "cur_np": np.nan,  "prev_np": np.nan,  "np_yoy": np.nan,
@@ -78,17 +80,16 @@ def fetch_all_stock_data(codes_tuple):
             "cur_roe": np.nan, "prev_roe": np.nan,
             "cur_per": np.nan, "prev_per": np.nan,
             "cur_pbr": np.nan, "prev_pbr": np.nan,
-            # 안전성 & 현금흐름 항목
+            # 요약 재무제표의 부채비율 & FCF
             "cur_debt_ratio": np.nan, "prev_debt_ratio": np.nan,
             "cur_fcf": np.nan, "prev_fcf": np.nan,
-            "cur_cash": np.nan, "prev_cash": np.nan,
-            "cur_debt": np.nan, "prev_debt": np.nan,
         }
 
+        # 1. 요약 연간 재무제표 파싱
         row_list = extract_row_list(fin_json)
         if row_list:
             for row in row_list:
-                raw_title = row.get("title", "").strip()
+                raw_title = row.get("title", "").strip().replace(" ", "")
                 columns = row.get("columns", {})
                 if not columns:
                     continue
@@ -99,8 +100,10 @@ def fetch_all_stock_data(codes_tuple):
                 latest_k = sorted_years[-1]
                 prev_k = sorted_years[-2] if len(sorted_years) >= 2 else None
                 fin_info["latest_yr"] = f"{latest_k[:4]}년"
+                fin_info["latest_k"] = latest_k
                 if prev_k:
                     fin_info["prev_yr"] = f"{prev_k[:4]}년"
+                    fin_info["prev_k"] = prev_k
 
                 c_item = columns.get(latest_k, {})
                 c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
@@ -124,54 +127,82 @@ def fetch_all_stock_data(codes_tuple):
                     fin_info["prev_np"] = p_val
                     if pd.notna(c_val) and pd.notna(p_val) and p_val != 0:
                         fin_info["np_yoy"] = round(((c_val - p_val) / abs(p_val)) * 100, 2)
-                elif raw_title in ["수정주당순이익(원)", "주당순이익(원)", "EPS"]:
+                elif any(k in raw_title for k in ["수정주당순이익", "주당순이익", "EPS"]):
                     fin_info["cur_eps"] = c_val
                     fin_info["prev_eps"] = p_val
-                elif raw_title in ["주당순자산(원)", "주당순자산가치(원)", "BPS"]:
+                elif any(k in raw_title for k in ["주당순자산", "BPS"]):
                     fin_info["cur_bps"] = c_val
                     fin_info["prev_bps"] = p_val
-                elif raw_title in ["주당배당금(원)", "주당배당금", "DPS"]:
+                elif any(k in raw_title for k in ["주당배당금", "DPS"]):
                     fin_info["cur_dps"] = c_val
                     fin_info["prev_dps"] = p_val
-                elif raw_title in ["ROE(%)", "ROE"]:
+                elif "ROE" in raw_title:
                     fin_info["cur_roe"] = c_val
                     fin_info["prev_roe"] = p_val
-                elif raw_title in ["PER(배)", "PER"]:
+                elif "PER" in raw_title:
                     fin_info["cur_per"] = c_val
                     fin_info["prev_per"] = p_val
-                elif raw_title in ["PBR(배)", "PBR"]:
+                elif "PBR" in raw_title:
                     fin_info["cur_pbr"] = c_val
                     fin_info["prev_pbr"] = p_val
-                # 부채비율
-                elif raw_title in ["부채비율", "부채비율(%)"]:
+                elif "부채비율" in raw_title:
                     fin_info["cur_debt_ratio"] = c_val
                     fin_info["prev_debt_ratio"] = p_val
-                # FCF
-                elif raw_title in ["FCF", "잉여현금흐름"]:
+                elif any(k in raw_title for k in ["FCF", "잉여현금"]):
                     fin_info["cur_fcf"] = c_val
                     fin_info["prev_fcf"] = p_val
-                # 현금성자산 및 차입금
-                elif raw_title in ["현금및현금성자산", "현금및단기금융상품"]:
-                    fin_info["cur_cash"] = c_val
-                    fin_info["prev_cash"] = p_val
-                elif raw_title in ["총차입금", "단기차입금"]:
-                    fin_info["cur_debt"] = c_val
-                    fin_info["prev_debt"] = p_val
 
         if fin_info["prev_yr"] != "-":
             prev_years.append(fin_info["prev_yr"])
         if fin_info["latest_yr"] != "-":
             latest_years.append(fin_info["latest_yr"])
 
-        dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
+        # 2. [재무상태표] 상세 파싱 (순현금성자산, 순차입금)
+        cur_cash_eq, prev_cash_eq = 0.0, 0.0
+        cur_st_fin, prev_st_fin = 0.0, 0.0
+        cur_borrowings, prev_borrowings = 0.0, 0.0
+        has_bs_data = False
 
-        # 순현금성자산 계산 (현금 - 차입금)
-        cur_net_cash = np.nan
-        prev_net_cash = np.nan
-        if pd.notna(fin_info["cur_cash"]):
-            cur_net_cash = fin_info["cur_cash"] - (fin_info["cur_debt"] if pd.notna(fin_info["cur_debt"]) else 0)
-        if pd.notna(fin_info["prev_cash"]):
-            prev_net_cash = fin_info["prev_cash"] - (fin_info["prev_debt"] if pd.notna(fin_info["prev_debt"]) else 0)
+        bs_rows = extract_row_list(bs_json)
+        lk = fin_info["latest_k"]
+        pk = fin_info["prev_k"]
+
+        if bs_rows:
+            for row in bs_rows:
+                title = row.get("title", "").strip().replace(" ", "")
+                cols = row.get("columns", {})
+                if not cols:
+                    continue
+
+                # 해당 연도 키 매칭
+                c_val_bs = to_num(cols.get(lk, {}).get("value") if isinstance(cols.get(lk, {}), dict) else cols.get(lk))
+                p_val_bs = to_num(cols.get(pk, {}).get("value") if isinstance(cols.get(pk, {}), dict) else cols.get(pk))
+
+                if "현금및현금성자산" in title:
+                    has_bs_data = True
+                    cur_cash_eq += c_val_bs if pd.notna(c_val_bs) else 0.0
+                    prev_cash_eq += p_val_bs if pd.notna(p_val_bs) else 0.0
+                elif "단기금융상품" in title:
+                    has_bs_data = True
+                    cur_st_fin += c_val_bs if pd.notna(c_val_bs) else 0.0
+                    prev_st_fin += p_val_bs if pd.notna(p_val_bs) else 0.0
+                elif any(k in title for k in ["단기차입금", "유동성장기부채", "사채", "장기차입금"]):
+                    has_bs_data = True
+                    cur_borrowings += c_val_bs if pd.notna(c_val_bs) else 0.0
+                    prev_borrowings += p_val_bs if pd.notna(p_val_bs) else 0.0
+
+        if has_bs_data:
+            # 순현금성자산 = 현금및현금성자산 + 단기금융상품
+            cur_net_cash = cur_cash_eq + cur_st_fin
+            prev_net_cash = prev_cash_eq + prev_st_fin
+            # 순차입금 = 총차입금 - 순현금성자산
+            cur_net_debt = cur_borrowings - cur_net_cash
+            prev_net_debt = prev_borrowings - prev_net_cash
+        else:
+            cur_net_cash, prev_net_cash = np.nan, np.nan
+            cur_net_debt, prev_net_debt = np.nan, np.nan
+
+        dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
         # 1. 기본 & 시세
         scan_basic.append({
@@ -218,18 +249,19 @@ def fetch_all_stock_data(codes_tuple):
             "_num_EPS_직전": fin_info['prev_eps'], "_num_BPS_직전": fin_info['prev_bps'],
         })
 
-        # 4. 안전성 & 현금흐름
+        # 4. 안전성 & 현금흐름 (부채비율, 순현금성자산, 순차입금, FCF)
         scan_safety.append({
             "종목명": stock_name,
             "부채비율_직전": f"{fin_info['prev_debt_ratio']:.1f}%" if pd.notna(fin_info['prev_debt_ratio']) else "-",
-            "순현금_직전": f"{prev_net_cash:,.0f}억" if pd.notna(prev_net_cash) else "-",
+            "순현금_직전": f"{prev_net_cash:,.0f}억" if pd.notna(prev_net_cash) and prev_net_cash != 0 else "-",
+            "순차입금_직전": f"{prev_net_debt:,.0f}억" if pd.notna(prev_net_debt) and prev_net_debt != 0 else "-",
             "FCF_직전": f"{fin_info['prev_fcf']:,.0f}억" if pd.notna(fin_info['prev_fcf']) else "-",
             "부채비율_최근": f"{fin_info['cur_debt_ratio']:.1f}%" if pd.notna(fin_info['cur_debt_ratio']) else "-",
-            "순현금_최근": f"{cur_net_cash:,.0f}억" if pd.notna(cur_net_cash) else "-",
+            "순현금_최근": f"{cur_net_cash:,.0f}억" if pd.notna(cur_net_cash) and cur_net_cash != 0 else "-",
+            "순차입금_최근": f"{cur_net_debt:,.0f}억" if pd.notna(cur_net_debt) and cur_net_debt != 0 else "-",
             "FCF_최근": f"{fin_info['cur_fcf']:,.0f}억" if pd.notna(fin_info['cur_fcf']) else "-",
         })
 
-        # 전체 CSV 저장용 레코드
         full_csv_records.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
             "직전연도": fin_info['prev_yr'], "최근연도": fin_info['latest_yr'],
@@ -242,8 +274,9 @@ def fetch_all_stock_data(codes_tuple):
             "PER_직전": fin_info['prev_per'], "PER_최근": fin_info['cur_per'],
             "PBR_직전": fin_info['prev_pbr'], "PBR_최근": fin_info['cur_pbr'],
             "부채비율_직전": fin_info['prev_debt_ratio'], "부채비율_최근": fin_info['cur_debt_ratio'],
+            "순현금성자산_직전": prev_net_cash, "순현금성자산_최근": cur_net_cash,
+            "순차입금_직전": prev_net_debt, "순차입금_최근": cur_net_debt,
             "FCF_직전": fin_info['prev_fcf'], "FCF_최근": fin_info['cur_fcf'],
-            "순현금_직전": prev_net_cash, "순현금_최근": cur_net_cash,
             "DPS": fin_info['cur_dps'], "현재PER": per_val, "현재PBR": pbr_val, "배당수익률": div_val
         })
 
@@ -272,7 +305,7 @@ if current_codes:
     df_share = pd.DataFrame(scan_share)
     df_safety = pd.DataFrame(scan_safety)
 
-    # 1. 정렬 제어 영역
+    # 1. 정렬 제어
     sort_col1, sort_col2, _ = st.columns([2, 1.5, 3.5])
     with sort_col1:
         sort_metric = st.selectbox(
@@ -295,7 +328,7 @@ if current_codes:
     with sort_col2:
         sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
 
-    # 2. PER / PBR 조건 필터링 영역
+    # 2. 밸류에이션 필터링
     with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):
         f_c1, f_c2, f_c3 = st.columns(3)
         with f_c1:
@@ -309,7 +342,6 @@ if current_codes:
             pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
             pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
 
-    # 필터링 적용
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
     target_per_col = f"_num_PER{filter_prefix}"
     target_pbr_col = f"_num_PBR{filter_prefix}"
@@ -354,7 +386,7 @@ if current_codes:
         df_share = df_share.reset_index(drop=True)
         df_safety = df_safety.reset_index(drop=True)
 
-    # 탭 구성 (총 5개 탭)
+    # 5개 탭 렌더링
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 기본 & 시세", 
         "💰 주당 가치 (2개년 비교)",
@@ -378,7 +410,7 @@ if current_codes:
     with tab5:
         edited_market_df = render_tab_market()
 
-    # 하단 컨트롤 (선택 항목 삭제 & CSV 다운로드)
+    # 하단 컨트롤
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True)
