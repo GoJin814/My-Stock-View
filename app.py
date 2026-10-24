@@ -6,7 +6,7 @@ import os
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 
-# 표 글자 크기, 컴팩트 스타일 및 2단 헤더/구분선 스타일 적용
+# CSS 스타일 (표 폰트 컴팩트화 및 세로 굵은 구분선)
 st.markdown("""
 <style>
 div[data-testid="stDataEditor"] {
@@ -20,7 +20,6 @@ div[data-testid="stDataEditor"] .dvn-scroller {
     line-height: 1.2 !important;
 }
 
-/* 2단 헤더 및 국내지수 모니터 테이블 스타일 */
 .styled-table-container {
     width: 100%;
     overflow-x: auto;
@@ -55,11 +54,9 @@ div[data-testid="stDataEditor"] .dvn-scroller {
 .compare-table tr:hover td {
     background-color: #374151;
 }
-/* 블록 경계선 (굵은 세로 구분선) */
 .compare-table .year-divider {
     border-right: 3px solid #9ca3af !important;
 }
-/* 종목명 및 일시 열 고정(Sticky) */
 .compare-table .sticky-col {
     position: sticky;
     left: 0;
@@ -99,7 +96,7 @@ REQ_HEADERS = {
     "Sec-Fetch-Site": "same-origin"
 }
 
-# 1. 실시간 시세 (/basic)
+# 1. 종목 시세/통합/재무
 def fetch_basic(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     try:
@@ -110,7 +107,6 @@ def fetch_basic(code: str):
         pass
     return {}
 
-# 2. 통합 정보 (/integration)
 def fetch_integration(code: str):
     url = f"https://m.stock.naver.com/api/stock/{code}/integration"
     try:
@@ -121,7 +117,6 @@ def fetch_integration(code: str):
         pass
     return {}
 
-# 3. 연간 재무제표 (2단계 자동 폴백)
 def fetch_finance(code: str):
     url_front = f"https://m.stock.naver.com/front-api/stock/domestic/finance/annual?code={code}"
     try:
@@ -142,11 +137,59 @@ def fetch_finance(code: str):
         pass
     return {}
 
+# 2. 국내지수 Monitor 전용 API 호출 함수
+def fetch_kospi_history(page_size=15):
+    # KOSPI 지수 히스토리 API
+    url = f"https://m.stock.naver.com/front-api/marketIndex/prices?category=index&reutersCode=KOSPI&page=1&pageSize={page_size}"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            json_data = res.json()
+            return json_data.get("result", []) if isinstance(json_data, dict) else []
+    except Exception:
+        pass
+    return []
+
+def fetch_exchange_history(page_size=15):
+    # 원/달러 환율 히스토리 API
+    url = f"https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW&page=1&pageSize={page_size}"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            json_data = res.json()
+            return json_data.get("result", []) if isinstance(json_data, dict) else []
+    except Exception:
+        pass
+    return []
+
+def fetch_deposit_trend(page_size=15):
+    # 고객예탁금 및 신용잔고 트렌드 API
+    url = f"https://m.stock.naver.com/front-api/investor/deposit/trend?page=1&pageSize={page_size}"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            json_data = res.json()
+            return json_data.get("result", []) if isinstance(json_data, dict) else []
+    except Exception:
+        pass
+    return []
+
+def fetch_kospi_basic():
+    # 코스피 실시간 기본정보(시총, PER, PBR)
+    url = "https://m.stock.naver.com/api/index/KOSPI/basic"
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return {}
+
 def to_num(val):
     if val is None or val in ["", "-", "N/A"]:
         return np.nan
     try:
-        return float(str(val).replace(",", "").strip())
+        return float(str(val).replace(",", "").replace("+", "").strip())
     except:
         return np.nan
 
@@ -165,7 +208,6 @@ def extract_row_list(obj):
                 return found
     return []
 
-# 상단 2단 헤더 테이블 렌더러
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
     top_th_html = ""
     for title, colspan, is_divider in top_headers:
@@ -208,7 +250,6 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
     """
     st.markdown(html_code, unsafe_allow_html=True)
 
-# 단일 헤더 테이블 렌더러 (구분선 지원)
 def render_single_header_table(df: pd.DataFrame, divider_indices: list):
     th_html = ""
     for idx, col in enumerate(df.columns):
@@ -249,7 +290,7 @@ st.title("Scanning_주식")
 
 current_codes = load_codes()
 
-# --- 2. 데이터 수집 및 지표 파싱 ---
+# --- 2. 개별 종목 데이터 수집 ---
 if current_codes:
     scan_basic = []
     scan_perf = []
@@ -259,7 +300,7 @@ if current_codes:
     prev_years = []
     latest_years = []
 
-    with st.spinner("네이버 증권 데이터를 동기화하고 있습니다..."):
+    with st.spinner("증권 데이터를 동기화하고 있습니다..."):
         for code in current_codes:
             basic = fetch_basic(code)
             integration = fetch_integration(code)
@@ -434,7 +475,7 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # --- 3. 탭 렌더링 (국내지수 Monitor 탭 추가) ---
+    # --- 3. 탭 렌더링 ---
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "📈 실적 & 성장성 (2개년 비교)", 
@@ -493,61 +534,89 @@ if current_codes:
         )
 
     with tab4:
-        # [신규] 국내 주식시장 지수 및 유동성 모니터링 테스트 데이터
-        market_records = [
-            {
-                "일시": "2026-07-24",
-                "KOSPI": "2,785.40",
-                "시가총액 (억원)": "2,264,120",
-                "PER": "12.45",
-                "PBR": "0.98",
-                "고객예탁금 (억원)": "574,820",
-                "증감 (억원)": "+4,150",
-                "신용잔고 (억원)": "201,300",
-                "증감(신용) (억원)": "-820",
-                "환율": "1,348.5원",
-                "고객예탁금/지수": "206.37",
-                "신용잔고/지수": "72.27"
-            },
-            {
-                "일시": "2026-07-10",
-                "KOSPI": "2,822.15",
-                "시가총액 (억원)": "2,298,450",
-                "PER": "12.60",
-                "PBR": "0.99",
-                "고객예탁금 (억원)": "570,670",
-                "증감 (억원)": "-2,300",
-                "신용잔고 (억원)": "202,120",
-                "증감(신용) (억원)": "+1,450",
-                "환율": "1,355.2원",
-                "고객예탁금/지수": "202.21",
-                "신용잔고/지수": "71.62"
-            },
-            {
-                "일시": "2026-06-15",
-                "KOSPI": "2,758.42",
-                "시가총액 (억원)": "2,241,800",
-                "PER": "12.18",
-                "PBR": "0.95",
-                "고객예탁금 (억원)": "563,400",
-                "증감 (억원)": "+6,800",
-                "신용잔고 (억원)": "198,700",
-                "증감(신용) (억원)": "+3,100",
-                "환율": "1,372.0원",
-                "고객예탁금/지수": "204.25",
-                "신용잔고/지수": "72.03"
-            }
-        ]
-        df_market = pd.DataFrame(market_records)
-        df_market.columns = [
-            "일시", "KOSPI", "시가총액(억원)", "PER", "PBR", 
-            "고객예탁금(억원)", "증감(억원)", 
-            "신용잔고(억원)", "증감(억원)", 
-            "환율", "고객예탁금/지수", "신용잔고/지수"
-        ]
-        
-        # 이미지에 표기된 대로 블록별 굵은 세로선 적용: PBR 뒤(4열), 예탁금 증감 뒤(6열), 신용잔고 증감 뒤(8열)
-        render_single_header_table(df_market, divider_indices=[4, 6, 8])
+        # [실시간 연동] 공식 엔드포인트에서 3개 소스 데이터 수집 및 일자 기준 통합
+        with st.spinner("국내 증시 및 자금동향 지표를 수집하고 있습니다..."):
+            kospi_list = fetch_kospi_history(page_size=20)
+            exchange_list = fetch_exchange_history(page_size=20)
+            deposit_list = fetch_deposit_trend(page_size=20)
+            kospi_basic = fetch_kospi_basic()
+
+            # 일자별 인덱싱 매핑
+            kospi_map = {item.get("localTradedAt", "")[:10]: item for item in kospi_list if "localTradedAt" in item}
+            exchange_map = {item.get("localTradedAt", "")[:10]: item for item in exchange_list if "localTradedAt" in item}
+            deposit_map = {item.get("baseDate", "")[:10]: item for item in deposit_list if "baseDate" in item}
+
+            # 최근 날짜 기준으로 정렬된 공통/가용 날짜 집합 생성
+            all_dates = sorted(list(set(list(kospi_map.keys()) + list(deposit_map.keys()))), reverse=True)
+
+            market_rows = []
+            for dt in all_dates[:15]:
+                k_data = kospi_map.get(dt, {})
+                ex_data = exchange_map.get(dt, {})
+                dep_data = deposit_map.get(dt, {})
+
+                # 1. KOSPI 지수
+                raw_kospi = k_data.get("closePrice")
+                kospi_num = to_num(raw_kospi)
+                kospi_str = f"{kospi_num:,.2f}" if pd.notna(kospi_num) else "-"
+
+                # 2. 시가총액, PER, PBR
+                # API 최신값 매핑 및 백업
+                m_cap = kospi_basic.get("marketValue", "-")
+                per_str = str(kospi_basic.get("per", "-"))
+                pbr_str = str(kospi_basic.get("pbr", "-"))
+
+                # 3. 고객예탁금 및 증감
+                cust_dep = to_num(dep_data.get("custDeposit"))
+                cust_diff = to_num(dep_data.get("custDepositDiff"))
+                cust_dep_str = f"{cust_dep:,.0f}" if pd.notna(cust_dep) else "-"
+                cust_diff_str = f"{cust_diff:+,.0f}" if pd.notna(cust_diff) else "-"
+
+                # 4. 신용잔고 및 증감
+                credit_tot = to_num(dep_data.get("creditTotal"))
+                credit_diff = to_num(dep_data.get("creditTotalDiff"))
+                credit_tot_str = f"{credit_tot:,.0f}" if pd.notna(credit_tot) else "-"
+                credit_diff_str = f"{credit_diff:+,.0f}" if pd.notna(credit_diff) else "-"
+
+                # 5. 환율
+                raw_ex = ex_data.get("closePrice")
+                ex_num = to_num(raw_ex)
+                ex_str = f"{ex_num:,.1f}원" if pd.notna(ex_num) else "-"
+
+                # 6. 파생 비율 (고객예탁금/지수, 신용잔고/지수)
+                dep_ratio_str = "-"
+                credit_ratio_str = "-"
+                if pd.notna(cust_dep) and pd.notna(kospi_num) and kospi_num > 0:
+                    dep_ratio_str = f"{(cust_dep / kospi_num):.2f}"
+                if pd.notna(credit_tot) and pd.notna(kospi_num) and kospi_num > 0:
+                    credit_ratio_str = f"{(credit_tot / kospi_num):.2f}"
+
+                market_rows.append({
+                    "일시": dt,
+                    "KOSPI": kospi_str,
+                    "시가총액(억원)": m_cap,
+                    "PER": per_str,
+                    "PBR": pbr_str,
+                    "고객예탁금(억원)": cust_dep_str,
+                    "증감(억원)": cust_diff_str,
+                    "신용잔고(억원)": credit_tot_str,
+                    "증감(신용)(억원)": credit_diff_str,
+                    "환율": ex_str,
+                    "고객예탁금/지수": dep_ratio_str,
+                    "신용잔고/지수": credit_ratio_str
+                })
+
+            df_market = pd.DataFrame(market_rows)
+            if not df_market.empty:
+                df_market.columns = [
+                    "일시", "KOSPI", "시가총액(억원)", "PER", "PBR", 
+                    "고객예탁금(억원)", "증감(억원)", 
+                    "신용잔고(억원)", "증감(억원)", 
+                    "환율", "고객예탁금/지수", "신용잔고/지수"
+                ]
+                render_single_header_table(df_market, divider_indices=[4, 6, 8])
+            else:
+                st.info("국내 지수 데이터를 불러오는 중입니다...")
 
     # --- 4. 컨트롤 영역 (선택 삭제 & CSV 다운로드) ---
     btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
@@ -592,4 +661,4 @@ with col_btn:
                 st.rerun()
 
 # --- 6. 맨 하단 출처 안내 ---
-st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
+st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual, /marketIndex) 실시간 연동")
