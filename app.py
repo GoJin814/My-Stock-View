@@ -165,9 +165,9 @@ def extract_row_list(obj):
                 return found
     return []
 
-# 상단 2단 헤더를 지원하며 여러 개의 구분선(divider_indices)을 처리하는 렌더러
+# 상단 2단 헤더 테이블 렌더러
 def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: list, divider_indices: list):
-    # 1행: 상단 그룹 헤더
+    # 1행: 상단 그룹 헤더 (연도)
     top_th_html = ""
     for title, colspan, is_divider in top_headers:
         divider_cls = " year-divider" if is_divider else ""
@@ -176,13 +176,13 @@ def render_multi_header_table(df: pd.DataFrame, top_headers: list, sub_headers: 
         else:
             top_th_html += f'<th colspan="{colspan}" class="group-header{divider_cls}">{title}</th>'
 
-    # 2행: 하위 컬럼 헤더
+    # 2행: 하위 컬럼 헤더 (지표명)
     sub_th_html = ""
     for idx, col_title in enumerate(sub_headers, start=1):
         divider_cls = " year-divider" if idx in divider_indices else ""
         sub_th_html += f'<th class="{divider_cls}">{col_title}</th>'
 
-    # 본문 행 생성 (위치 인덱스 기반으로 안전하게 추출)
+    # 본문 행 생성 (위치 인덱스 기반으로 추출)
     num_cols = len(df.columns)
     tb_html = ""
     for row_idx in range(len(df)):
@@ -334,7 +334,7 @@ if current_codes:
                 "배당수익률": div_val
             })
 
-            # 2) 실적 탭: 직전 연도 3개 -> 마지막 연도 3개 -> YoY 성장률 3개(우측 집중)
+            # 2) 실적 탭: 직전 연도 3개 -> 마지막 연도 3개 -> YoY 성장률 3개
             scan_perf.append({
                 "종목명": stock_name,
                 "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
@@ -373,6 +373,7 @@ if current_codes:
                 "PER": per_val, "PBR": pbr_val, "배당수익률": div_val
             })
 
+    # 대표 연도 산출 (기본값: 2025년 / 2026년)
     most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
     most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
 
@@ -398,11 +399,11 @@ if current_codes:
         )
 
     with tab2:
-        # 실적 탭 2단 상단 헤더: 종목명(1) | 2025년(3) | 2026년(3) | 성장률(3)
+        # 상단 헤더: (직전), (마지막) 텍스트 제거하고 연도만 표기
         top_headers_perf = [
             ("종목명", 1, False),
-            (f"{most_prev_yr} (직전)", 3, True),     # 3번째 열 뒤 구분선
-            (f"{most_latest_yr} (마지막)", 3, True), # 6번째 열 뒤 구분선
+            (most_prev_yr, 3, True),       # 3번째 열 뒤 구분선
+            (most_latest_yr, 3, True),     # 6번째 열 뒤 구분선
             ("성장률 (YoY)", 3, False)
         ]
         sub_headers_perf = [
@@ -414,15 +415,15 @@ if current_codes:
             df_perf,
             top_headers=top_headers_perf,
             sub_headers=sub_headers_perf,
-            divider_indices=[3, 6]  # 3열(순익_직전)과 6열(순익_최근) 뒤에 굵은 경계선 배치
+            divider_indices=[3, 6]
         )
 
     with tab3:
-        # 주당 가치 탭 2단 상단 헤더: 종목명(1) | 2025년(3) | 2026년(4)
+        # 상단 헤더: (직전), (마지막) 텍스트 제거하고 연도만 표기
         top_headers_share = [
             ("종목명", 1, False),
-            (f"{most_prev_yr} (직전)", 3, True),
-            (f"{most_latest_yr} (마지막)", 4, False)
+            (most_prev_yr, 3, True),
+            (most_latest_yr, 4, False)
         ]
         sub_headers_share = ["EPS", "BPS", "DPS", "EPS", "BPS", "DPS", "배당수익률"]
         render_multi_header_table(
