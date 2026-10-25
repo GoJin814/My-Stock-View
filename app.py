@@ -304,7 +304,7 @@ if current_codes:
         sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
 
     # 2. 밸류에이션 필터링
-    with st.expander("> 🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):
+    with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):
         f_c1, f_c2, f_c3 = st.columns(3)
         with f_c1:
             filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
