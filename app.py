@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import base64
+import requests
 
 from styles import apply_custom_styles
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
@@ -16,6 +18,40 @@ apply_custom_styles()
 
 SAVE_FILE = "saved_codes.txt"
 
+def commit_to_github(filename, content_str, commit_message="Auto-update from Streamlit"):
+    """Streamlit Secrets의 토큰을 사용하여 원본 GitHub 저장소로 파일을 자동 커밋"""
+    token = st.secrets.get("GITHUB_TOKEN")
+    repo = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    
+    if not token or not repo:
+        return False
+        
+    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # 기존 파일 SHA 조회
+    res = requests.get(url, headers=headers, params={"ref": branch})
+    sha = None
+    if res.status_code == 200:
+        sha = res.json().get("sha")
+        
+    # Base64 인코딩 후 PUT 커밋
+    content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
+    payload = {
+        "message": commit_message,
+        "content": content_b64,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    put_res = requests.put(url, headers=headers, json=payload)
+    return put_res.status_code in [200, 201]
+
 def load_codes():
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
@@ -25,9 +61,13 @@ def load_codes():
     return ["178320", "001130", "086450", "007690", "095660", "161890"]
 
 def save_codes(codes):
+    # 1. 컨테이너 로컬 파일 저장
+    content = "\n".join([f"{c.strip().zfill(6)}" for c in codes]) + "\n"
     with open(SAVE_FILE, "w", encoding="utf-8") as f:
-        for c in codes:
-            f.write(f"{c.strip().zfill(6)}\n")
+        f.write(content)
+        
+    # 2. GitHub 원격 저장소에 자동 커밋 (영구 보존)
+    commit_to_github(SAVE_FILE, content, f"Auto-commit saved_codes.txt ({len(codes)} stocks)")
 
 @st.cache_data(ttl=600, show_spinner="증권 데이터를 동기화하고 있습니다...")
 def fetch_all_stock_data(codes_tuple):
@@ -47,7 +87,6 @@ def fetch_all_stock_data(codes_tuple):
         raw_close = basic.get("closePrice", "-")
         curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
         
-        # 현재가 숫자 추출 (계산용)
         numeric_close = to_num(raw_close)
 
         total_infos = integration.get("totalInfos", [])
@@ -143,17 +182,16 @@ def fetch_all_stock_data(codes_tuple):
         if fin_info["latest_yr"] != "-":
             latest_years.append(fin_info["latest_yr"])
 
-        # DPS(원)
         dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
-        # 1. 배당수익률 계산: DPS / 현재가 * 100
+        # 배당수익률 계산: DPS / 현재가 * 100
         if pd.notna(fin_info["cur_dps"]) and pd.notna(numeric_close) and numeric_close > 0:
             calc_div_yield = (fin_info["cur_dps"] / numeric_close) * 100.0
             div_val = f"{calc_div_yield:.2f}%"
         else:
             div_val = "-"
 
-        # 기본 & 시세
+        # 1. 기본 & 시세
         scan_basic.append({
             "선택": False,
             "종목명": stock_name,
@@ -166,7 +204,7 @@ def fetch_all_stock_data(codes_tuple):
             "배당수익률": div_val
         })
 
-        # 실적 & 성장성
+        # 2. 실적 & 성장성
         scan_perf.append({
             "종목명": stock_name,
             "종목코드": code,
@@ -181,7 +219,7 @@ def fetch_all_stock_data(codes_tuple):
             "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
         })
 
-        # 주당 가치
+        # 3. 주당 가치
         p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
         p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
         c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
@@ -336,7 +374,7 @@ if current_codes:
     with tab4:
         edited_market_df = render_tab_market()
 
-    # 하단 컨트롤
+    # 하단 제어 버튼
     btn_col1, btn_col2, btn_col3 = st.columns([1.5, 2, 2])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True)
@@ -356,10 +394,11 @@ if current_codes:
             data=codes_txt_data,
             file_name="saved_codes_backup.txt",
             mime="text/plain",
-            help="현재 등록된 종목코드 목록을 TXT로 내려받아 보관합니다.",
+            help="현재 등록된 종목코드 목록을 TXT 파일로 내려받습니다.",
             use_container_width=True
         )
 
+    # 삭제 동작
     if delete_btn:
         deleted_anything = False
 
@@ -367,9 +406,9 @@ if current_codes:
             selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
             if selected_codes:
                 remaining_codes = [c for c in current_codes if c not in selected_codes]
-                save_codes(remaining_codes)
+                save_codes(remaining_codes)  # 로컬 저장 + GitHub 자동 커밋
                 fetch_all_stock_data.clear()
-                st.success(f"종목 {len(selected_codes)}개 삭제 완료")
+                st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
                 deleted_anything = True
 
         if edited_market_df is not None and not edited_market_df.empty:
@@ -378,8 +417,8 @@ if current_codes:
                 m_cache = load_market_cache()
                 for d in selected_dates:
                     m_cache.pop(d, None)
-                save_market_cache(m_cache)
-                st.success(f"지수 데이터 {len(selected_dates)}일자 삭제 완료")
+                save_market_cache(m_cache)  # 로컬 저장 + GitHub 자동 커밋
+                st.success(f"지수 데이터 {len(selected_dates)}일자 삭제 및 GitHub 저장 완료")
                 deleted_anything = True
 
         if deleted_anything:
@@ -389,7 +428,7 @@ if current_codes:
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
 
-# 종목코드 추가 및 일괄 등록
+# 종목코드 추가 패널
 st.write("")
 with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", expanded=False):
     tab_single, tab_bulk_text, tab_bulk_file = st.tabs(["단건 추가", "텍스트 일괄 붙여넣기", "파일 일괄 업로드(TXT/CSV/XLSX)"])
@@ -405,9 +444,9 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                     formatted = new_code.strip().zfill(6)
                     if formatted not in current_codes:
                         current_codes.append(formatted)
-                        save_codes(current_codes)
+                        save_codes(current_codes)  # 로컬 저장 + GitHub 자동 커밋
                         fetch_all_stock_data.clear()
-                        st.success(f"{formatted} 추가 완료")
+                        st.success(f"{formatted} 추가 및 GitHub 자동 커밋 완료")
                         st.rerun()
 
     with tab_bulk_text:
@@ -423,9 +462,9 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                     new_unique = [c for c in dict.fromkeys(found_codes) if c not in current_codes]
                     if new_unique:
                         current_codes.extend(new_unique)
-                        save_codes(current_codes)
+                        save_codes(current_codes)  # 로컬 저장 + GitHub 자동 커밋
                         fetch_all_stock_data.clear()
-                        st.success(f"총 {len(new_unique)}개 종목이 추가되었습니다: {', '.join(new_unique)}")
+                        st.success(f"총 {len(new_unique)}개 종목이 추가 및 GitHub에 자동 커밋되었습니다.")
                         st.rerun()
                     else:
                         st.info("입력된 종목코드가 이미 모두 등록되어 있습니다.")
@@ -462,9 +501,9 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                         new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
                         if new_unique:
                             current_codes.extend(new_unique)
-                            save_codes(current_codes)
+                            save_codes(current_codes)  # 로컬 저장 + GitHub 자동 커밋
                             fetch_all_stock_data.clear()
-                            st.success(f"파일에서 {len(new_unique)}개 종목이 등록되었습니다: {', '.join(new_unique)}")
+                            st.success(f"파일에서 {len(new_unique)}개 종목이 등록 및 GitHub에 자동 커밋되었습니다.")
                             st.rerun()
                         else:
                             st.info("파일 내 종목코드가 이미 등록되어 있습니다.")
