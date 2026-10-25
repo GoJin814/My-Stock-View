@@ -9,16 +9,16 @@ def apply_custom_styles():
             padding-bottom: 3rem;
         }
 
-        /* 1. 상단 expander 접기 아이콘 텍스트 겹침 버그(_arrow_right) 수정 */
-        [data-testid="stExpander"] summary span {
-            display: inline-flex !important;
-            align-items: center !important;
-        }
-        [data-testid="stExpander"] summary svg {
-            margin-right: 8px !important;
-        }
+        /* ⚡ 1. 상단 expander의 '_arrow_right' 텍스트 겹침 버그 완전 제거 */
         [data-testid="stExpanderToggleIcon"] {
-            user-select: none !important;
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        [data-testid="stExpander"] summary {
+            font-weight: 500 !important;
+            padding: 8px 12px !important;
         }
 
         /* 2. 탭 바 여백 */
@@ -31,36 +31,34 @@ def apply_custom_styles():
             white-space: nowrap;
         }
 
-        /* 3. 기본 탭과 100% 일치된 컴팩트 다크 그리드 컨테이너 */
+        /* ⚡ 3. 기본 탭과 100% 동일한 다크 그리드 (폭 최소화 & 배경 완전 일치) */
         .custom-grid-container {
             overflow-x: auto;
             margin-bottom: 1.2rem;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.09);
-            background-color: #0e1117;
-            display: inline-block;
-            max-width: 100%;
+            display: block;
+            width: 100%;
         }
 
         .custom-grid-table {
-            width: max-content; /* 테이블 폭 최소화 (데이터 길이에 맞춤) */
-            min-width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            font-size: 0.82rem;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            color: #fafafa;
-            background-color: #0e1117;
+            width: auto !important; /* 화면 100% 강제 확장을 막고 데이터 폭에 딱 맞춤 */
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            font-size: 0.82rem !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            background-color: #0e1117 !important;
+            color: #fafafa !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 4px !important;
         }
 
-        /* 4. 기본 탭과 완벽히 동일한 헤더 배경 및 라인 */
+        /* ⚡ 기본 탭 헤더와 100% 똑같은 칠흑색 헤더 */
         .custom-grid-table th {
-            background-color: #12151c !important; /* 기본 탭과 일치된 톤 */
+            background-color: #0e1117 !important;
             color: #9ca3af !important;
             font-weight: 500 !important;
-            padding: 7px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+            padding: 6px 10px !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
             text-align: center !important;
             white-space: nowrap !important;
         }
@@ -69,22 +67,21 @@ def apply_custom_styles():
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
             padding: 6px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
-            text-align: center !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
             white-space: nowrap !important;
         }
 
-        /* 마우스 호버 효과 */
+        /* 행 마우스 오버 효과 */
         .custom-grid-table tr:hover td {
-            background-color: #1a1e27 !important;
+            background-color: #161a22 !important;
         }
 
-        /* 네이버 링크 스타일 */
+        /* 네이버 PC 링크 스타일 (기본 탭 링크색과 동기화) */
         .naver-stock-link {
             color: #58a6ff !important;
             text-decoration: none !important;
-            font-weight: 500;
+            font-weight: 500 !important;
         }
         .naver-stock-link:hover {
             text-decoration: underline !important;
@@ -98,6 +95,7 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
+    # 인자 추출
     header_rows = kwargs.get("header_rows", None)
     if not header_rows and args and isinstance(args[0], list):
         header_rows = args[0]
@@ -107,27 +105,27 @@ def render_multi_header_table(df, *args, **kwargs):
         divider_indices = args[1]
     div_set = set(divider_indices) if divider_indices else set()
 
-    has_naver_link = kwargs.get("has_naver_link", True)
-
-    # 1. 2단 복합 헤더 생성
+    # 1. 2단 복합 헤더 조립 (배경색 완전 일치)
     thead_parts = ["<thead>"]
     if header_rows:
         for row in header_rows:
-            thead_parts.append("<tr>")
+            thead_parts.append('<tr style="background-color: #0e1117;">')
             for cell in row:
                 r_span = f' rowspan="{cell.get("rowspan", 1)}"' if cell.get("rowspan", 1) > 1 else ""
                 c_span = f' colspan="{cell.get("colspan", 1)}"' if cell.get("colspan", 1) > 1 else ""
                 txt = cell.get("text", "")
-                thead_parts.append(f'<th{r_span}{c_span}>{txt}</th>')
+                thead_parts.append(
+                    f'<th{r_span}{c_span} style="background-color: #0e1117; color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); padding: 6px 10px; text-align: center;">{txt}</th>'
+                )
             thead_parts.append("</tr>")
     else:
-        thead_parts.append("<tr>")
+        thead_parts.append('<tr style="background-color: #0e1117;">')
         for c in df.columns:
-            thead_parts.append(f'<th>{c}</th>')
+            thead_parts.append(f'<th style="background-color: #0e1117; color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); padding: 6px 10px; text-align: center;">{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 행 생성 (종목명 좌측 정렬 및 폭 최소화)
+    # 2. 본문 조립 (종목명 좌측 정렬 & PC 링크 & 컴팩트 여백 강제 적용)
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         tbody_parts.append("<tr>")
@@ -137,37 +135,38 @@ def render_multi_header_table(df, *args, **kwargs):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
-            # 우측 구분선
-            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
+            # 우측 구분선(BPS/순익 뒤 강조)
+            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.25) !important;" if col_idx in div_set else "border-right: 1px solid rgba(255, 255, 255, 0.06);"
+            border_b = "border-bottom: 1px solid rgba(255, 255, 255, 0.06);"
 
-            # 종목명 컬럼은 좌측 정렬(text-align: left) 및 네이버 PC 링크 연결
-            if col_name == "종목명":
-                align_style = "text-align: left !important; padding-left: 14px !important;"
-                if has_naver_link and code_val:
-                    pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
-                    content = f'<a href="{pc_url}" target="_blank" class="naver-stock-link">{val}</a>'
-                else:
-                    content = val
-                tbody_parts.append(f'<td style="{align_style} {border_r}">{content}</td>')
+            # ⚡ 종목명 열: 왼쪽 정렬 (text-align: left) + 네이버 PC 웹 링크
+            if "종목명" in col_name:
+                pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
+                link_html = f'<a href="{pc_url}" target="_blank" class="naver-stock-link">{val}</a>'
+                tbody_parts.append(
+                    f'<td style="background-color: #0e1117; text-align: left !important; padding: 6px 12px !important; {border_b} {border_r}">{link_html}</td>'
+                )
                 continue
 
-            # 증감률 컬러링
-            align_style = "text-align: center !important;"
-            if "%" in val and not val.startswith("-") and val != "-":
+            # 나머지 수치 열: 중앙 정렬
+            align_css = "text-align: center !important;"
+            color_css = "color: #f3f4f6;"
+            
+            # 수치 색상 강조 (+ 빨강, - 파랑)
+            if "%" in val and val != "-":
                 if val.startswith("+"):
-                    content = f'<span style="color: #f87171; font-weight: 500;">{val}</span>'
-                else:
-                    content = val
-            elif val.startswith("-") and "%" in val and val != "-":
-                content = f'<span style="color: #60a5fa; font-weight: 500;">{val}</span>'
-            else:
-                content = val
+                    color_css = "color: #f87171; font-weight: 500;"
+                elif val.startswith("-"):
+                    color_css = "color: #60a5fa; font-weight: 500;"
 
-            tbody_parts.append(f'<td style="{align_style} {border_r}">{content}</td>')
+            tbody_parts.append(
+                f'<td style="background-color: #0e1117; {align_css} {color_css} padding: 6px 10px !important; {border_b} {border_r}">{val}</td>'
+            )
 
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
 
+    # 3. HTML 마크다운 렌더링
     html_code = f"""
     <div class="custom-grid-container">
         <table class="custom-grid-table">
