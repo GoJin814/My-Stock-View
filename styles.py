@@ -4,44 +4,56 @@ import pandas as pd
 def apply_custom_styles():
     st.markdown("""
         <style>
+        /* ⚡ 1. 모바일(웨일/크롬) 아래로 스와이프 당겨서 새로고침(Pull-to-refresh) 강제 허용 */
+        html, body, .stApp, [data-testid="stAppViewContainer"] {
+            overscroll-behavior-y: auto !important;
+            touch-action: pan-y pinch-zoom !important;
+        }
+
         .block-container {
             padding-top: 1.8rem;
             padding-bottom: 3rem;
         }
 
-        /* ⚡ 1. Expander 텍스트 깨짐(keyboard_arrow_right) 완전 삭제 및 한 줄 출력 고정 */
+        /* ⚡ 2. Expander 제목 복원 & keyboard_arrow_right 문자열 찌꺼기 원천 차단 */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
             padding: 8px 12px !important;
-            font-weight: 500 !important;
             font-size: 0.92rem !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
+            font-weight: 500 !important;
+            color: #fafafa !important;
+            cursor: pointer !important;
         }
 
-        /* 아이콘 폰트 텍스트 찌꺼기가 위로 튀어나오는 것 원천 숨김 */
-        [data-testid="stExpander"] summary span:first-child,
+        /* 머티리얼 심볼 폰트 깨짐 텍스트만 안 보이게 격리 */
+        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] span,
         [data-testid="stExpander"] summary .material-symbols-rounded,
         [data-testid="stExpander"] summary .material-icons {
             font-size: 0px !important;
-            line-height: 0 !important;
-            width: 0 !important;
-            height: 0 !important;
             color: transparent !important;
+            letter-spacing: -9999px !important;
             display: none !important;
-            visibility: hidden !important;
         }
 
-        /* 정상적인 SVG 화살표만 작게 표시 */
         [data-testid="stExpander"] summary svg {
             display: inline-block !important;
-            visibility: visible !important;
             width: 1rem !important;
             height: 1rem !important;
-            margin-right: 6px !important;
-            flex-shrink: 0 !important;
+            min-width: 1rem !important;
+            margin-right: 8px !important;
+            fill: #fafafa !important;
+        }
+
+        /* Expander 본문 텍스트 강제 표시 */
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary div,
+        [data-testid="stExpander"] summary > span:last-child {
+            display: inline-block !important;
+            visibility: visible !important;
+            color: #fafafa !important;
+            font-size: 0.92rem !important;
         }
 
         /* 탭 버튼 스타일 */
@@ -52,6 +64,74 @@ def apply_custom_styles():
             padding-left: 14px;
             padding-right: 14px;
             white-space: nowrap;
+        }
+
+        /* ⚡ 3. 기본 탭(st.data_editor)과 100% 동일한 그리드 서식 강제 고정 */
+        .grid-wrapper {
+            width: 100% !important;
+            overflow-x: auto !important;
+            margin-bottom: 1.2rem !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 4px !important;
+            background-color: #0e1117 !important;
+        }
+
+        table.grid-table {
+            width: max-content !important; /* 화면 억지 확장 방지 */
+            min-width: 100% !important;
+            border-collapse: collapse !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            font-size: 0.82rem !important;
+            background-color: #0e1117 !important;
+        }
+
+        /* 기본 탭 헤더: 미세한 4% 반투명 다크 톤 */
+        table.grid-table th {
+            background-color: rgba(255, 255, 255, 0.04) !important;
+            color: #9ca3af !important;
+            font-weight: 500 !important;
+            font-size: 0.81rem !important;
+            padding: 7px 10px !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
+            text-align: center !important;
+            white-space: nowrap !important;
+        }
+
+        /* 기본 탭 데이터 셀 */
+        table.grid-table td {
+            background-color: #0e1117 !important;
+            color: #f3f4f6 !important;
+            padding: 6px 10px !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+            font-variant-numeric: tabular-nums !important;
+        }
+
+        /* ⚡ 종목명 열: 무조건 왼쪽 정렬 + 폭 최소화 */
+        table.grid-table td.col-stock-name {
+            text-align: left !important;
+            padding-left: 14px !important;
+            padding-right: 14px !important;
+            width: 1% !important;
+            white-space: nowrap !important;
+        }
+
+        table.grid-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.03) !important;
+        }
+
+        /* 네이버 링크 스타일 */
+        .naver-link {
+            color: #58a6ff !important;
+            text-decoration: none !important;
+            font-weight: 500 !important;
+        }
+        .naver-link:hover {
+            text-decoration: underline !important;
+            color: #79b8ff !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -72,17 +152,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
     has_naver_link = kwargs.get("has_naver_link", True)
 
-    # ⚡ 기본 탭(st.data_editor) 실제 렌더링 색상 토큰과 100% 동일하게 일치
-    bg_table = "#0e1117"
-    bg_th = "rgba(255, 255, 255, 0.04)"       # 기본 탭 헤더의 미세한 4% 반투명 다크 톤
-    color_th = "#9ca3af"                     # 기본 탭 헤더 글자색
-    color_td = "#f3f4f6"                     # 기본 탭 본문 글자색
-    border_outer = "rgba(255, 255, 255, 0.08)"
-    border_th_b = "rgba(255, 255, 255, 0.12)" # 헤더 하단 라인
-    border_cell = "rgba(255, 255, 255, 0.04)" # 셀 사이 세로/가로 구분선
-    border_div = "rgba(255, 255, 255, 0.22)"  # 직전/최근 구분 세로선
-
-    # 1. 2단 복합 헤더 조립
+    # 1. 2단 헤더 구성
     thead_parts = ["<thead>"]
     if header_rows:
         for row in header_rows:
@@ -91,73 +161,60 @@ def render_multi_header_table(df, *args, **kwargs):
                 r_span = f' rowspan="{cell.get("rowspan", 1)}"' if cell.get("rowspan", 1) > 1 else ""
                 c_span = f' colspan="{cell.get("colspan", 1)}"' if cell.get("colspan", 1) > 1 else ""
                 txt = cell.get("text", "")
-                thead_parts.append(
-                    f'<th{r_span}{c_span} style="background-color: {bg_th}; color: {color_th}; font-weight: 500; font-size: 0.81rem; padding: 7px 10px; border-bottom: 1px solid {border_th_b}; border-right: 1px solid {border_cell}; text-align: center; white-space: nowrap;">{txt}</th>'
-                )
+                thead_parts.append(f'<th{r_span}{c_span}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
         for c in df.columns:
-            thead_parts.append(
-                f'<th style="background-color: {bg_th}; color: {color_th}; font-weight: 500; font-size: 0.81rem; padding: 7px 10px; border-bottom: 1px solid {border_th_b}; border-right: 1px solid {border_cell}; text-align: center; white-space: nowrap;">{c}</th>'
-            )
+            thead_parts.append(f'<th>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 조립 (종목명 좌측 정렬 및 폭 최소화, 글자색 동기화)
+    # 2. 본문 행 구성 (클래스 기반 강제 스타일 바인딩)
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         tbody_parts.append("<tr>")
-        
-        code_val = ""
-        if "종목코드" in df.columns:
-            code_val = str(row["종목코드"]).strip().zfill(6)
-        elif len(df.columns) > 1:
-            code_val = str(row.iloc[1]).strip().zfill(6)
+        code_val = str(row.get("종목코드", "")).strip().zfill(6)
 
-        for col_idx in range(len(df.columns)):
-            raw_val = str(row.iloc[col_idx])
+        for col_idx, col_name in enumerate(df.columns):
+            raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
-            # 구분선 열인 경우 우측 테두리 강조
-            border_r = f"border-right: 2px solid {border_div} !important;" if col_idx in div_set else f"border-right: 1px solid {border_cell};"
-            border_b = f"border-bottom: 1px solid {border_cell};"
+            # 우측 구분선 클래스/스타일
+            extra_style = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            # ⚡ 0번째 열(종목명): 무조건 좌측 정렬 + 글자 크기만큼만 폭 최소화 (width: 1%)
+            # ⚡ 0번째 열(종목명): col-stock-name 클래스 부여로 왼쪽 정렬 및 폭 최소화
             if col_idx == 0:
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
-                    content = f'<a href="{pc_url}" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">{val}</a>'
+                    content = f'<a href="{pc_url}" target="_blank" class="naver-link">{val}</a>'
                 else:
                     content = val
 
-                tbody_parts.append(
-                    f'<td style="background-color: {bg_table}; text-align: left !important; padding: 6px 12px !important; white-space: nowrap !important; width: 1% !important; {border_b} {border_r}">{content}</td>'
-                )
+                style_attr = f'style="{extra_style}"' if extra_style else ""
+                tbody_parts.append(f'<td class="col-stock-name" {style_attr}>{content}</td>')
                 continue
 
-            # 나머지 열: 중앙 정렬
-            align_css = "text-align: center !important;"
-            color_css = f"color: {color_td};"
-            
             # 수치 컬러링 (+ 빨강, - 파랑)
+            color_style = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
-                    color_css = "color: #f87171 !important; font-weight: 500;"
+                    color_style = "color: #f87171 !important; font-weight: 500;"
                 elif val.startswith("-"):
-                    color_css = "color: #60a5fa !important; font-weight: 500;"
+                    color_style = "color: #60a5fa !important; font-weight: 500;"
 
-            tbody_parts.append(
-                f'<td style="background-color: {bg_table}; {align_css} {color_css} padding: 6px 10px !important; white-space: nowrap !important; font-variant-numeric: tabular-nums; {border_b} {border_r}">{val}</td>'
-            )
+            style_combined = f"{color_style} {extra_style}".strip()
+            style_attr = f'style="{style_combined}"' if style_combined else ""
+
+            tbody_parts.append(f'<td {style_attr}>{val}</td>')
 
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
 
-    # 3. 마크다운 렌더링 (st.data_editor와 동일한 외곽 테두리 및 둥근 모서리)
+    # 3. HTML 렌더링
     html_code = f"""
-    <div style="overflow-x: auto; margin-bottom: 1.2rem; border-radius: 6px; border: 1px solid {border_outer}; background-color: {bg_table}; width: 100%;">
-        <table style="width: 100%; border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.82rem;">
+    <div class="grid-wrapper">
+        <table class="grid-table">
             {"".join(thead_parts)}
             {"".join(tbody_parts)}
         </table>
