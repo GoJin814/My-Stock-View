@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 모바일(웨일/크롬) 아래로 스와이프 당겨서 새로고침(Pull-to-refresh) 강제 허용 */
+        /* 1. 모바일(웨일/크롬) 아래로 당겨 새로고침 제스처 허용 */
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
             overscroll-behavior-y: auto !important;
             touch-action: pan-y pinch-zoom !important;
@@ -16,7 +16,7 @@ def apply_custom_styles():
             padding-bottom: 3rem;
         }
 
-        /* 2. Expander 제목 정돈 및 태블릿 문자열 깨짐 방지 */
+        /* 2. Expander 글자 겹침 방지 */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -48,7 +48,7 @@ def apply_custom_styles():
             color: #fafafa !important;
         }
 
-        /* 3. 단순화된 탭 바 스타일 */
+        /* 3. 탭 바 여백 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -59,7 +59,7 @@ def apply_custom_styles():
             font-size: 0.92rem !important;
         }
 
-        /* ⚡ 4. 기본 탭과 통일된 외형 + 가로 스크롤 컨테이너 */
+        /* 4. 기본 탭과 통일된 외형 + 가로 스크롤 컨테이너 */
         .custom-grid-wrapper {
             overflow-x: auto !important;
             margin-bottom: 1.2rem;
@@ -73,7 +73,7 @@ def apply_custom_styles():
         .custom-grid-table {
             width: max-content !important;
             min-width: 100% !important;
-            border-collapse: separate !important; /* sticky를 위해 separate 유지 */
+            border-collapse: separate !important;
             border-spacing: 0 !important;
             font-size: 0.82rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -114,12 +114,12 @@ def apply_custom_styles():
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* ⚡ 5. 종목명 열 좌측 고정 (Sticky 120px) */
+        /* 5. 종목명 열 좌측 고정 (120px) */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
-            z-index: 3 !important; /* 상단 헤더 중에서도 최상단 */
-            background-color: #171b22 !important; /* 스크롤 시 아래 데이터가 비치지 않는 불투명 다크 톤 */
+            z-index: 3 !important;
+            background-color: #171b22 !important;
             width: 120px !important;
             min-width: 120px !important;
             max-width: 120px !important;
@@ -132,7 +132,7 @@ def apply_custom_styles():
             position: sticky !important;
             left: 0 !important;
             z-index: 2 !important;
-            background-color: #0e1117 !important; /* 본문 스크롤 시 내용 안 겹치는 불투명 검정 */
+            background-color: #0e1117 !important;
             width: 120px !important;
             min-width: 120px !important;
             max-width: 120px !important;
@@ -167,7 +167,7 @@ def apply_custom_styles():
 def render_multi_header_table(df, *args, **kwargs):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         st.info("표시할 데이터가 없습니다.")
-        return
+        return None
 
     header_rows = kwargs.get("header_rows", None)
     if not header_rows and args and isinstance(args[0], list):
@@ -179,9 +179,10 @@ def render_multi_header_table(df, *args, **kwargs):
     div_set = set(divider_indices) if divider_indices else set()
 
     has_naver_link = kwargs.get("has_naver_link", True)
-    table_id = kwargs.get("tab_key", "tbl") + "_custom_grid"
+    tab_key = kwargs.get("tab_key", "tbl")
+    table_id = tab_key + "_custom_grid"
 
-    # 1. 2단 복합 헤더 조립 (종목명에 고정 클래스 col-name-th 부여)
+    # 1. 2단 복합 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
@@ -197,7 +198,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes = []
                 th_attrs = ""
 
-                # ⚡ 종목명 헤더는 좌측 고정 클래스 부여
                 if r_idx == 0 and txt == "종목명":
                     th_classes.append("col-name-th")
 
@@ -221,11 +221,11 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 행 조립 (종목명 셀에 고정 클래스 col-name 부여)
+    # 2. 본문 행 조립 (각 행에 data-code 주입)
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
-        tbody_parts.append("<tr>")
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
+        tbody_parts.append(f'<tr data-code="{code_val}">')
 
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
@@ -233,7 +233,6 @@ def render_multi_header_table(df, *args, **kwargs):
 
             border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            # ⚡ 0번째 열(종목명): 좌측 고정 클래스 적용
             if col_idx == 0:
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
@@ -245,7 +244,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 tbody_parts.append(f'<td class="col-name" {style_attr}>{content}</td>')
                 continue
 
-            # 나머지 열: 컬러링 및 값 표기
             color_css = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
@@ -261,7 +259,6 @@ def render_multi_header_table(df, *args, **kwargs):
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
 
-    # 3. HTML 렌더링
     html_code = f"""
     <div class="custom-grid-wrapper">
         <table id="{table_id}" class="custom-grid-table">
@@ -272,10 +269,10 @@ def render_multi_header_table(df, *args, **kwargs):
     """
     st.markdown(html_code, unsafe_allow_html=True)
 
-    # 4. 새로고침 없는 브라우저 단 정렬 엔진
-    components.html(f"""
+    # ⚡ 3. 브라우저 정렬 후 정렬된 종목 순서를 모든 탭 동기화 세션으로 전달하는 컴포넌트
+    sorted_order = components.html(f"""
     <script>
-    (function initSort() {{
+    (function() {{
         const doc = window.parent.document;
         const table = doc.getElementById("{table_id}");
         if (!table) return;
@@ -298,15 +295,15 @@ def render_multi_header_table(df, *args, **kwargs):
 
         const thList = table.querySelectorAll('th.sortable-th');
         thList.forEach(th => {{
-            if (th.getAttribute('data-has-listener') === 'true') return;
-            th.setAttribute('data-has-listener', 'true');
+            if (th.getAttribute('data-has-sync-listener') === 'true') return;
+            th.setAttribute('data-has-sync-listener', 'true');
 
             th.addEventListener('click', function(e) {{
                 e.preventDefault();
                 const tbody = table.querySelector('tbody');
                 const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
                 const rows = Array.from(tbody.querySelectorAll('tr'));
-                
+
                 let isAsc = th.getAttribute('data-sort-asc') === 'true';
                 let nextAsc = !isAsc;
 
@@ -331,9 +328,18 @@ def render_multi_header_table(df, *args, **kwargs):
                     return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
                 }});
 
+                // DOM 재배치
                 rows.forEach(r => tbody.appendChild(r));
+
+                // ⚡ 정렬된 종목 순서 리스트 추출 및 Streamlit 이벤트 전송
+                const orderedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+                if (window.Streamlit) {{
+                    window.Streamlit.setComponentValue(orderedCodes);
+                }}
             }});
         }});
     }})();
     </script>
-    """, height=0, width=0)
+    """, height=0, width=0, key=f"comp_{table_id}")
+
+    return sorted_order
