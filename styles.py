@@ -9,37 +9,19 @@ def apply_custom_styles():
             padding-bottom: 3rem;
         }
 
-        /* ⚡ 1. 태블릿 브라우저 Material Symbols 텍스트 깨짐(_arrow_right) 원천 차단 */
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
-        [data-testid="stExpander"] summary span:has(svg),
-        [data-testid="stExpander"] summary .material-symbols-rounded,
-        [data-testid="stExpander"] summary .material-icons,
-        [data-testid="stExpander"] summary span[translate="no"] {
-            font-size: 0px !important;
-            line-height: 0 !important;
-            letter-spacing: -9999px !important;
-            color: transparent !important;
-            user-select: none !important;
+        /* 1. 태블릿 브라우저 _arrow_right 겹침 방지 */
+        [data-testid="stExpanderToggleIcon"] {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
         }
-        
-        /* Expander 화살표 SVG는 정상 표시되도록 크기 복구 */
-        [data-testid="stExpander"] summary svg {
-            font-size: 1.2rem !important;
-            letter-spacing: normal !important;
-            color: inherit !important;
-            width: 1.2rem !important;
-            height: 1.2rem !important;
-            display: inline-block !important;
-        }
-
         [data-testid="stExpander"] summary {
             font-weight: 500 !important;
             padding: 8px 12px !important;
-            display: flex !important;
-            align-items: center !important;
         }
 
-        /* 2. 탭 바 여백 */
+        /* 2. 탭 바 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -49,67 +31,64 @@ def apply_custom_styles():
             white-space: nowrap;
         }
 
-        /* ⚡ 3. 기본 탭과 100% 동일한 다크 그리드 (태블릿 다크모드 강제 덮어쓰기) */
+        /* ⚡ 3. st.data_editor 외곽 프레임과 100% 동일한 컨테이너 */
         .custom-grid-container {
             overflow-x: auto;
             margin-bottom: 1.2rem;
             display: block;
             width: 100%;
+            border: 1px solid rgba(250, 250, 250, 0.12) !important; /* st.data_editor 테두리와 일치 */
+            border-radius: 8px !important;
             background-color: #0e1117 !important;
         }
 
         .custom-grid-table {
-            width: auto !important;
-            border-collapse: separate !important;
-            border-spacing: 0 !important;
-            font-size: 0.82rem !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-            background-color: #0e1117 !important;
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 0.83rem !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
             color: #fafafa !important;
-            border: 1px solid rgba(255, 255, 255, 0.12) !important;
-            border-radius: 4px !important;
+            background-color: transparent !important;
         }
 
-        /* ⚡ 기본 탭 헤더와 동일하게 칠흑색(#0e1117) 강제 */
-        .custom-grid-table thead,
-        .custom-grid-table thead tr,
+        /* ⚡ 4. st.data_editor 헤더와 100% 동일한 반투명 다크 톤 및 테두리 */
         .custom-grid-table th {
-            background: #0e1117 !important;
-            background-color: #0e1117 !important;
-            color: #9ca3af !important;
+            background-color: rgba(255, 255, 255, 0.04) !important; /* data_editor 헤더 색상 */
+            color: #a1a1aa !important;
             font-weight: 500 !important;
-            padding: 6px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+            padding: 8px 12px !important;
+            border-bottom: 1px solid rgba(250, 250, 250, 0.12) !important;
+            border-right: 1px solid rgba(250, 250, 250, 0.06) !important;
             text-align: center !important;
             white-space: nowrap !important;
+            letter-spacing: -0.01em;
         }
 
-        .custom-grid-table tbody,
-        .custom-grid-table tbody tr,
+        /* ⚡ 5. st.data_editor 본문 행과 100% 동일한 톤 */
         .custom-grid-table td {
-            background: #0e1117 !important;
-            background-color: #0e1117 !important;
-            color: #f3f4f6 !important;
-            padding: 6px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+            background-color: transparent !important;
+            color: #f4f4f5 !important;
+            padding: 7px 12px !important;
+            border-bottom: 1px solid rgba(250, 250, 250, 0.06) !important;
+            border-right: 1px solid rgba(250, 250, 250, 0.06) !important;
             white-space: nowrap !important;
+            font-variant-numeric: tabular-nums;
         }
 
+        /* 호버 시 행 하이라이트 */
         .custom-grid-table tr:hover td {
-            background-color: #161a22 !important;
+            background-color: rgba(255, 255, 255, 0.03) !important;
         }
 
-        /* 네이버 PC 링크 스타일 */
+        /* 네이버 링크 스타일 */
         .naver-stock-link {
-            color: #58a6ff !important;
+            color: #60a5fa !important;
             text-decoration: none !important;
             font-weight: 500 !important;
         }
         .naver-stock-link:hover {
             text-decoration: underline !important;
-            color: #79b8ff !important;
+            color: #93c5fd !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -128,60 +107,61 @@ def render_multi_header_table(df, *args, **kwargs):
         divider_indices = args[1]
     div_set = set(divider_indices) if divider_indices else set()
 
-    # 1. 헤더 조립 (인라인 스타일에도 순수 검정 배경 명시)
-    thead_parts = ['<thead style="background-color: #0e1117 !important;">']
+    # 1. 헤더 (st.data_editor 헤더 색상과 동기화)
+    thead_parts = ["<thead>"]
     if header_rows:
         for row in header_rows:
-            thead_parts.append('<tr style="background-color: #0e1117 !important;">')
+            thead_parts.append("<tr>")
             for cell in row:
                 r_span = f' rowspan="{cell.get("rowspan", 1)}"' if cell.get("rowspan", 1) > 1 else ""
                 c_span = f' colspan="{cell.get("colspan", 1)}"' if cell.get("colspan", 1) > 1 else ""
                 txt = cell.get("text", "")
-                thead_parts.append(
-                    f'<th{r_span}{c_span} style="background-color: #0e1117 !important; color: #9ca3af !important; border: 1px solid rgba(255,255,255,0.1) !important; padding: 6px 10px !important; text-align: center !important;">{txt}</th>'
-                )
+                thead_parts.append(f'<th{r_span}{c_span}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
-        thead_parts.append('<tr style="background-color: #0e1117 !important;">')
+        thead_parts.append("<tr>")
         for c in df.columns:
-            thead_parts.append(f'<th style="background-color: #0e1117 !important; color: #9ca3af !important; border: 1px solid rgba(255,255,255,0.1) !important; padding: 6px 10px !important; text-align: center !important;">{c}</th>')
+            thead_parts.append(f'<th>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 조립
-    tbody_parts = ['<tbody style="background-color: #0e1117 !important;">']
+    # 2. 본문 (st.data_editor 데이터 행 스타일과 동기화)
+    tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
-        tbody_parts.append('<tr style="background-color: #0e1117 !important;">')
+        tbody_parts.append("<tr>")
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
 
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
-            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.25) !important;" if col_idx in div_set else "border-right: 1px solid rgba(255, 255, 255, 0.06) !important;"
-            border_b = "border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;"
+            # 구분선 열인 경우 우측 테두리 강조
+            border_r = ' style="border-right: 2px solid rgba(250, 250, 250, 0.22) !important;"' if col_idx in div_set else ""
 
             # 종목명: 좌측 정렬 + 네이버 PC 링크
             if "종목명" in col_name:
                 pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
                 link_html = f'<a href="{pc_url}" target="_blank" class="naver-stock-link">{val}</a>'
                 tbody_parts.append(
-                    f'<td style="background-color: #0e1117 !important; text-align: left !important; padding: 6px 12px !important; {border_b} {border_r}">{link_html}</td>'
+                    f'<td style="text-align: left !important; padding-left: 14px !important;{border_r[7:]}">{link_html}</td>'
                 )
                 continue
 
+            # 수치 컬러링 (+ 빨강, - 파랑)
             align_css = "text-align: center !important;"
-            color_css = "color: #f3f4f6 !important;"
-            
+            color_css = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
-                    color_css = "color: #f87171 !important; font-weight: 500 !important;"
+                    color_css = "color: #f87171 !important; font-weight: 500;"
                 elif val.startswith("-"):
-                    color_css = "color: #60a5fa !important; font-weight: 500 !important;"
+                    color_css = "color: #60a5fa !important; font-weight: 500;"
 
-            tbody_parts.append(
-                f'<td style="background-color: #0e1117 !important; {align_css} {color_css} padding: 6px 10px !important; {border_b} {border_r}">{val}</td>'
-            )
+            style_attr = f'style="{align_css} {color_css}'
+            if col_idx in div_set:
+                style_attr += ' border-right: 2px solid rgba(250, 250, 250, 0.22) !important;'
+            style_attr += '"'
+
+            tbody_parts.append(f'<td {style_attr}>{val}</td>')
 
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
