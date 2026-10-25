@@ -3,10 +3,62 @@ import pandas as pd
 import json
 import os
 import re
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
-from api import fetch_market_indices
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
+
+REQ_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Referer": "https://finance.naver.com/",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+}
+
+def parse_index_detail(index_code: str):
+    """네이버 증권 지수 상세 페이지에서 PER, PBR 크롤링"""
+    url = f"https://finance.naver.com/sise/sise_index.naver?code={index_code}"
+    result = {"PER_최근": "-", "PER_12M": "-", "PBR_최근": "-", "PBR_12M": "-"}
+    try:
+        res = requests.get(url, headers=REQ_HEADERS, timeout=6)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            for tr in soup.find_all("tr"):
+                th = tr.find("th")
+                td = tr.find("td")
+                if not th or not td:
+                    continue
+                text_th = th.get_text().strip()
+                text_td = td.get_text().strip()
+                
+                if "PER" in text_th:
+                    if "추정" in text_th or "12M" in text_th or "Fwd" in text_th:
+                        result["PER_12M"] = text_td.replace("배", "").strip()
+                    else:
+                        result["PER_최근"] = text_td.replace("배", "").strip()
+                elif "PBR" in text_th:
+                    if "추정" in text_th or "12M" in text_th or "Fwd" in text_th:
+                        result["PBR_12M"] = text_td.replace("배", "").strip()
+                    else:
+                        result["PBR_최근"] = text_td.replace("배", "").strip()
+    except Exception:
+        pass
+    return result
+
+def fetch_market_indices():
+    """KOSPI, KOSDAQ, KPI200 전체 자동 스크래핑"""
+    kpi = parse_index_detail("KOSPI")
+    kdq = parse_index_detail("KOSDAQ")
+    k200 = parse_index_detail("KPI200")
+    
+    return {
+        "KOSPI_PER_최근": kpi["PER_최근"], "KOSPI_PER_12M": kpi["PER_12M"],
+        "KOSPI_PBR_최근": kpi["PBR_최근"], "KOSPI_PBR_12M": kpi["PBR_12M"],
+        "KOSDAQ_PER_최근": kdq["PER_최근"], "KOSDAQ_PER_12M": kdq["PER_12M"],
+        "KOSDAQ_PBR_최근": kdq["PBR_최근"], "KOSDAQ_PBR_12M": kdq["PBR_12M"],
+        "KOSPI200_PER_최근": k200["PER_최근"], "KOSPI200_PER_12M": k200["PER_12M"],
+        "KOSPI200_PBR_최근": k200["PBR_최근"], "KOSPI200_PBR_12M": k200["PBR_12M"],
+    }
 
 def normalize_date(val):
     if not val or pd.isna(val):
@@ -41,7 +93,7 @@ def save_market_cache(cache_data):
 def render_tab_market():
     m_cache = load_market_cache()
 
-    # 상단 자동 불러오기 버튼
+    # 상단 자동 수집 버튼
     btn_c1, _ = st.columns([2, 4])
     with btn_c1:
         if st.button("⚡ 오늘 지수 데이터 자동 불러오기", type="primary", use_container_width=True):
@@ -69,11 +121,9 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # 1. 엑셀 업로드로 추가된 매크로 지표 컬럼(KOSPI지수, 시총, 예탁금, 신용잔고, 환율 등) 존재 여부 확인
     macro_cols = ["KOSPI", "시가총액(억원)", "고객예탁금(억원)", "신용잔고(억원)", "환율"]
     has_macro = any(col in df_market.columns for col in macro_cols)
 
-    # 2. 복합 헤더 테이블 구성
     macro_header_html = ""
     macro_sub_header_html = ""
     if has_macro:
@@ -148,7 +198,6 @@ def render_market_inputs():
     with st.expander("🌐 국내지수 데이터 파일 업로드(CSV / Excel) 및 수기 등록", expanded=False):
         t_upload, t_manual, t_restore = st.tabs(["📊 CSV / Excel 파일 일괄 업로드", "✍️ 개별 수기 입력", "📂 백업 파일(JSON) 복원"])
 
-        # 1. 사용자가 제시한 엑셀/CSV 업로드 탭
         with t_upload:
             st.write("보유하고 계신 **CSV 또는 Excel(.xlsx)** 파일을 업로드하면 날짜별 데이터가 자동으로 병합/추가됩니다.")
             market_file = st.file_uploader(
@@ -159,7 +208,6 @@ def render_market_inputs():
             if market_file is not None:
                 if st.button("📥 파일 데이터 읽어서 추가하기", type="primary", key="btn_apply_market_file"):
                     try:
-                        # 파일 형식별 로드
                         if market_file.name.endswith(".csv"):
                             try:
                                 df_up = pd.read_csv(market_file, encoding="utf-8")
@@ -169,10 +217,8 @@ def render_market_inputs():
                         else:
                             df_up = pd.read_excel(market_file)
 
-                        # 컬럼명 공백 정리
                         df_up.columns = [str(c).replace(" ", "").strip() for c in df_up.columns]
 
-                        # '일시' 또는 '날짜' 컬럼 찾기
                         date_col = None
                         for c in df_up.columns:
                             if any(k in c for k in ["일시", "날짜", "Date", "DATE"]):
@@ -194,7 +240,6 @@ def render_market_inputs():
                                 if d_str not in cache:
                                     cache[d_str] = {}
 
-                                # 이미지에 표시된 컬럼명들을 안전하게 매핑
                                 for col in df_up.columns:
                                     if col == date_col:
                                         continue
@@ -202,7 +247,6 @@ def render_market_inputs():
                                     if val_str in ["nan", "None", ""]:
                                         val_str = "-"
 
-                                    # 컬럼별 매핑
                                     if "시가총액" in col:
                                         cache[d_str]["시가총액(억원)"] = val_str
                                     elif "고객예탁금" in col or "예탁금" in col:
@@ -228,7 +272,6 @@ def render_market_inputs():
                     except Exception as e:
                         st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
 
-        # 2. 개별 수기 입력 탭
         with t_manual:
             c_date, _ = st.columns([2, 4])
             with c_date:
@@ -279,7 +322,6 @@ def render_market_inputs():
                 st.success(f"{date_str} 지수 데이터가 성공적으로 저장되었습니다.")
                 st.rerun()
 
-        # 3. JSON 백업 복원 탭
         with t_restore:
             up_json = st.file_uploader("백업받은 market_indices_backup.json 업로드", type=["json"], key="json_backup_restore")
             if up_json is not None:
