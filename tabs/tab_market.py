@@ -32,46 +32,44 @@ def load_market_cache():
     return {}
 
 def commit_to_github(filename, content_str, commit_message="Auto-update from Streamlit"):
-    """GitHub API를 통해 원본 저장소에 파일을 백그라운드로 자동 커밋"""
     token = st.secrets.get("GITHUB_TOKEN")
     repo = st.secrets.get("GITHUB_REPO")
     branch = st.secrets.get("GITHUB_BRANCH", "main")
     
     if not token or not repo:
+        st.error("⚠️ Secrets에 GITHUB_TOKEN 또는 GITHUB_REPO 설정이 누락되었습니다.")
         return False
         
     url = f"https://api.github.com/repos/{repo}/contents/{filename}"
     headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
+        "Authorization": f"Bearer {token.strip()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
     }
     
-    # 1. 파일의 기존 SHA 조회
-    res = requests.get(url, headers=headers, params={"ref": branch})
-    sha = None
-    if res.status_code == 200:
-        sha = res.json().get("sha")
-        
-    # 2. Base64 인코딩 후 PUT 커밋
-    content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
-    payload = {
-        "message": commit_message,
-        "content": content_b64,
-        "branch": branch
-    }
-    if sha:
-        payload["sha"] = sha
-        
-    put_res = requests.put(url, headers=headers, json=payload)
-    return put_res.status_code in [200, 201]
+    try:
+        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
+        sha = res.json().get("sha") if res.status_code == 200 else None
+            
+        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
+        payload = {
+            "message": commit_message,
+            "content": content_b64,
+            "branch": branch
+        }
+        if sha:
+            payload["sha"] = sha
+            
+        put_res = requests.put(url, headers=headers, json=payload, timeout=7)
+        return put_res.status_code in [200, 201]
+    except Exception as e:
+        st.error(f"⚠️ GitHub 통신 에러: {e}")
+        return False
 
 def save_market_cache(cache_data):
-    # 1. 로컬 컨테이너 저장
     json_text = json.dumps(cache_data, ensure_ascii=False, indent=2)
     with open(MARKET_CACHE_FILE, "w", encoding="utf-8") as f:
         f.write(json_text)
-        
-    # 2. GitHub 원격 저장소 자동 커밋
     commit_to_github(MARKET_CACHE_FILE, json_text, "Auto-commit market_indices_cache.json")
 
 def render_tab_market():
@@ -100,35 +98,20 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    html_parts = [
-        '<div style="overflow-x: auto; margin-bottom: 1rem;">',
-        '<table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: center;">',
-        '<thead>',
-        '<tr style="background-color: var(--secondary-background-color, #f0f2f6); color: var(--text-color, #31333F);">',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 10px;">선택</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">일시</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">KOSPI</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">시가총액(억원)</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">per</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">pbr</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">고객예탁금(억원)</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">신용잔고(억원)</th>',
-        '<th style="border: 1px solid rgba(128,128,128,0.3); padding: 8px 12px;">환율</th>',
-        '</tr>',
-        '</thead>',
-        '</table>',
-        '</div>'
-    ]
-    st.markdown("".join(html_parts), unsafe_allow_html=True)
-
+    # st.data_editor 단일 렌더링 (중복 HTML 테이블 제거 완료)
     disabled_cols = [c for c in df_market.columns if c != "선택"]
     edited_df = st.data_editor(
         df_market,
         column_config={
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
             "일시": st.column_config.TextColumn("일시", width="medium"),
+            "KOSPI": st.column_config.TextColumn("KOSPI"),
+            "시가총액(억원)": st.column_config.TextColumn("시가총액(억원)"),
             "per": st.column_config.TextColumn("per"),
             "pbr": st.column_config.TextColumn("pbr"),
+            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금(억원)"),
+            "신용잔고(억원)": st.column_config.TextColumn("신용잔고(억원)"),
+            "환율": st.column_config.TextColumn("환율"),
         },
         disabled=disabled_cols,
         hide_index=True,
@@ -136,13 +119,14 @@ def render_tab_market():
         key="market_monitor_editor"
     )
 
+    # 지수 전체 백업 다운로드
     json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
     st.download_button(
         "💾 국내지수 전체 백업(JSON 다운로드)",
         data=json_bytes,
         file_name="market_indices_backup.json",
         mime="application/json",
-        help="서버가 재부팅되더라도 언제든 복원할 수 있도록 지수 데이터를 파일로 저장합니다."
+        help="지수 데이터를 로컬 백업용 파일로 다운로드합니다."
     )
 
     return edited_df
@@ -151,7 +135,7 @@ def render_market_inputs():
     with st.expander("🌐 국내지수 데이터 파일 업로드(CSV / Excel) 및 수기 등록", expanded=False):
         t_upload, t_manual, t_restore = st.tabs(["📊 CSV / Excel 파일 일괄 업로드", "✍️ 개별 수기 입력", "📂 백업 파일(JSON) 복원"])
 
-        # 1. CSV / Excel 파일 일괄 업로드
+        # 1. 파일 일괄 업로드
         with t_upload:
             st.write("보유하고 계신 **CSV 또는 Excel(.xlsx)** 파일을 업로드하면 날짜별 데이터가 자동으로 병합/추가됩니다.")
             market_file = st.file_uploader(
@@ -221,7 +205,7 @@ def render_market_inputs():
                                 added_count += 1
 
                             save_market_cache(cache)
-                            st.success(f"총 {added_count}개 일자의 지수 데이터가 성공적으로 반영 및 GitHub에 자동 커밋되었습니다!")
+                            st.success(f"총 {added_count}개 일자의 지수 데이터가 반영 및 GitHub에 자동 저장되었습니다!")
                             st.rerun()
                     except Exception as e:
                         st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
