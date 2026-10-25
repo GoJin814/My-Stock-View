@@ -3,33 +3,39 @@ import pandas as pd
 from styles import render_multi_header_table
 
 def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
-    if df_perf.empty:
-        st.info("표시할 종목 데이터가 없습니다.")
+    if df_perf is None or df_perf.empty:
+        st.info("표시할 실적 데이터가 없습니다.")
         return
 
-    desired_cols = [
+    # 1. 2단 복합 헤더 구성 (상단 연도 및 YoY 대분류 + 하단 지표)
+    header_rows = [
+        [
+            {"text": "종목명", "rowspan": 2},
+            {"text": "종목코드", "rowspan": 2},
+            {"text": f"{prev_yr}", "colspan": 3},
+            {"text": f"{latest_yr}", "colspan": 3},
+            {"text": "YoY 성장률", "colspan": 3}
+        ],
+        [
+            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
+            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
+            {"text": "매출"}, {"text": "영업익"}, {"text": "순익"}
+        ]
+    ]
+
+    display_cols = [
         "종목명", "종목코드",
         "매출_직전", "영업익_직전", "순익_직전",
         "매출_최근", "영업익_최근", "순익_최근",
         "매출_YoY", "영업익_YoY", "순익_YoY"
     ]
-    display_df = df_perf[[c for c in desired_cols if c in df_perf.columns]]
 
-    top_headers_perf = [
-        ("종목명", 1, False),
-        (prev_yr, 3, True),
-        (latest_yr, 3, True),
-        ("성장률(YoY)", 3, False)
-    ]
-    sub_headers_perf = [
-        "매출액", "영업이익", "당기순익",
-        "매출액", "영업이익", "당기순익",
-        "매출", "영업익", "순익"
-    ]
+    display_df = df_perf[[c for c in display_cols if c in df_perf.columns]].copy()
 
+    # divider_indices: 종목코드(1), 직전 순익(4), 최근 순익(7) 우측 구분선
     render_multi_header_table(
         display_df,
-        top_headers=top_headers_perf,
-        sub_headers=sub_headers_perf,
-        divider_indices=[2, 5]
+        header_rows=header_rows,
+        divider_indices=[1, 4, 7],
+        has_naver_link=True
     )
