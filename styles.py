@@ -76,6 +76,7 @@ def apply_custom_styles():
             background-color: #0e1117;
         }
 
+        /* ⚡ 클릭 정렬 가능 헤더 스타일 (커서 손가락 모양 및 호버 효과) */
         .custom-grid-table th {
             background-color: rgba(255, 255, 255, 0.04) !important;
             color: #9ca3af !important;
@@ -86,6 +87,15 @@ def apply_custom_styles():
             border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
             text-align: center !important;
             white-space: nowrap !important;
+            user-select: none !important;
+        }
+
+        .custom-grid-table th.sortable-th {
+            cursor: pointer !important;
+        }
+        .custom-grid-table th.sortable-th:hover {
+            background-color: rgba(255, 255, 255, 0.08) !important;
+            color: #ffffff !important;
         }
 
         .custom-grid-table td {
@@ -99,7 +109,7 @@ def apply_custom_styles():
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* ⚡ 종목명 열: 120px 고정 + 왼쪽 정렬 */
+        /* 종목명 열: 120px 고정 + 좌측 정렬 */
         .custom-grid-table th.col-name-th,
         .custom-grid-table td.col-name {
             width: 120px !important;
@@ -145,29 +155,47 @@ def render_multi_header_table(df, *args, **kwargs):
 
     has_naver_link = kwargs.get("has_naver_link", True)
 
-    # 1. 2단 복합 헤더 조립 (종목명 th에 120px 고정 클래스 부여)
+    # 1. 2단 복합 헤더 조립 (각 헤더에 data-col 인덱스 및 정렬 트리거 클래스 주입)
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
+            col_counter = 0 if r_idx == 0 else 2  # 2번째 행은 종목명/코드(0,1) 건너뛰고 2번 인덱스부터 시작
             for cell in row:
-                r_span = f' rowspan="{cell.get("rowspan", 1)}"' if cell.get("rowspan", 1) > 1 else ""
-                c_span = f' colspan="{cell.get("colspan", 1)}"' if cell.get("colspan", 1) > 1 else ""
+                r_span_val = cell.get("rowspan", 1)
+                c_span_val = cell.get("colspan", 1)
+                r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
+                c_span = f' colspan="{c_span_val}"' if c_span_val > 1 else ""
                 txt = cell.get("text", "")
+
+                th_classes = []
+                th_attrs = ""
+
+                if r_idx == 0 and txt == "종목명":
+                    th_classes.append("col-name-th")
                 
-                # 종목명 헤더 셀에 120px 고정 클래스 적용
-                th_class = ' class="col-name-th"' if (r_idx == 0 and txt == "종목명") else ""
-                thead_parts.append(f'<th{r_span}{c_span}{th_class}>{txt}</th>')
+                # 클릭 정렬 대상 셀 판별 (단독 열이거나 2층 소분류 셀)
+                if r_span_val > 1 or c_span_val == 1:
+                    th_classes.append("sortable-th")
+                    th_attrs = f' data-col-idx="{col_counter}" onclick="sortTableByCol(this)"'
+                    col_counter += 1
+
+                class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
-        for c in df.columns:
-            th_class = ' class="col-name-th"' if c == "종목명" else ""
-            thead_parts.append(f'<th{th_class}>{c}</th>')
+        for idx, c in enumerate(df.columns):
+            th_classes = ["sortable-th"]
+            if c == "종목명":
+                th_classes.append("col-name-th")
+            class_str = f' class="{" ".join(th_classes)}"'
+            th_attrs = f' data-col-idx="{idx}" onclick="sortTableByCol(this)"'
+            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 조립 (종목명 td에 120px 고정 클래스 부여)
+    # 2. 본문 조립
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         tbody_parts.append("<tr>")
@@ -179,7 +207,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
             border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            # 0번째 열(종목명): 120px 고정 + 왼쪽 정렬 + 네이버 PC 링크
+            # 종목명 열 (120px 고정 + 링크)
             if col_idx == 0:
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
@@ -191,7 +219,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 tbody_parts.append(f'<td class="col-name" {style_attr}>{content}</td>')
                 continue
 
-            # 나머지 수치 열
+            # 수치 컬러링
             color_css = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
@@ -207,6 +235,63 @@ def render_multi_header_table(df, *args, **kwargs):
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
 
+    # 3. ⚡ 금융 데이터 숫자/문자열 자동 감지 정렬 스크립트
+    sort_script = """
+    <script>
+    function parseFinancialValue(str) {
+        if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
+        let clean = str.replace(/[,%원배\s]/g, '');
+        let multiplier = 1;
+        if (clean.includes('조')) {
+            let parts = clean.split('조');
+            let jo = parseFloat(parts[0]) || 0;
+            let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
+            return (jo * 10000) + rest;
+        } else if (clean.includes('억')) {
+            clean = clean.replace(/억/g, '');
+            return parseFloat(clean) || 0;
+        }
+        let num = parseFloat(clean);
+        return isNaN(num) ? str.trim() : num;
+    }
+
+    function sortTableByCol(thElem) {
+        const table = thElem.closest('table');
+        const tbody = table.querySelector('tbody');
+        const colIdx = parseInt(thElem.getAttribute('data-col-idx'), 10);
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        let currentAsc = thElem.getAttribute('data-sort-asc') === 'true';
+        let newAsc = !currentAsc;
+        
+        // 모든 헤더 표시 초기화
+        table.querySelectorAll('th.sortable-th').forEach(th => {
+            th.removeAttribute('data-sort-asc');
+            th.textContent = th.textContent.replace(/[▲▼]/g, '').trim();
+        });
+
+        // 화살표 표시
+        thElem.setAttribute('data-sort-asc', newAsc);
+        thElem.textContent = thElem.textContent.trim() + (newAsc ? ' ▲' : ' ▼');
+
+        rows.sort((a, b) => {
+            let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
+            let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
+
+            let parsedA = parseFinancialValue(valA);
+            let parsedB = parseFinancialValue(valB);
+
+            if (typeof parsedA === 'number' && typeof parsedB === 'number') {
+                return newAsc ? (parsedA - parsedB) : (parsedB - parsedA);
+            }
+            return newAsc ? String(parsedA).localeCompare(String(parsedB)) : String(parsedB).localeCompare(String(parsedA));
+        });
+
+        rows.forEach(r => tbody.appendChild(r));
+    }
+    </script>
+    """
+
     html_code = f"""
     <div class="custom-grid-wrapper">
         <table class="custom-grid-table">
@@ -214,5 +299,6 @@ def render_multi_header_table(df, *args, **kwargs):
             {"".join(tbody_parts)}
         </table>
     </div>
+    {sort_script}
     """
     st.markdown(html_code, unsafe_allow_html=True)
