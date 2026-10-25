@@ -7,13 +7,13 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         st.info("표시할 주당 가치 데이터가 없습니다.")
         return
 
-    # 좌측은 2행 통합(rowspan 2), 우측 연도는 5열 통합(colspan 5)
+    # 2단 복합 헤더 정의 (변수 자체에 '년'이 포함되어 있으므로 f"{prev_yr}" 그대로 전달)
     header_rows = [
         [
             {"text": "종목명", "rowspan": 2},
             {"text": "종목코드", "rowspan": 2},
-            {"text": f"{prev_yr}년", "colspan": 5},
-            {"text": f"{latest_yr}년", "colspan": 5}
+            {"text": f"{prev_yr}", "colspan": 5},
+            {"text": f"{latest_yr}", "colspan": 5}
         ],
         [
             {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"},
@@ -29,7 +29,7 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
 
     display_df = df_share[[c for c in source_cols if c in df_share.columns]].copy()
 
-    # divider_indices=[1, 6]: 종목코드(1) 우측, 직전 BPS(6) 우측에 연도 구분선 강조
+    # divider_indices: 종목코드(1), 직전 BPS(6) 우측 구분선 강조
     render_multi_header_table(
         display_df,
         header_rows=header_rows,
