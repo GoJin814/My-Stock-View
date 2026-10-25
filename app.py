@@ -268,6 +268,8 @@ with sync_col:
     st.write("")
     if st.button("🔄 실시간 시세 동기화", use_container_width=True):
         fetch_single_stock.clear()
+        if "synced_codes" in st.session_state:
+            del st.session_state["synced_codes"]
         st.rerun()
 
 current_codes = load_codes()
@@ -280,7 +282,7 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # ⚡ 1. 밸류에이션 필터링 (상단 정렬 UI 및 정렬 로직 완전 삭제됨)
+    # 1. 밸류에이션 필터링
     with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):   
         f_c1, f_c2, f_c3 = st.columns(3)
         with f_c1:
@@ -308,7 +310,23 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # ⚡ 4개 탭 명칭 단순화 (아이콘 유지)
+    # ⚡ 2. 모든 탭 간 종목 순서 동기화 처리 (세션 상태 반영)
+    if "synced_codes" in st.session_state and st.session_state["synced_codes"]:
+        sync_order = st.session_state["synced_codes"]
+        
+        def reorder_by_sync(target_df):
+            if "종목코드" in target_df.columns:
+                target_df["_sort_order"] = target_df["종목코드"].astype(str).str.zfill(6).map(
+                    lambda x: sync_order.index(x) if x in sync_order else 9999
+                )
+                target_df = target_df.sort_values(by="_sort_order").drop(columns=["_sort_order"]).reset_index(drop=True)
+            return target_df
+
+        df_basic = reorder_by_sync(df_basic)
+        df_perf = reorder_by_sync(df_perf)
+        df_share = reorder_by_sync(df_share)
+
+    # 3. 4개 탭 분기 렌더링
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 현재 시세", 
         "💰 주당 가치",
@@ -316,7 +334,7 @@ if current_codes:
         "🌐 국내지수"
     ])
 
-    # 1. 현재 시세 탭: 종목 관리 컨트롤 및 종목 추가 패널 활성화
+    # 1. 현재 시세 탭
     with tab1:
         edited_basic_df = render_tab_basic(df_basic)
 
@@ -329,6 +347,8 @@ if current_codes:
                         remaining_codes = [c for c in current_codes if c not in selected_codes]
                         save_codes(remaining_codes)
                         fetch_single_stock.clear()
+                        if "synced_codes" in st.session_state:
+                            del st.session_state["synced_codes"]
                         st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
                         st.rerun()
                     else:
@@ -438,11 +458,17 @@ if current_codes:
 
     # 2. 주당 가치 탭
     with tab2:
-        render_tab_share(df_share, most_prev_yr, most_latest_yr)
+        new_share_order = render_tab_share(df_share, most_prev_yr, most_latest_yr)
+        if new_share_order and new_share_order != st.session_state.get("synced_codes"):
+            st.session_state["synced_codes"] = new_share_order
+            st.rerun()
 
     # 3. 실적 탭
     with tab3:
-        render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
+        new_perf_order = render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
+        if new_perf_order and new_perf_order != st.session_state.get("synced_codes"):
+            st.session_state["synced_codes"] = new_perf_order
+            st.rerun()
 
     # 4. 국내지수 탭
     with tab4:
