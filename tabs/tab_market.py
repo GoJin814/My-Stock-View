@@ -101,13 +101,11 @@ def render_tab_market():
         num_dep = to_clean_num(dep_val)
         num_crd = to_clean_num(crd_val)
 
-        # 고객예탁금고/지수: 고객예탁금 / 시가총액 * 100
         if pd.notna(num_dep) and pd.notna(num_mcap) and num_mcap > 0:
             dep_ratio_str = f"{(num_dep / num_mcap) * 100.0:.2f}%"
         else:
             dep_ratio_str = "-"
 
-        # 신용잔고지수: 신용잔고 / 시가총액 * 100
         if pd.notna(num_crd) and pd.notna(num_mcap) and num_mcap > 0:
             crd_ratio_str = f"{(num_crd / num_mcap) * 100.0:.2f}%"
         else:
@@ -130,7 +128,6 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # 데이터 크기에 맞춰 열 너비 최소화(small) 및 컴팩트 설정
     disabled_cols = [c for c in df_market.columns if c != "선택"]
     edited_df = st.data_editor(
         df_market,
@@ -138,7 +135,7 @@ def render_tab_market():
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
             "일시": st.column_config.TextColumn("일시", width="small"),
             "KOSPI": st.column_config.TextColumn("KOSPI", width="small"),
-            "시가총액(억원)": st.column_config.TextColumn("시가총액(억원)", width="medium"),
+            "시가총액(억원)": st.column_config.TextColumn("시가총액(억원)", width="small"),  # ⚡ 폭 최소화 (small)
             "PER": st.column_config.TextColumn("PER", width="small"),
             "PBR": st.column_config.TextColumn("PBR", width="small"),
             "고객예탁금고/지수": st.column_config.TextColumn("고객예탁금고/지수", width="small"),
@@ -168,7 +165,6 @@ def render_market_inputs():
     with st.expander("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", expanded=False):
         t_manual, t_upload, t_restore = st.tabs(["✍️ 개별 수기 입력", "📊 CSV / Excel 파일 일괄 업로드", "📂 백업 파일(JSON) 복원"])
 
-        # 1. 개별 수기 입력 탭
         with t_manual:
             c_date, _ = st.columns([2, 4])
             with c_date:
@@ -211,7 +207,6 @@ def render_market_inputs():
                 st.success(f"{date_str} KOSPI 데이터가 저장 및 GitHub에 자동 커밋되었습니다.")
                 st.rerun()
 
-        # 2. CSV / Excel 파일 일괄 업로드 탭
         with t_upload:
             st.write("보유하고 계신 **CSV 또는 Excel(.xlsx)** 파일을 업로드하면 날짜별 데이터가 자동으로 병합/추가됩니다.")
             market_file = st.file_uploader(
@@ -286,7 +281,6 @@ def render_market_inputs():
                     except Exception as e:
                         st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
 
-        # 3. JSON 백업 복원 탭
         with t_restore:
             up_json = st.file_uploader("백업받은 market_indices_backup.json 업로드", type=["json"], key="json_backup_restore")
             if up_json is not None:
