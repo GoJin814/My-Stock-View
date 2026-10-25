@@ -8,7 +8,20 @@ def apply_custom_styles():
             padding-top: 1.8rem;
             padding-bottom: 3rem;
         }
-        
+
+        /* 1. 상단 expander 접기 아이콘 텍스트 겹침 버그(_arrow_right) 수정 */
+        [data-testid="stExpander"] summary span {
+            display: inline-flex !important;
+            align-items: center !important;
+        }
+        [data-testid="stExpander"] summary svg {
+            margin-right: 8px !important;
+        }
+        [data-testid="stExpanderToggleIcon"] {
+            user-select: none !important;
+        }
+
+        /* 2. 탭 바 여백 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -17,31 +30,35 @@ def apply_custom_styles():
             padding-right: 14px;
             white-space: nowrap;
         }
-        
-        /* 기본 탭(Glide Data Grid)과 완전 일치된 컨테이너 */
+
+        /* 3. 기본 탭과 100% 일치된 컴팩트 다크 그리드 컨테이너 */
         .custom-grid-container {
             overflow-x: auto;
             margin-bottom: 1.2rem;
-            border-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
             background-color: #0e1117;
+            display: inline-block;
+            max-width: 100%;
         }
 
         .custom-grid-table {
-            width: 100%;
+            width: max-content; /* 테이블 폭 최소화 (데이터 길이에 맞춤) */
+            min-width: 100%;
             border-collapse: separate;
             border-spacing: 0;
             font-size: 0.82rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             color: #fafafa;
+            background-color: #0e1117;
         }
 
-        /* 기본 탭과 동일한 헤더 톤 */
+        /* 4. 기본 탭과 완벽히 동일한 헤더 배경 및 라인 */
         .custom-grid-table th {
-            background-color: #1e2129 !important;
-            color: #d1d5db !important;
+            background-color: #12151c !important; /* 기본 탭과 일치된 톤 */
+            color: #9ca3af !important;
             font-weight: 500 !important;
-            padding: 8px 10px !important;
+            padding: 7px 10px !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
             border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
             text-align: center !important;
@@ -51,27 +68,27 @@ def apply_custom_styles():
         .custom-grid-table td {
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
-            padding: 7px 10px !important;
+            padding: 6px 10px !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
             border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
             text-align: center !important;
             white-space: nowrap !important;
         }
 
-        /* 행 마우스 오버 시 기본 탭과 동일한 하이라이트 */
+        /* 마우스 호버 효과 */
         .custom-grid-table tr:hover td {
-            background-color: #181c24 !important;
+            background-color: #1a1e27 !important;
         }
 
-        /* 네이버 링크 스타일 (기본 탭 링크 컬러와 동기화) */
+        /* 네이버 링크 스타일 */
         .naver-stock-link {
-            color: #60a5fa !important;
+            color: #58a6ff !important;
             text-decoration: none !important;
             font-weight: 500;
         }
         .naver-stock-link:hover {
             text-decoration: underline !important;
-            color: #93c5fd !important;
+            color: #79b8ff !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -81,7 +98,6 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 인자 추출
     header_rows = kwargs.get("header_rows", None)
     if not header_rows and args and isinstance(args[0], list):
         header_rows = args[0]
@@ -93,7 +109,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
     has_naver_link = kwargs.get("has_naver_link", True)
 
-    # 1. 복합 헤더 렌더링
+    # 1. 2단 복합 헤더 생성
     thead_parts = ["<thead>"]
     if header_rows:
         for row in header_rows:
@@ -111,7 +127,7 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 행 렌더링
+    # 2. 본문 행 생성 (종목명 좌측 정렬 및 폭 최소화)
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         tbody_parts.append("<tr>")
@@ -121,28 +137,33 @@ def render_multi_header_table(df, *args, **kwargs):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
-            # 우측 구분선 강조 열 체크
-            border_r = ' style="border-right: 2px solid rgba(255, 255, 255, 0.22) !important;"' if col_idx in div_set else ""
+            # 우측 구분선
+            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            # 종목명 컬럼인 경우 네이버 PC 웹 링크 연결
-            if col_name == "종목명" and has_naver_link and code_val:
-                pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
-                cell_content = f'<a href="{pc_url}" target="_blank" class="naver-stock-link">{val}</a>'
-                tbody_parts.append(f'<td{border_r}>{cell_content}</td>')
+            # 종목명 컬럼은 좌측 정렬(text-align: left) 및 네이버 PC 링크 연결
+            if col_name == "종목명":
+                align_style = "text-align: left !important; padding-left: 14px !important;"
+                if has_naver_link and code_val:
+                    pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
+                    content = f'<a href="{pc_url}" target="_blank" class="naver-stock-link">{val}</a>'
+                else:
+                    content = val
+                tbody_parts.append(f'<td style="{align_style} {border_r}">{content}</td>')
                 continue
 
-            # YoY 수치 컬러링
+            # 증감률 컬러링
+            align_style = "text-align: center !important;"
             if "%" in val and not val.startswith("-") and val != "-":
                 if val.startswith("+"):
-                    cell_content = f'<span style="color: #f87171; font-weight: 500;">{val}</span>'
+                    content = f'<span style="color: #f87171; font-weight: 500;">{val}</span>'
                 else:
-                    cell_content = val
+                    content = val
             elif val.startswith("-") and "%" in val and val != "-":
-                cell_content = f'<span style="color: #60a5fa; font-weight: 500;">{val}</span>'
+                content = f'<span style="color: #60a5fa; font-weight: 500;">{val}</span>'
             else:
-                cell_content = val
+                content = val
 
-            tbody_parts.append(f'<td{border_r}>{cell_content}</td>')
+            tbody_parts.append(f'<td style="{align_style} {border_r}">{content}</td>')
 
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
