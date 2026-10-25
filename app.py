@@ -280,29 +280,6 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 1. 정렬 제어
-    sort_col1, sort_col2, _ = st.columns([2, 1.5, 3.5])
-    with sort_col1:
-        sort_metric = st.selectbox(
-            "🔽 정렬 기준 지표 (모든 탭 동기화)",
-            options=[
-                "기본 순서 (등록순)",
-                f"최근 PER ({most_latest_yr})",
-                f"최근 PBR ({most_latest_yr})",
-                f"최근 ROE ({most_latest_yr})",
-                f"최근 EPS ({most_latest_yr})",
-                f"최근 BPS ({most_latest_yr})",
-                f"직전 PER ({most_prev_yr})",
-                f"직전 PBR ({most_prev_yr})",
-                f"직전 ROE ({most_prev_yr})",
-                f"직전 EPS ({most_prev_yr})",
-                f"직전 BPS ({most_prev_yr})",
-            ],
-            index=0
-        )
-    with sort_col2:
-        sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
-
     # 2. 밸류에이션 필터링
     with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):   
         f_c1, f_c2, f_c3 = st.columns(3)
