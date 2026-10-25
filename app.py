@@ -5,6 +5,7 @@ import os
 import re
 import base64
 import requests
+from concurrent.futures import ThreadPoolExecutor
 
 from styles import apply_custom_styles
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
@@ -19,22 +20,23 @@ apply_custom_styles()
 SAVE_FILE = "saved_codes.txt"
 
 def commit_to_github(filename, content_str, commit_message="Auto-update from Streamlit"):
-    """GitHub API를 통해 원본 저장소로 파일 백그라운드 자동 커밋"""
     token = st.secrets.get("GITHUB_TOKEN")
     repo = st.secrets.get("GITHUB_REPO")
     branch = st.secrets.get("GITHUB_BRANCH", "main")
     
     if not token or not repo:
+        st.error("⚠️ Streamlit Secrets에 GITHUB_TOKEN 또는 GITHUB_REPO 설정이 누락되었습니다.")
         return False
         
     url = f"https://api.github.com/repos/{repo}/contents/{filename}"
     headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
+        "Authorization": f"Bearer {token.strip()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
     }
     
     try:
-        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=5)
+        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
         sha = res.json().get("sha") if res.status_code == 200 else None
             
         content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
@@ -46,9 +48,15 @@ def commit_to_github(filename, content_str, commit_message="Auto-update from Str
         if sha:
             payload["sha"] = sha
             
-        put_res = requests.put(url, headers=headers, json=payload, timeout=5)
-        return put_res.status_code in [200, 201]
-    except Exception:
+        put_res = requests.put(url, headers=headers, json=payload, timeout=7)
+        if put_res.status_code in [200, 201]:
+            return True
+        else:
+            err_data = put_res.json()
+            st.error(f"⚠️ GitHub 커밋 실패 ({put_res.status_code}): {err_data.get('message', '')}")
+            return False
+    except Exception as e:
+        st.error(f"⚠️ GitHub 통신 에러: {e}")
         return False
 
 def load_codes():
@@ -65,9 +73,7 @@ def save_codes(codes):
         f.write(content)
     commit_to_github(SAVE_FILE, content, f"Auto-commit saved_codes.txt ({len(codes)} stocks)")
 
-# ⚡ 핵심 개선 1: 종목 1개 단위 개별 캐싱 (30분 유지)
-# 이렇게 하면 새로고침하거나 1종목을 추가/삭제해도 나머지 169개는 네트워크 통신 없이 0초 만에 로딩됨
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_single_stock(code: str):
     basic = fetch_basic(code)
     integration = fetch_integration(code)
@@ -168,14 +174,12 @@ def fetch_single_stock(code: str):
 
     dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
-    # DPS / 현재가 * 100 배당수익률 계산
     if pd.notna(fin_info["cur_dps"]) and pd.notna(numeric_close) and numeric_close > 0:
         calc_div_yield = (fin_info["cur_dps"] / numeric_close) * 100.0
         div_val = f"{calc_div_yield:.2f}%"
     else:
         div_val = "-"
 
-    # 기본 & 시세 레코드
     rec_basic = {
         "선택": False,
         "종목명": stock_name,
@@ -188,7 +192,6 @@ def fetch_single_stock(code: str):
         "배당수익률": div_val
     }
 
-    # 실적 & 성장성 레코드
     rec_perf = {
         "종목명": stock_name,
         "종목코드": code,
@@ -203,7 +206,6 @@ def fetch_single_stock(code: str):
         "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
     }
 
-    # 주당 가치 레코드
     p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
     p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
     c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
@@ -238,12 +240,14 @@ def fetch_single_stock(code: str):
 
     return rec_basic, rec_perf, rec_share, rec_csv, fin_info["prev_yr"], fin_info["latest_yr"]
 
-def get_all_stocks(codes_list):
+def get_all_stocks_parallel(codes_list):
     scan_basic, scan_perf, scan_share, full_csv_records = [], [], [], []
     prev_years, latest_years = [], []
 
-    for code in codes_list:
-        b, p, s, c, py, ly = fetch_single_stock(code)
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        results = list(executor.map(fetch_single_stock, codes_list))
+
+    for b, p, s, c, py, ly in results:
         scan_basic.append(b)
         scan_perf.append(p)
         scan_share.append(s)
@@ -263,13 +267,14 @@ with title_col:
 with sync_col:
     st.write("")
     if st.button("🔄 실시간 시세 동기화", use_container_width=True):
-        fetch_single_stock.clear()  # 전체 캐시 비우고 최신 시세 갱신
+        fetch_single_stock.clear()
         st.rerun()
 
 current_codes = load_codes()
 
 if current_codes:
-    scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = get_all_stocks(current_codes)
+    with st.spinner(f"종목 {len(current_codes)}개 데이터를 동기화하는 중입니다..."):
+        scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = get_all_stocks_parallel(current_codes)
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
@@ -353,7 +358,7 @@ if current_codes:
         df_perf = df_perf.reset_index(drop=True)
         df_share = df_share.reset_index(drop=True)
 
-    # 4개 탭 렌더링
+    # 4개 탭 분기 렌더링
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 기본 & 시세", 
         "💰 주당 가치 (2개년 비교)",
@@ -361,154 +366,169 @@ if current_codes:
         "🌐 국내지수 Monitor"
     ])
 
+    # 1. 기본 & 시세 탭: 종목 관리 컨트롤 및 종목 추가 패널 활성화
     with tab1:
-        edited_df = render_tab_basic(df_basic)
+        edited_basic_df = render_tab_basic(df_basic)
 
+        b_col1, b_col2, b_col3 = st.columns([1.5, 2, 2])
+        with b_col1:
+            if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
+                if edited_basic_df is not None and not edited_basic_df.empty:
+                    selected_codes = edited_basic_df[edited_basic_df["선택"] == True]["종목코드"].tolist()
+                    if selected_codes:
+                        remaining_codes = [c for c in current_codes if c not in selected_codes]
+                        save_codes(remaining_codes)
+                        fetch_single_stock.clear()
+                        st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
+                        st.rerun()
+                    else:
+                        st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
+        with b_col2:
+            csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                "📥 전체 결과 CSV 다운로드",
+                data=csv_data,
+                file_name="종목Scan_비교결과.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="btn_down_csv_basic"
+            )
+        with b_col3:
+            codes_txt_data = "\n".join(current_codes).encode('utf-8')
+            st.download_button(
+                "📋 종목코드 백업(TXT)",
+                data=codes_txt_data,
+                file_name="saved_codes_backup.txt",
+                mime="text/plain",
+                help="현재 등록된 종목코드 목록을 TXT 파일로 내려받습니다.",
+                use_container_width=True,
+                key="btn_down_txt_basic"
+            )
+
+        st.write("")
+        with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", expanded=False):
+            tab_single, tab_bulk_text, tab_bulk_file = st.tabs(["단건 추가", "텍스트 일괄 붙여넣기", "파일 일괄 업로드(TXT/CSV/XLSX)"])
+
+            with tab_single:
+                c_code, c_btn = st.columns([3, 1])
+                with c_code:
+                    new_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6, key="single_code_input")
+                with c_btn:
+                    st.write("")
+                    if st.button("종목 추가", use_container_width=True, key="btn_single_add"):
+                        if new_code.strip():
+                            formatted = new_code.strip().zfill(6)
+                            if formatted not in current_codes:
+                                current_codes.append(formatted)
+                                save_codes(current_codes)
+                                st.success(f"{formatted} 추가 및 GitHub 커밋 완료")
+                                st.rerun()
+
+            with tab_bulk_text:
+                bulk_text = st.text_area(
+                    "종목코드 목록 붙여넣기 (줄바꿈, 쉼표, 공백 구분)",
+                    placeholder="예시:\n005930\n000660, 035420 035720",
+                    height=120,
+                    key="area_bulk_codes"
+                )
+                if st.button("📥 텍스트 목록 일괄 추가", type="primary", key="btn_bulk_text_add"):
+                    if bulk_text.strip():
+                        found_codes = re.findall(r'\b\d{6}\b', bulk_text)
+                        if found_codes:
+                            new_unique = [c for c in dict.fromkeys(found_codes) if c not in current_codes]
+                            if new_unique:
+                                current_codes.extend(new_unique)
+                                save_codes(current_codes)
+                                st.success(f"총 {len(new_unique)}개 종목이 추가되었습니다.")
+                                st.rerun()
+                            else:
+                                st.info("입력된 종목코드가 이미 모두 등록되어 있습니다.")
+                        else:
+                            st.warning("유효한 6자리 종목코드를 찾을 수 없습니다.")
+
+            with tab_bulk_file:
+                up_file = st.file_uploader(
+                    "종목코드가 포함된 파일 업로드",
+                    type=["txt", "csv", "xlsx", "xls"],
+                    key="stock_code_file_uploader"
+                )
+                if up_file is not None:
+                    if st.button("📥 파일에서 종목코드 일괄 추출/추가", type="primary", key="btn_bulk_file_add"):
+                        try:
+                            extracted = []
+                            if up_file.name.endswith(".txt"):
+                                content = up_file.read().decode("utf-8", errors="ignore")
+                                extracted = re.findall(r'\b\d{6}\b', content)
+                            elif up_file.name.endswith((".xlsx", ".xls")):
+                                df_file = pd.read_excel(up_file, dtype=str)
+                                for col in df_file.columns:
+                                    items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
+                                    valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
+                                    extracted.extend(valid_codes)
+                            elif up_file.name.endswith(".csv"):
+                                df_file = pd.read_csv(up_file, dtype=str)
+                                for col in df_file.columns:
+                                    items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
+                                    valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
+                                    extracted.extend(valid_codes)
+
+                            if extracted:
+                                new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
+                                if new_unique:
+                                    current_codes.extend(new_unique)
+                                    save_codes(current_codes)
+                                    st.success(f"파일에서 {len(new_unique)}개 종목이 등록되었습니다.")
+                                    st.rerun()
+                                else:
+                                    st.info("파일 내 종목코드가 이미 등록되어 있습니다.")
+                            else:
+                                st.warning("파일에서 6자리 종목코드를 추출하지 못했습니다.")
+                        except Exception as e:
+                            st.error(f"파일 처리 중 오류 발생: {e}")
+
+    # 2. 주당 가치 탭: 조회 전용 (저장/추가/삭제 컨트롤 일체 미노출)
     with tab2:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
+    # 3. 실적 & 성장성 탭: 조회 전용 (저장/추가/삭제 컨트롤 일체 미노출)
     with tab3:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
+    # 4. 국내지수 Monitor 탭: 국내지수 전용 삭제/백업 및 입력 패널만 활성화
     with tab4:
         edited_market_df = render_tab_market()
+        
+        m_col1, m_col2 = st.columns([1.5, 4.5])
+        with m_col1:
+            if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_market"):
+                if edited_market_df is not None and not edited_market_df.empty:
+                    selected_dates = edited_market_df[edited_market_df["선택"] == True]["일시"].tolist()
+                    if selected_dates:
+                        m_cache = load_market_cache()
+                        for d in selected_dates:
+                            m_cache.pop(d, None)
+                        save_market_cache(m_cache)
+                        st.success(f"지수 데이터 {len(selected_dates)}일자 삭제 및 GitHub 저장 완료")
+                        st.rerun()
+                    else:
+                        st.warning("삭제할 일자의 체크박스를 먼저 선택해 주세요.")
 
-    # 하단 제어 버튼
-    btn_col1, btn_col2, btn_col3 = st.columns([1.5, 2, 2])
-    with btn_col1:
-        delete_btn = st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True)
-    with btn_col2:
-        csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            "📥 전체 결과 CSV 다운로드",
-            data=csv_data,
-            file_name="종목Scan_비교결과.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    with btn_col3:
-        codes_txt_data = "\n".join(current_codes).encode('utf-8')
-        st.download_button(
-            "📋 종목코드 백업(TXT)",
-            data=codes_txt_data,
-            file_name="saved_codes_backup.txt",
-            mime="text/plain",
-            help="현재 등록된 종목코드 목록을 TXT 파일로 내려받습니다.",
-            use_container_width=True
-        )
+        st.write("")
+        render_market_inputs()
 
-    # 항목 삭제 처리
-    if delete_btn:
-        deleted_anything = False
-
-        if edited_df is not None and not edited_df.empty:
-            selected_codes = edited_df[edited_df["선택"] == True]["종목코드"].tolist()
-            if selected_codes:
-                remaining_codes = [c for c in current_codes if c not in selected_codes]
-                save_codes(remaining_codes)
-                st.success(f"종목 {len(selected_codes)}개 삭제 완료")
-                deleted_anything = True
-
-        if edited_market_df is not None and not edited_market_df.empty:
-            selected_dates = edited_market_df[edited_market_df["선택"] == True]["일시"].tolist()
-            if selected_dates:
-                m_cache = load_market_cache()
-                for d in selected_dates:
-                    m_cache.pop(d, None)
-                save_market_cache(m_cache)
-                st.success(f"지수 데이터 {len(selected_dates)}일자 삭제 완료")
-                deleted_anything = True
-
-        if deleted_anything:
-            st.rerun()
-        else:
-            st.warning("삭제할 항목(종목 또는 일자)의 체크박스를 먼저 선택해 주세요.")
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
-
-# 종목코드 추가 패널
-st.write("")
-with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", expanded=False):
-    tab_single, tab_bulk_text, tab_bulk_file = st.tabs(["단건 추가", "텍스트 일괄 붙여넣기", "파일 일괄 업로드(TXT/CSV/XLSX)"])
-
-    with tab_single:
+    with st.expander("➕ 종목코드 추가 및 일괄 등록", expanded=True):
         c_code, c_btn = st.columns([3, 1])
         with c_code:
-            new_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6, key="single_code_input")
+            init_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930", max_chars=6, key="init_single_code")
         with c_btn:
             st.write("")
-            if st.button("종목 추가", use_container_width=True, key="btn_single_add"):
-                if new_code.strip():
-                    formatted = new_code.strip().zfill(6)
-                    if formatted not in current_codes:
-                        current_codes.append(formatted)
-                        save_codes(current_codes)
-                        st.success(f"{formatted} 추가 완료")
-                        st.rerun()
-
-    with tab_bulk_text:
-        bulk_text = st.text_area(
-            "종목코드 목록 붙여넣기 (줄바꿈, 쉼표, 공백 구분)",
-            placeholder="예시:\n005930\n000660, 035420 035720",
-            height=120
-        )
-        if st.button("📥 텍스트 목록 일괄 추가", type="primary", key="btn_bulk_text_add"):
-            if bulk_text.strip():
-                found_codes = re.findall(r'\b\d{6}\b', bulk_text)
-                if found_codes:
-                    new_unique = [c for c in dict.fromkeys(found_codes) if c not in current_codes]
-                    if new_unique:
-                        current_codes.extend(new_unique)
-                        save_codes(current_codes)
-                        st.success(f"총 {len(new_unique)}개 종목이 추가되었습니다: {', '.join(new_unique)}")
-                        st.rerun()
-                    else:
-                        st.info("입력된 종목코드가 이미 모두 등록되어 있습니다.")
-                else:
-                    st.warning("유효한 6자리 종목코드를 찾을 수 없습니다.")
-
-    with tab_bulk_file:
-        up_file = st.file_uploader(
-            "종목코드가 포함된 파일 업로드",
-            type=["txt", "csv", "xlsx", "xls"],
-            key="stock_code_file_uploader"
-        )
-        if up_file is not None:
-            if st.button("📥 파일에서 종목코드 일괄 추출/추가", type="primary", key="btn_bulk_file_add"):
-                try:
-                    extracted = []
-                    if up_file.name.endswith(".txt"):
-                        content = up_file.read().decode("utf-8", errors="ignore")
-                        extracted = re.findall(r'\b\d{6}\b', content)
-                    elif up_file.name.endswith((".xlsx", ".xls")):
-                        df_file = pd.read_excel(up_file, dtype=str)
-                        for col in df_file.columns:
-                            items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
-                            valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
-                            extracted.extend(valid_codes)
-                    elif up_file.name.endswith(".csv"):
-                        df_file = pd.read_csv(up_file, dtype=str)
-                        for col in df_file.columns:
-                            items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
-                            valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
-                            extracted.extend(valid_codes)
-
-                    if extracted:
-                        new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
-                        if new_unique:
-                            current_codes.extend(new_unique)
-                            save_codes(current_codes)
-                            st.success(f"파일에서 {len(new_unique)}개 종목이 등록되었습니다: {', '.join(new_unique)}")
-                            st.rerun()
-                        else:
-                            st.info("파일 내 종목코드가 이미 등록되어 있습니다.")
-                    else:
-                        st.warning("파일에서 6자리 종목코드를 추출하지 못했습니다.")
-                except Exception as e:
-                    st.error(f"파일 처리 중 오류 발생: {e}")
-
-# 국내지수 입력 및 복원 패널
-st.write("")
-render_market_inputs()
+            if st.button("종목 추가", use_container_width=True, key="btn_init_add"):
+                if init_code.strip():
+                    formatted = init_code.strip().zfill(6)
+                    save_codes([formatted])
+                    st.success(f"{formatted} 등록 완료")
+                    st.rerun()
 
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
