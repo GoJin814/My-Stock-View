@@ -3,6 +3,8 @@ import pandas as pd
 import json
 import os
 import re
+from datetime import datetime
+from api import fetch_market_indices
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
 
@@ -38,11 +40,26 @@ def save_market_cache(cache_data):
 
 def render_tab_market():
     m_cache = load_market_cache()
+
+    # 상단 자동 불러오기 버튼
+    btn_c1, _ = st.columns([2, 4])
+    with btn_c1:
+        if st.button("⚡ 오늘 지수 데이터 자동 불러오기", type="primary", use_container_width=True):
+            today_str = datetime.today().strftime('%Y-%m-%d')
+            with st.spinner("네이버 증권에서 오늘 지수 데이터를 불러오는 중..."):
+                latest_data = fetch_market_indices()
+                if today_str not in m_cache:
+                    m_cache[today_str] = {}
+                m_cache[today_str].update(latest_data)
+                save_market_cache(m_cache)
+                st.success(f"{today_str} 지수 밸류에이션 데이터가 자동 등록되었습니다!")
+                st.rerun()
+
     if not m_cache:
-        st.info("기록된 국내지수 데이터가 없습니다. 아래 입력 패널에서 데이터를 등록해 주세요.")
+        st.info("기록된 국내지수 데이터가 없습니다. 상단 '오늘 지수 데이터 자동 불러오기' 버튼을 누르거나 아래에서 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
-    # 일자 역순 정렬 (최신 날짜가 위로)
+    # 최신 날짜순 정렬
     sorted_dates = sorted(list(m_cache.keys()), reverse=True)
     records = []
     for d in sorted_dates:
@@ -51,20 +68,38 @@ def render_tab_market():
         records.append(row)
 
     df_market = pd.DataFrame(records)
-    
-    # 3층 복합 헤더 렌더링
-    st.markdown("""
+
+    # 1. 엑셀 업로드로 추가된 매크로 지표 컬럼(KOSPI지수, 시총, 예탁금, 신용잔고, 환율 등) 존재 여부 확인
+    macro_cols = ["KOSPI", "시가총액(억원)", "고객예탁금(억원)", "신용잔고(억원)", "환율"]
+    has_macro = any(col in df_market.columns for col in macro_cols)
+
+    # 2. 복합 헤더 테이블 구성
+    macro_header_html = ""
+    macro_sub_header_html = ""
+    if has_macro:
+        macro_header_html = '<th colspan="5" style="border: 1px solid rgba(128,128,128,0.3); padding: 6px; background-color: var(--secondary-background-color, #f0f2f6);">시장 매크로 지표</th>'
+        macro_sub_header_html = """
+            <th rowspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">KOSPI지수</th>
+            <th rowspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">시가총액(억)</th>
+            <th rowspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">고객예탁금(억)</th>
+            <th rowspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">신용잔고(억)</th>
+            <th rowspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">환율(원)</th>
+        """
+
+    st.markdown(f"""
         <div style="overflow-x: auto; margin-bottom: 1rem;">
         <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: center;">
             <thead>
                 <tr style="background-color: var(--secondary-background-color, #f0f2f6);">
                     <th rowspan="3" style="border: 1px solid rgba(128,128,128,0.3); padding: 6px;">선택</th>
                     <th rowspan="3" style="border: 1px solid rgba(128,128,128,0.3); padding: 6px;">일시</th>
+                    {macro_header_html}
                     <th colspan="4" style="border: 1px solid rgba(128,128,128,0.3); padding: 6px;">KOSPI</th>
                     <th colspan="4" style="border: 1px solid rgba(128,128,128,0.3); padding: 6px;">KOSDAQ</th>
                     <th colspan="4" style="border: 1px solid rgba(128,128,128,0.3); padding: 6px;">KOSPI200</th>
                 </tr>
                 <tr style="background-color: var(--secondary-background-color, #f0f2f6);">
+                    {macro_sub_header_html}
                     <th colspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">PER</th>
                     <th colspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">PBR</th>
                     <th colspan="2" style="border: 1px solid rgba(128,128,128,0.3); padding: 4px;">PER</th>
@@ -98,7 +133,6 @@ def render_tab_market():
         key="market_monitor_editor"
     )
 
-    # 지수 데이터 백업 다운로드 버튼 제공
     json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
     st.download_button(
         "💾 국내지수 전체 백업(JSON 다운로드)",
@@ -111,23 +145,102 @@ def render_tab_market():
     return edited_df
 
 def render_market_inputs():
-    with st.expander("🌐 국내지수 밸류에이션 데이터 수기 입력 / 백업 복원", expanded=False):
-        t_manual, t_restore = st.tabs(["수기 입력", "📂 백업 파일(JSON) 복원"])
+    with st.expander("🌐 국내지수 데이터 파일 업로드(CSV / Excel) 및 수기 등록", expanded=False):
+        t_upload, t_manual, t_restore = st.tabs(["📊 CSV / Excel 파일 일괄 업로드", "✍️ 개별 수기 입력", "📂 백업 파일(JSON) 복원"])
 
+        # 1. 사용자가 제시한 엑셀/CSV 업로드 탭
+        with t_upload:
+            st.write("보유하고 계신 **CSV 또는 Excel(.xlsx)** 파일을 업로드하면 날짜별 데이터가 자동으로 병합/추가됩니다.")
+            market_file = st.file_uploader(
+                "지수 데이터 파일 선택 (일시, KOSPI, 시가총액, PER, PBR 등)",
+                type=["csv", "xlsx", "xls"],
+                key="market_csv_excel_uploader"
+            )
+            if market_file is not None:
+                if st.button("📥 파일 데이터 읽어서 추가하기", type="primary", key="btn_apply_market_file"):
+                    try:
+                        # 파일 형식별 로드
+                        if market_file.name.endswith(".csv"):
+                            try:
+                                df_up = pd.read_csv(market_file, encoding="utf-8")
+                            except UnicodeDecodeError:
+                                market_file.seek(0)
+                                df_up = pd.read_csv(market_file, encoding="cp949")
+                        else:
+                            df_up = pd.read_excel(market_file)
+
+                        # 컬럼명 공백 정리
+                        df_up.columns = [str(c).replace(" ", "").strip() for c in df_up.columns]
+
+                        # '일시' 또는 '날짜' 컬럼 찾기
+                        date_col = None
+                        for c in df_up.columns:
+                            if any(k in c for k in ["일시", "날짜", "Date", "DATE"]):
+                                date_col = c
+                                break
+
+                        if not date_col:
+                            st.error("파일에서 '일시' 또는 '날짜' 컬럼을 찾을 수 없습니다.")
+                        else:
+                            cache = load_market_cache()
+                            added_count = 0
+
+                            for _, r in df_up.iterrows():
+                                raw_d = str(r[date_col]).strip()
+                                d_str = normalize_date(raw_d)
+                                if not d_str:
+                                    continue
+
+                                if d_str not in cache:
+                                    cache[d_str] = {}
+
+                                # 이미지에 표시된 컬럼명들을 안전하게 매핑
+                                for col in df_up.columns:
+                                    if col == date_col:
+                                        continue
+                                    val_str = str(r[col]).strip()
+                                    if val_str in ["nan", "None", ""]:
+                                        val_str = "-"
+
+                                    # 컬럼별 매핑
+                                    if "시가총액" in col:
+                                        cache[d_str]["시가총액(억원)"] = val_str
+                                    elif "고객예탁금" in col or "예탁금" in col:
+                                        cache[d_str]["고객예탁금(억원)"] = val_str
+                                    elif "신용잔고" in col or "신용융자" in col:
+                                        cache[d_str]["신용잔고(억원)"] = val_str
+                                    elif "환율" in col:
+                                        cache[d_str]["환율"] = val_str
+                                    elif col == "PER":
+                                        cache[d_str]["KOSPI_PER_최근"] = val_str
+                                    elif col == "PBR":
+                                        cache[d_str]["KOSPI_PBR_최근"] = val_str
+                                    elif col in ["KOSPI", "코스피"]:
+                                        cache[d_str]["KOSPI"] = val_str
+                                    else:
+                                        cache[d_str][col] = val_str
+
+                                added_count += 1
+
+                            save_market_cache(cache)
+                            st.success(f"총 {added_count}개 일자의 지수 데이터가 성공적으로 반영되었습니다!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
+
+        # 2. 개별 수기 입력 탭
         with t_manual:
-            c_date, c_submit = st.columns([2, 1])
+            c_date, _ = st.columns([2, 4])
             with c_date:
                 input_date = st.date_input("기준 일자", key="market_input_date")
             date_str = str(input_date)
 
-            st.write("**지수별 밸류에이션 입력**")
             col_kpi, col_kdq, col_k200 = st.columns(3)
-
             with col_kpi:
                 st.markdown("##### KOSPI")
-                kpi_per_c = st.text_input("PER (최근)", key="kpi_per_c", placeholder="예: 11.23")
+                kpi_per_c = st.text_input("PER (최근)", key="kpi_per_c", placeholder="예: 18.19")
                 kpi_per_f = st.text_input("PER (12M Fwd)", key="kpi_per_f", placeholder="예: 9.85")
-                kpi_pbr_c = st.text_input("PBR (최근)", key="kpi_pbr_c", placeholder="예: 0.95")
+                kpi_pbr_c = st.text_input("PBR (최근)", key="kpi_pbr_c", placeholder="예: 1.90")
                 kpi_pbr_f = st.text_input("PBR (12M Fwd)", key="kpi_pbr_f", placeholder="예: 0.88")
 
             with col_kdq:
@@ -144,9 +257,11 @@ def render_market_inputs():
                 k200_pbr_c = st.text_input("PBR (최근)", key="k200_pbr_c", placeholder="예: 0.92")
                 k200_pbr_f = st.text_input("PBR (12M Fwd)", key="k200_pbr_f", placeholder="예: 0.85")
 
-            if st.button("📌 해당 일자 지수 데이터 저장", type="primary", key="btn_save_market"):
+            if st.button("📌 수기 데이터 저장", type="primary", key="btn_save_market"):
                 cache = load_market_cache()
-                cache[date_str] = {
+                if date_str not in cache:
+                    cache[date_str] = {}
+                cache[date_str].update({
                     "KOSPI_PER_최근": kpi_per_c.strip() or "-",
                     "KOSPI_PER_12M": kpi_per_f.strip() or "-",
                     "KOSPI_PBR_최근": kpi_pbr_c.strip() or "-",
@@ -159,11 +274,12 @@ def render_market_inputs():
                     "KOSPI200_PER_12M": k200_per_f.strip() or "-",
                     "KOSPI200_PBR_최근": k200_pbr_c.strip() or "-",
                     "KOSPI200_PBR_12M": k200_pbr_f.strip() or "-",
-                }
+                })
                 save_market_cache(cache)
                 st.success(f"{date_str} 지수 데이터가 성공적으로 저장되었습니다.")
                 st.rerun()
 
+        # 3. JSON 백업 복원 탭
         with t_restore:
             up_json = st.file_uploader("백업받은 market_indices_backup.json 업로드", type=["json"], key="json_backup_restore")
             if up_json is not None:
