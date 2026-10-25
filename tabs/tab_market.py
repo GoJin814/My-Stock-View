@@ -76,7 +76,7 @@ def render_tab_market():
     m_cache = load_market_cache()
 
     if not m_cache:
-        st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 CSV/Excel 파일을 업로드하거나 수기로 등록해 주세요.")
+        st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 수기로 등록하거나 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
     sorted_dates = sorted(list(m_cache.keys()), reverse=True)
@@ -98,7 +98,6 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # st.data_editor 단일 렌더링 (중복 HTML 테이블 제거 완료)
     disabled_cols = [c for c in df_market.columns if c != "선택"]
     edited_df = st.data_editor(
         df_market,
@@ -119,7 +118,6 @@ def render_tab_market():
         key="market_monitor_editor"
     )
 
-    # 지수 전체 백업 다운로드
     json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
     st.download_button(
         "💾 국내지수 전체 백업(JSON 다운로드)",
@@ -132,10 +130,54 @@ def render_tab_market():
     return edited_df
 
 def render_market_inputs():
-    with st.expander("🌐 국내지수 데이터 파일 업로드(CSV / Excel) 및 수기 등록", expanded=False):
-        t_upload, t_manual, t_restore = st.tabs(["📊 CSV / Excel 파일 일괄 업로드", "✍️ 개별 수기 입력", "📂 백업 파일(JSON) 복원"])
+    with st.expander("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", expanded=False):
+        # 요청 순서: 1. 개별 수기 입력 -> 2. CSV / Excel 파일 일괄 업로드 -> 3. 백업 파일(JSON) 복원
+        t_manual, t_upload, t_restore = st.tabs(["✍️ 개별 수기 입력", "📊 CSV / Excel 파일 일괄 업로드", "📂 백업 파일(JSON) 복원"])
 
-        # 1. 파일 일괄 업로드
+        # 1. 개별 수기 입력 탭
+        with t_manual:
+            c_date, _ = st.columns([2, 4])
+            with c_date:
+                input_date = st.date_input("기준 일자", key="market_input_date")
+            date_str = str(input_date)
+
+            st.write("**KOSPI 및 시장 매크로 데이터 입력**")
+            r1_c1, r1_c2, r1_c3 = st.columns(3)
+            with r1_c1:
+                in_kospi = st.text_input("KOSPI 지수", placeholder="예: 2528.92", key="man_kospi")
+            with r1_c2:
+                in_mcap = st.text_input("시가총액(억원)", placeholder="예: 20,712,779", key="man_mcap")
+            with r1_c3:
+                in_fx = st.text_input("환율", placeholder="예: 1455.5", key="man_fx")
+
+            r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+            with r2_c1:
+                in_per = st.text_input("per", placeholder="예: 13.32", key="man_per")
+            with r2_c2:
+                in_pbr = st.text_input("pbr", placeholder="예: 0.89", key="man_pbr")
+            with r2_c3:
+                in_deposit = st.text_input("고객예탁금(억원)", placeholder="예: 572,328", key="man_deposit")
+            with r2_c4:
+                in_credit = st.text_input("신용잔고(억원)", placeholder="예: 181,786", key="man_credit")
+
+            if st.button("📌 수기 데이터 저장", type="primary", key="btn_save_market"):
+                cache = load_market_cache()
+                if date_str not in cache:
+                    cache[date_str] = {}
+                cache[date_str].update({
+                    "KOSPI": in_kospi.strip() or "-",
+                    "시가총액(억원)": in_mcap.strip() or "-",
+                    "per": in_per.strip() or "-",
+                    "pbr": in_pbr.strip() or "-",
+                    "고객예탁금(억원)": in_deposit.strip() or "-",
+                    "신용잔고(억원)": in_credit.strip() or "-",
+                    "환율": in_fx.strip() or "-",
+                })
+                save_market_cache(cache)
+                st.success(f"{date_str} KOSPI 데이터가 저장 및 GitHub에 자동 커밋되었습니다.")
+                st.rerun()
+
+        # 2. CSV / Excel 파일 일괄 업로드 탭
         with t_upload:
             st.write("보유하고 계신 **CSV 또는 Excel(.xlsx)** 파일을 업로드하면 날짜별 데이터가 자동으로 병합/추가됩니다.")
             market_file = st.file_uploader(
@@ -209,49 +251,6 @@ def render_market_inputs():
                             st.rerun()
                     except Exception as e:
                         st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
-
-        # 2. KOSPI 전용 개별 수기 입력
-        with t_manual:
-            c_date, _ = st.columns([2, 4])
-            with c_date:
-                input_date = st.date_input("기준 일자", key="market_input_date")
-            date_str = str(input_date)
-
-            st.write("**KOSPI 및 시장 매크로 데이터 입력**")
-            r1_c1, r1_c2, r1_c3 = st.columns(3)
-            with r1_c1:
-                in_kospi = st.text_input("KOSPI 지수", placeholder="예: 2528.92", key="man_kospi")
-            with r1_c2:
-                in_mcap = st.text_input("시가총액(억원)", placeholder="예: 20,712,779", key="man_mcap")
-            with r1_c3:
-                in_fx = st.text_input("환율", placeholder="예: 1455.5", key="man_fx")
-
-            r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
-            with r2_c1:
-                in_per = st.text_input("per", placeholder="예: 13.32", key="man_per")
-            with r2_c2:
-                in_pbr = st.text_input("pbr", placeholder="예: 0.89", key="man_pbr")
-            with r2_c3:
-                in_deposit = st.text_input("고객예탁금(억원)", placeholder="예: 572,328", key="man_deposit")
-            with r2_c4:
-                in_credit = st.text_input("신용잔고(억원)", placeholder="예: 181,786", key="man_credit")
-
-            if st.button("📌 수기 데이터 저장", type="primary", key="btn_save_market"):
-                cache = load_market_cache()
-                if date_str not in cache:
-                    cache[date_str] = {}
-                cache[date_str].update({
-                    "KOSPI": in_kospi.strip() or "-",
-                    "시가총액(억원)": in_mcap.strip() or "-",
-                    "per": in_per.strip() or "-",
-                    "pbr": in_pbr.strip() or "-",
-                    "고객예탁금(억원)": in_deposit.strip() or "-",
-                    "신용잔고(억원)": in_credit.strip() or "-",
-                    "환율": in_fx.strip() or "-",
-                })
-                save_market_cache(cache)
-                st.success(f"{date_str} KOSPI 데이터가 저장 및 GitHub에 자동 커밋되었습니다.")
-                st.rerun()
 
         # 3. JSON 백업 복원 탭
         with t_restore:
