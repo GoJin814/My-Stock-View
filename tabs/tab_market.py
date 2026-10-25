@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import json
 import os
 import re
@@ -7,6 +8,15 @@ import base64
 import requests
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
+
+def to_clean_num(val):
+    if val is None or val in ["", "-", "N/A", "nan", "None"]:
+        return np.nan
+    try:
+        cleaned = re.sub(r'[^0-9.-]', '', str(val))
+        return float(cleaned) if cleaned else np.nan
+    except Exception:
+        return np.nan
 
 def normalize_date(val):
     if not val or pd.isna(val):
@@ -83,34 +93,59 @@ def render_tab_market():
     records = []
     for d in sorted_dates:
         item = m_cache[d]
+        mcap_val = item.get("시가총액(억원)", "-")
+        dep_val = item.get("고객예탁금(억원)", "-")
+        crd_val = item.get("신용잔고(억원)", "-")
+
+        num_mcap = to_clean_num(mcap_val)
+        num_dep = to_clean_num(dep_val)
+        num_crd = to_clean_num(crd_val)
+
+        # 고객예탁금고/지수: 고객예탁금 / 시가총액 * 100
+        if pd.notna(num_dep) and pd.notna(num_mcap) and num_mcap > 0:
+            dep_ratio_str = f"{(num_dep / num_mcap) * 100.0:.2f}%"
+        else:
+            dep_ratio_str = "-"
+
+        # 신용잔고지수: 신용잔고 / 시가총액 * 100
+        if pd.notna(num_crd) and pd.notna(num_mcap) and num_mcap > 0:
+            crd_ratio_str = f"{(num_crd / num_mcap) * 100.0:.2f}%"
+        else:
+            crd_ratio_str = "-"
+
         row = {
             "선택": False,
             "일시": d,
             "KOSPI": item.get("KOSPI", "-"),
-            "시가총액(억원)": item.get("시가총액(억원)", "-"),
-            "per": item.get("per", item.get("PER", item.get("KOSPI_PER_최근", "-"))),
-            "pbr": item.get("pbr", item.get("PBR", item.get("KOSPI_PBR_최근", "-"))),
-            "고객예탁금(억원)": item.get("고객예탁금(억원)", "-"),
-            "신용잔고(억원)": item.get("신용잔고(억원)", "-"),
+            "시가총액(억원)": mcap_val,
+            "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
+            "PBR": item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-"))),
+            "고객예탁금고/지수": dep_ratio_str,
+            "신용잔고지수": crd_ratio_str,
+            "고객예탁금(억원)": dep_val,
+            "신용잔고(억원)": crd_val,
             "환율": item.get("환율", item.get("환율(원)", "-"))
         }
         records.append(row)
 
     df_market = pd.DataFrame(records)
 
+    # 데이터 크기에 맞춰 열 너비 최소화(small) 및 컴팩트 설정
     disabled_cols = [c for c in df_market.columns if c != "선택"]
     edited_df = st.data_editor(
         df_market,
         column_config={
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
-            "일시": st.column_config.TextColumn("일시", width="medium"),
-            "KOSPI": st.column_config.TextColumn("KOSPI"),
-            "시가총액(억원)": st.column_config.TextColumn("시가총액(억원)"),
-            "per": st.column_config.TextColumn("per"),
-            "pbr": st.column_config.TextColumn("pbr"),
-            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금(억원)"),
-            "신용잔고(억원)": st.column_config.TextColumn("신용잔고(억원)"),
-            "환율": st.column_config.TextColumn("환율"),
+            "일시": st.column_config.TextColumn("일시", width="small"),
+            "KOSPI": st.column_config.TextColumn("KOSPI", width="small"),
+            "시가총액(억원)": st.column_config.TextColumn("시가총액(억원)", width="medium"),
+            "PER": st.column_config.TextColumn("PER", width="small"),
+            "PBR": st.column_config.TextColumn("PBR", width="small"),
+            "고객예탁금고/지수": st.column_config.TextColumn("고객예탁금고/지수", width="small"),
+            "신용잔고지수": st.column_config.TextColumn("신용잔고지수", width="small"),
+            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금(억원)", width="small"),
+            "신용잔고(억원)": st.column_config.TextColumn("신용잔고(억원)", width="small"),
+            "환율": st.column_config.TextColumn("환율", width="small"),
         },
         disabled=disabled_cols,
         hide_index=True,
@@ -131,7 +166,6 @@ def render_tab_market():
 
 def render_market_inputs():
     with st.expander("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", expanded=False):
-        # 요청 순서: 1. 개별 수기 입력 -> 2. CSV / Excel 파일 일괄 업로드 -> 3. 백업 파일(JSON) 복원
         t_manual, t_upload, t_restore = st.tabs(["✍️ 개별 수기 입력", "📊 CSV / Excel 파일 일괄 업로드", "📂 백업 파일(JSON) 복원"])
 
         # 1. 개별 수기 입력 탭
@@ -152,9 +186,9 @@ def render_market_inputs():
 
             r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
             with r2_c1:
-                in_per = st.text_input("per", placeholder="예: 13.32", key="man_per")
+                in_per = st.text_input("PER", placeholder="예: 13.32", key="man_per")
             with r2_c2:
-                in_pbr = st.text_input("pbr", placeholder="예: 0.89", key="man_pbr")
+                in_pbr = st.text_input("PBR", placeholder="예: 0.89", key="man_pbr")
             with r2_c3:
                 in_deposit = st.text_input("고객예탁금(억원)", placeholder="예: 572,328", key="man_deposit")
             with r2_c4:
@@ -167,8 +201,8 @@ def render_market_inputs():
                 cache[date_str].update({
                     "KOSPI": in_kospi.strip() or "-",
                     "시가총액(억원)": in_mcap.strip() or "-",
-                    "per": in_per.strip() or "-",
-                    "pbr": in_pbr.strip() or "-",
+                    "PER": in_per.strip() or "-",
+                    "PBR": in_pbr.strip() or "-",
                     "고객예탁금(억원)": in_deposit.strip() or "-",
                     "신용잔고(억원)": in_credit.strip() or "-",
                     "환율": in_fx.strip() or "-",
@@ -236,9 +270,9 @@ def render_market_inputs():
                                     elif "환율" in col:
                                         cache[d_str]["환율"] = val_str
                                     elif col.upper() == "PER":
-                                        cache[d_str]["per"] = val_str
+                                        cache[d_str]["PER"] = val_str
                                     elif col.upper() == "PBR":
-                                        cache[d_str]["pbr"] = val_str
+                                        cache[d_str]["PBR"] = val_str
                                     elif col in ["KOSPI", "코스피"]:
                                         cache[d_str]["KOSPI"] = val_str
                                     else:
