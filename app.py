@@ -22,7 +22,6 @@ def load_codes():
             codes = [line.strip().zfill(6) for line in f.readlines() if line.strip() and line.strip().isdigit()]
             if codes:
                 return list(dict.fromkeys(codes))
-    # 파일이 비어있거나 없을 때 기본 종목
     return ["178320", "001130", "086450", "007690", "095660", "161890"]
 
 def save_codes(codes):
@@ -48,6 +47,9 @@ def fetch_all_stock_data(codes_tuple):
         raw_close = basic.get("closePrice", "-")
         curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
         
+        # 현재가 숫자 추출 (계산용)
+        numeric_close = to_num(raw_close)
+
         total_infos = integration.get("totalInfos", [])
         market_cap = "-"
         integration_dict = {}
@@ -61,11 +63,9 @@ def fetch_all_stock_data(codes_tuple):
 
         raw_per = basic.get("per", integration_dict.get("PER", "-"))
         raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
-        raw_div = basic.get("dividendYield", integration_dict.get("배당수익률", "-"))
         
         per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
         pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
-        div_val = f"{raw_div}%" if (raw_div not in ["-", "N/A", None] and "%" not in str(raw_div)) else str(raw_div)
 
         fin_info = {
             "latest_yr": "-", "prev_yr": "-",
@@ -143,8 +143,17 @@ def fetch_all_stock_data(codes_tuple):
         if fin_info["latest_yr"] != "-":
             latest_years.append(fin_info["latest_yr"])
 
+        # DPS(원)
         dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
+        # 1. 배당수익률 계산: DPS / 현재가 * 100
+        if pd.notna(fin_info["cur_dps"]) and pd.notna(numeric_close) and numeric_close > 0:
+            calc_div_yield = (fin_info["cur_dps"] / numeric_close) * 100.0
+            div_val = f"{calc_div_yield:.2f}%"
+        else:
+            div_val = "-"
+
+        # 기본 & 시세
         scan_basic.append({
             "선택": False,
             "종목명": stock_name,
@@ -157,6 +166,7 @@ def fetch_all_stock_data(codes_tuple):
             "배당수익률": div_val
         })
 
+        # 실적 & 성장성
         scan_perf.append({
             "종목명": stock_name,
             "종목코드": code,
@@ -171,6 +181,7 @@ def fetch_all_stock_data(codes_tuple):
             "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
         })
 
+        # 주당 가치
         p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
         p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
         c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
@@ -339,7 +350,6 @@ if current_codes:
             use_container_width=True
         )
     with btn_col3:
-        # 종목코드 목록 백업용 TXT 다운로드
         codes_txt_data = "\n".join(current_codes).encode('utf-8')
         st.download_button(
             "📋 종목코드 백업(TXT)",
@@ -463,7 +473,7 @@ with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 
                 except Exception as e:
                     st.error(f"파일 처리 중 오류 발생: {e}")
 
-# 국내지수 파일 업로드 및 수기 입력 영역
+# 국내지수 입력 및 복원 패널
 st.write("")
 render_market_inputs()
 
