@@ -35,3 +35,12 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         has_naver_link=True,
         tab_key="share"
     )
+
+    # return 추가
+    return render_multi_header_table(
+        display_df,
+        header_rows=header_rows,
+        divider_indices=[1, 6],
+        has_naver_link=True,
+        tab_key="share"
+    )
