@@ -15,7 +15,7 @@ def apply_custom_styles():
             padding-bottom: 3rem;
         }
 
-        /* ⚡ 2. 태블릿 _arrow_right 겹침 방지 (라벨 위치 고정 및 텍스트 분리) */
+        /* 2. 태블릿 _arrow_right 겹침 방지 */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -29,7 +29,6 @@ def apply_custom_styles():
             overflow: hidden !important;
         }
 
-        /* 태블릿 브라우저에서 폰트 깨짐으로 노출되는 문자열 강제 숨김 */
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
             font-size: 0 !important;
             line-height: 0 !important;
@@ -58,7 +57,7 @@ def apply_custom_styles():
             white-space: nowrap;
         }
 
-        /* ⚡ 4. 기본 탭(st.data_editor)과 일치시킨 테이블 스타일 */
+        /* 4. 기본 탭(st.data_editor)과 일치시킨 테이블 스타일 */
         .custom-grid-wrapper {
             overflow-x: auto;
             margin-bottom: 1.2rem;
@@ -77,7 +76,6 @@ def apply_custom_styles():
             background-color: #0e1117;
         }
 
-        /* 기본 탭과 동일한 헤더 서식 (반투명 다크 톤) */
         .custom-grid-table th {
             background-color: rgba(255, 255, 255, 0.04) !important;
             color: #9ca3af !important;
@@ -90,7 +88,6 @@ def apply_custom_styles():
             white-space: nowrap !important;
         }
 
-        /* 본문 데이터 셀 */
         .custom-grid-table td {
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
@@ -102,20 +99,24 @@ def apply_custom_styles():
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* 종목명 열: 왼쪽 정렬 + 폭 최소화 */
+        /* ⚡ 종목명 열: 120px 고정 + 왼쪽 정렬 */
+        .custom-grid-table th.col-name-th,
         .custom-grid-table td.col-name {
+            width: 120px !important;
+            min-width: 120px !important;
+            max-width: 120px !important;
             text-align: left !important;
             padding-left: 12px !important;
-            padding-right: 12px !important;
-            width: 1% !important;
+            padding-right: 8px !important;
             white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
         }
 
         .custom-grid-table tr:hover td {
             background-color: rgba(255, 255, 255, 0.03) !important;
         }
 
-        /* 네이버 PC 링크 스타일 (기본 탭과 통일된 블루 컬러) */
         .naver-pc-link {
             color: #58a6ff !important;
             text-decoration: none !important;
@@ -144,25 +145,29 @@ def render_multi_header_table(df, *args, **kwargs):
 
     has_naver_link = kwargs.get("has_naver_link", True)
 
-    # 1. 깔끔한 2단 복합 헤더 조립
+    # 1. 2단 복합 헤더 조립 (종목명 th에 120px 고정 클래스 부여)
     thead_parts = ["<thead>"]
     if header_rows:
-        for row in header_rows:
+        for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
             for cell in row:
                 r_span = f' rowspan="{cell.get("rowspan", 1)}"' if cell.get("rowspan", 1) > 1 else ""
                 c_span = f' colspan="{cell.get("colspan", 1)}"' if cell.get("colspan", 1) > 1 else ""
                 txt = cell.get("text", "")
-                thead_parts.append(f'<th{r_span}{c_span}>{txt}</th>')
+                
+                # 종목명 헤더 셀에 120px 고정 클래스 적용
+                th_class = ' class="col-name-th"' if (r_idx == 0 and txt == "종목명") else ""
+                thead_parts.append(f'<th{r_span}{c_span}{th_class}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
         for c in df.columns:
-            thead_parts.append(f'<th>{c}</th>')
+            th_class = ' class="col-name-th"' if c == "종목명" else ""
+            thead_parts.append(f'<th{th_class}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 조립 (종목명 좌측 정렬 & 네이버 PC 웹 링크 연결)
+    # 2. 본문 조립 (종목명 td에 120px 고정 클래스 부여)
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         tbody_parts.append("<tr>")
@@ -172,10 +177,9 @@ def render_multi_header_table(df, *args, **kwargs):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
-            # 구분선 열인 경우 우측 테두리 강조
             border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            # 0번째 열(종목명): 왼쪽 정렬 + 네이버 PC 링크
+            # 0번째 열(종목명): 120px 고정 + 왼쪽 정렬 + 네이버 PC 링크
             if col_idx == 0:
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
@@ -187,7 +191,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 tbody_parts.append(f'<td class="col-name" {style_attr}>{content}</td>')
                 continue
 
-            # 수치 컬러링 (+ 빨강, - 파랑)
+            # 나머지 수치 열
             color_css = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
