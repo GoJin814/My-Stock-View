@@ -19,8 +19,10 @@ SAVE_FILE = "saved_codes.txt"
 def load_codes():
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
-            codes = [line.strip().zfill(6) for line in f.readlines() if line.strip()]
-            return list(dict.fromkeys(codes))
+            codes = [line.strip().zfill(6) for line in f.readlines() if line.strip() and line.strip().isdigit()]
+            if codes:
+                return list(dict.fromkeys(codes))
+    # 파일이 비어있거나 없을 때 기본 종목
     return ["178320", "001130", "086450", "007690", "095660", "161890"]
 
 def save_codes(codes):
@@ -143,7 +145,6 @@ def fetch_all_stock_data(codes_tuple):
 
         dps_display = f"{fin_info['cur_dps']:,.0f}원" if pd.notna(fin_info['cur_dps']) else "-"
 
-        # 기본 & 시세
         scan_basic.append({
             "선택": False,
             "종목명": stock_name,
@@ -156,7 +157,6 @@ def fetch_all_stock_data(codes_tuple):
             "배당수익률": div_val
         })
 
-        # 실적 & 성장성
         scan_perf.append({
             "종목명": stock_name,
             "종목코드": code,
@@ -171,7 +171,6 @@ def fetch_all_stock_data(codes_tuple):
             "순익_YoY": f"{fin_info['np_yoy']:+.1f}%" if pd.notna(fin_info['np_yoy']) else "-"
         })
 
-        # 주당 가치
         p_per_str = f"{fin_info['prev_per']:.2f}배" if pd.notna(fin_info['prev_per']) else "-"
         p_pbr_str = f"{fin_info['prev_pbr']:.2f}배" if pd.notna(fin_info['prev_pbr']) else "-"
         c_per_str = f"{fin_info['cur_per']:.2f}배" if pd.notna(fin_info['cur_per']) else "-"
@@ -209,6 +208,7 @@ def fetch_all_stock_data(codes_tuple):
 
     return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
+# 상단 헤더
 title_col, sync_col = st.columns([5, 1])
 with title_col:
     st.title("Scanning_주식")
@@ -326,7 +326,7 @@ if current_codes:
         edited_market_df = render_tab_market()
 
     # 하단 컨트롤
-    btn_col1, btn_col2, _ = st.columns([1.5, 2, 4])
+    btn_col1, btn_col2, btn_col3 = st.columns([1.5, 2, 2])
     with btn_col1:
         delete_btn = st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True)
     with btn_col2:
@@ -336,6 +336,17 @@ if current_codes:
             data=csv_data,
             file_name="종목Scan_비교결과.csv",
             mime="text/csv",
+            use_container_width=True
+        )
+    with btn_col3:
+        # 종목코드 목록 백업용 TXT 다운로드
+        codes_txt_data = "\n".join(current_codes).encode('utf-8')
+        st.download_button(
+            "📋 종목코드 백업(TXT)",
+            data=codes_txt_data,
+            file_name="saved_codes_backup.txt",
+            mime="text/plain",
+            help="현재 등록된 종목코드 목록을 TXT로 내려받아 보관합니다.",
             use_container_width=True
         )
 
