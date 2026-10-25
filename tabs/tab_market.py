@@ -3,6 +3,8 @@ import pandas as pd
 import json
 import os
 import re
+import base64
+import requests
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
 
@@ -29,12 +31,48 @@ def load_market_cache():
             pass
     return {}
 
+def commit_to_github(filename, content_str, commit_message="Auto-update from Streamlit"):
+    """GitHub API를 통해 원본 저장소에 파일을 백그라운드로 자동 커밋"""
+    token = st.secrets.get("GITHUB_TOKEN")
+    repo = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    
+    if not token or not repo:
+        return False
+        
+    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # 1. 파일의 기존 SHA 조회
+    res = requests.get(url, headers=headers, params={"ref": branch})
+    sha = None
+    if res.status_code == 200:
+        sha = res.json().get("sha")
+        
+    # 2. Base64 인코딩 후 PUT 커밋
+    content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
+    payload = {
+        "message": commit_message,
+        "content": content_b64,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    put_res = requests.put(url, headers=headers, json=payload)
+    return put_res.status_code in [200, 201]
+
 def save_market_cache(cache_data):
-    try:
-        with open(MARKET_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache_data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"지수 데이터 저장 중 오류 발생: {e}")
+    # 1. 로컬 컨테이너 저장
+    json_text = json.dumps(cache_data, ensure_ascii=False, indent=2)
+    with open(MARKET_CACHE_FILE, "w", encoding="utf-8") as f:
+        f.write(json_text)
+        
+    # 2. GitHub 원격 저장소 자동 커밋
+    commit_to_github(MARKET_CACHE_FILE, json_text, "Auto-commit market_indices_cache.json")
 
 def render_tab_market():
     m_cache = load_market_cache()
@@ -43,7 +81,6 @@ def render_tab_market():
         st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 CSV/Excel 파일을 업로드하거나 수기로 등록해 주세요.")
         return None
 
-    # 최신 일자순 정렬
     sorted_dates = sorted(list(m_cache.keys()), reverse=True)
     records = []
     for d in sorted_dates:
@@ -63,7 +100,6 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # 1. 깔끔한 단일 헤더 HTML 테이블 (per, pbr 명시)
     html_parts = [
         '<div style="overflow-x: auto; margin-bottom: 1rem;">',
         '<table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: center;">',
@@ -85,7 +121,6 @@ def render_tab_market():
     ]
     st.markdown("".join(html_parts), unsafe_allow_html=True)
 
-    # 2. 데이터 에디터 렌더링
     disabled_cols = [c for c in df_market.columns if c != "선택"]
     edited_df = st.data_editor(
         df_market,
@@ -101,7 +136,6 @@ def render_tab_market():
         key="market_monitor_editor"
     )
 
-    # 3. 지수 전체 백업 다운로드
     json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
     st.download_button(
         "💾 국내지수 전체 백업(JSON 다운로드)",
@@ -117,7 +151,7 @@ def render_market_inputs():
     with st.expander("🌐 국내지수 데이터 파일 업로드(CSV / Excel) 및 수기 등록", expanded=False):
         t_upload, t_manual, t_restore = st.tabs(["📊 CSV / Excel 파일 일괄 업로드", "✍️ 개별 수기 입력", "📂 백업 파일(JSON) 복원"])
 
-        # 1. 파일 일괄 업로드
+        # 1. CSV / Excel 파일 일괄 업로드
         with t_upload:
             st.write("보유하고 계신 **CSV 또는 Excel(.xlsx)** 파일을 업로드하면 날짜별 데이터가 자동으로 병합/추가됩니다.")
             market_file = st.file_uploader(
@@ -187,12 +221,12 @@ def render_market_inputs():
                                 added_count += 1
 
                             save_market_cache(cache)
-                            st.success(f"총 {added_count}개 일자의 지수 데이터가 성공적으로 반영되었습니다!")
+                            st.success(f"총 {added_count}개 일자의 지수 데이터가 성공적으로 반영 및 GitHub에 자동 커밋되었습니다!")
                             st.rerun()
                     except Exception as e:
                         st.error(f"파일을 읽는 도중 오류가 발생했습니다: {e}")
 
-        # 2. KOSPI 전용 개별 수기 입력 (표에 존재하는 모든 항목 구성)
+        # 2. KOSPI 전용 개별 수기 입력
         with t_manual:
             c_date, _ = st.columns([2, 4])
             with c_date:
@@ -232,7 +266,7 @@ def render_market_inputs():
                     "환율": in_fx.strip() or "-",
                 })
                 save_market_cache(cache)
-                st.success(f"{date_str} KOSPI 데이터가 성공적으로 저장되었습니다.")
+                st.success(f"{date_str} KOSPI 데이터가 저장 및 GitHub에 자동 커밋되었습니다.")
                 st.rerun()
 
         # 3. JSON 백업 복원 탭
@@ -246,7 +280,7 @@ def render_market_inputs():
                             cache = load_market_cache()
                             cache.update(content)
                             save_market_cache(cache)
-                            st.success(f"총 {len(content)}일자의 지수 데이터가 성공적으로 복원되었습니다.")
+                            st.success(f"총 {len(content)}일자의 지수 데이터가 복원 및 GitHub에 자동 커밋되었습니다.")
                             st.rerun()
                         else:
                             st.error("올바른 JSON 형식의 백업 파일이 아닙니다.")
