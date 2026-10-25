@@ -308,12 +308,12 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # ⚡ 2. 4개 탭 명칭 단순화
+    # ⚡ 4개 탭 명칭 단순화 (아이콘 유지)
     tab1, tab2, tab3, tab4 = st.tabs([
-        "현재 시세", 
-        "주당 가치",
-        "실적", 
-        "국내지수"
+        "📊 현재 시세", 
+        "💰 주당 가치",
+        "📈 실적", 
+        "🌐 국내지수"
     ])
 
     # 1. 현재 시세 탭: 종목 관리 컨트롤 및 종목 추가 패널 활성화
