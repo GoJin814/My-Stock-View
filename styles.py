@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import re
+import streamlit.components.v1 as components
 
 def apply_custom_styles():
     st.markdown("""
@@ -15,6 +15,7 @@ def apply_custom_styles():
             padding-bottom: 3rem;
         }
 
+        /* Expander 글자 겹침 방지 */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -55,6 +56,7 @@ def apply_custom_styles():
             white-space: nowrap;
         }
 
+        /* 기본 탭과 100% 동일한 그리드 서식 */
         .custom-grid-wrapper {
             overflow-x: auto;
             margin-bottom: 1.2rem;
@@ -83,22 +85,17 @@ def apply_custom_styles():
             border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
             text-align: center !important;
             white-space: nowrap !important;
+            user-select: none !important;
         }
 
-        /* ⚡ 정렬 헤더 링크 스타일 */
-        .th-sort-link {
-            color: #9ca3af !important;
-            text-decoration: none !important;
-            display: block !important;
-            width: 100% !important;
-            height: 100% !important;
+        /* 클릭 가능한 정렬 헤더 */
+        .custom-grid-table th.sortable-th {
+            cursor: pointer !important;
+            transition: background-color 0.15s ease, color 0.15s ease;
         }
-        .th-sort-link:hover {
-            color: #ffffff !important;
-        }
-        .th-sort-active {
+        .custom-grid-table th.sortable-th:hover {
+            background-color: rgba(255, 255, 255, 0.09) !important;
             color: #60a5fa !important;
-            font-weight: 600 !important;
         }
 
         .custom-grid-table td {
@@ -142,27 +139,6 @@ def apply_custom_styles():
         </style>
     """, unsafe_allow_html=True)
 
-def parse_num_for_sort(val):
-    if pd.isna(val) or val in ["", "-", "N/A", "nan", "None"]:
-        return -999999999999.0
-    val_str = str(val).strip()
-    clean = re.sub(r'[,%원배\s]', '', val_str)
-    
-    # 조, 억 복합 수치 변환
-    if '조' in clean:
-        parts = clean.split('조')
-        jo = float(re.sub(r'[^0-9.-]', '', parts[0])) if parts[0] else 0.0
-        rest = float(re.sub(r'[^0-9.-]', '', parts[1].replace('억', ''))) if len(parts) > 1 and parts[1] else 0.0
-        return (jo * 10000.0) + rest
-    elif '억' in clean:
-        clean = clean.replace('억', '')
-        return float(re.sub(r'[^0-9.-]', '', clean)) if clean else 0.0
-        
-    try:
-        return float(re.sub(r'[^0-9.-]', '', clean))
-    except Exception:
-        return -999999999999.0
-
 def render_multi_header_table(df, *args, **kwargs):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         st.info("표시할 데이터가 없습니다.")
@@ -178,64 +154,56 @@ def render_multi_header_table(df, *args, **kwargs):
     div_set = set(divider_indices) if divider_indices else set()
 
     has_naver_link = kwargs.get("has_naver_link", True)
-    tab_key = kwargs.get("tab_key", "t")
+    table_id = kwargs.get("tab_key", "tbl") + "_custom_grid"
 
-    # 1. 쿼리 파라미터에서 현재 정렬 상태 읽기
-    qp = st.query_params
-    cur_sort = qp.get(f"{tab_key}_sort", "")
-    cur_order = qp.get(f"{tab_key}_order", "desc")
-
-    # 2. 데이터프레임 파이썬 직접 정렬
-    sorted_df = df.copy()
-    if cur_sort and cur_sort in sorted_df.columns:
-        is_asc = (cur_order == "asc")
-        # 숫자 정렬용 키 시리즈 생성
-        num_series = sorted_df[cur_sort].apply(parse_num_for_sort)
-        if (num_series != -999999999999.0).any():
-            sorted_df["_sort_key"] = num_series
-            sorted_df = sorted_df.sort_values(by="_sort_key", ascending=is_asc).drop(columns=["_sort_key"])
-        else:
-            sorted_df = sorted_df.sort_values(by=cur_sort, ascending=is_asc)
-
-    # 3. 헤더 조립 (각 헤더 항목에 정렬 링크 생성)
+    # 1. 2단 복합 헤더 조립 (data-col-idx를 정확히 부여)
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
+            # 1층이면 0번(종목명), 1번(종목코드)만 단독열 / 2층이면 2번 인덱스부터 시작
+            col_seq = 0 if r_idx == 0 else 2
             for cell in row:
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
                 r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
                 c_span = f' colspan="{c_span_val}"' if c_span_val > 1 else ""
                 txt = cell.get("text", "")
-                data_col = cell.get("col", None)
 
-                th_class = ' class="col-name-th"' if (r_idx == 0 and txt == "종목명") else ""
+                th_classes = []
+                th_attrs = ""
 
-                # 정렬 가능한 하단 세부 열이거나 단독 열
-                if data_col and (r_span_val > 1 or c_span_val == 1):
-                    next_order = "desc" if (cur_sort == data_col and cur_order == "asc") else "asc"
-                    arrow = ""
-                    active_class = ""
-                    if cur_sort == data_col:
-                        arrow = " ▲" if cur_order == "asc" else " ▼"
-                        active_class = " th-sort-active"
+                if r_idx == 0 and txt == "종목명":
+                    th_classes.append("col-name-th")
 
-                    header_content = f'<a href="?{tab_key}_sort={data_col}&{tab_key}_order={next_order}" target="_self" class="th-sort-link{active_class}">{txt}{arrow}</a>'
-                else:
-                    header_content = txt
+                # 정렬 가능한 셀: 단독 열(rowspan > 1)이거나 하단 지표 열(c_span == 1)
+                if r_span_val > 1 or c_span_val == 1:
+                    th_classes.append("sortable-th")
+                    th_attrs = f' data-col-idx="{col_seq}"'
+                    col_seq += 1
 
-                thead_parts.append(f'<th{r_span}{c_span}{th_class}>{header_content}</th>')
+                class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
+    else:
+        thead_parts.append("<tr>")
+        for idx, c in enumerate(df.columns):
+            th_classes = ["sortable-th"]
+            if c == "종목명":
+                th_classes.append("col-name-th")
+            class_str = f' class="{" ".join(th_classes)}"'
+            th_attrs = f' data-col-idx="{idx}"'
+            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
+        thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 4. 본문 조립
+    # 2. 본문 행 조립
     tbody_parts = ["<tbody>"]
-    for _, row in sorted_df.iterrows():
+    for _, row in df.iterrows():
         tbody_parts.append("<tr>")
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
 
-        for col_idx, col_name in enumerate(sorted_df.columns):
+        for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
@@ -267,12 +235,80 @@ def render_multi_header_table(df, *args, **kwargs):
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
 
+    # 3. HTML 렌더링
     html_code = f"""
     <div class="custom-grid-wrapper">
-        <table class="custom-grid-table">
+        <table id="{table_id}" class="custom-grid-table">
             {"".join(thead_parts)}
             {"".join(tbody_parts)}
         </table>
     </div>
     """
     st.markdown(html_code, unsafe_allow_html=True)
+
+    # ⚡ 4. 새로고침 없는 브라우저 단 즉각 정렬 엔진 (상위 윈도우 DOM 이벤트 바인딩)
+    components.html(f"""
+    <script>
+    (function initSort() {{
+        const doc = window.parent.document;
+        const table = doc.getElementById("{table_id}");
+        if (!table) return;
+
+        function parseFin(str) {{
+            if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
+            let clean = str.replace(/[,%원배\\s]/g, '');
+            if (clean.includes('조')) {{
+                let parts = clean.split('조');
+                let jo = parseFloat(parts[0]) || 0;
+                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
+                return (jo * 10000) + rest;
+            }} else if (clean.includes('억')) {{
+                clean = clean.replace(/억/g, '');
+                return parseFloat(clean) || 0;
+            }}
+            let num = parseFloat(clean);
+            return isNaN(num) ? str.trim() : num;
+        }}
+
+        const thList = table.querySelectorAll('th.sortable-th');
+        thList.forEach(th => {{
+            // 중복 리스너 등록 방지
+            if (th.getAttribute('data-has-listener') === 'true') return;
+            th.setAttribute('data-has-listener', 'true');
+
+            th.addEventListener('click', function(e) {{
+                e.preventDefault();
+                const tbody = table.querySelector('tbody');
+                const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                
+                let isAsc = th.getAttribute('data-sort-asc') === 'true';
+                let nextAsc = !isAsc;
+
+                thList.forEach(otherTh => {{
+                    otherTh.removeAttribute('data-sort-asc');
+                    otherTh.innerHTML = otherTh.innerHTML.replace(/[ ▲▼]/g, '').trim();
+                }});
+
+                th.setAttribute('data-sort-asc', nextAsc);
+                th.innerHTML = th.innerHTML.trim() + (nextAsc ? ' ▲' : ' ▼');
+
+                rows.sort((a, b) => {{
+                    let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
+                    let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
+
+                    let pA = parseFin(valA);
+                    let pB = parseFin(valB);
+
+                    if (typeof pA === 'number' && typeof pB === 'number') {{
+                        return nextAsc ? (pA - pB) : (pB - pA);
+                    }}
+                    return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
+                }});
+
+                rows.forEach(r => tbody.appendChild(r));
+            }});
+        }});
+    }})();
+    </script>
+    """, height=0, width=0)
