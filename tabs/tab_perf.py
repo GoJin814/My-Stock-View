@@ -1,24 +1,25 @@
 import streamlit as st
 import pandas as pd
+from styles import render_multi_header_table
 
 def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
     if df_perf is None or df_perf.empty:
         st.info("표시할 실적 데이터가 없습니다.")
         return
 
-    # 1. 2단 복합 헤더 멀티인덱스 튜플 정의
-    multi_cols = [
-        ("종목정보", "종목명"),
-        ("종목정보", "종목코드"),
-        (f"{prev_yr}년", "매출액"),
-        (f"{prev_yr}년", "영업이익"),
-        (f"{prev_yr}년", "당기순익"),
-        (f"{latest_yr}년", "매출액"),
-        (f"{latest_yr}년", "영업이익"),
-        (f"{latest_yr}년", "당기순익"),
-        ("YoY 성장률", "매출"),
-        ("YoY 성장률", "영업익"),
-        ("YoY 성장률", "순익"),
+    header_rows = [
+        [
+            {"text": "종목명", "rowspan": 2},
+            {"text": "종목코드", "rowspan": 2},
+            {"text": f"{prev_yr}년", "colspan": 3},
+            {"text": f"{latest_yr}년", "colspan": 3},
+            {"text": "YoY 성장률", "colspan": 3}
+        ],
+        [
+            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
+            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
+            {"text": "매출"}, {"text": "영업익"}, {"text": "순익"}
+        ]
     ]
 
     source_cols = [
@@ -29,10 +30,11 @@ def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
     ]
 
     display_df = df_perf[[c for c in source_cols if c in df_perf.columns]].copy()
-    display_df.columns = pd.MultiIndex.from_tuples(multi_cols[:len(display_df.columns)])
 
-    st.dataframe(
+    # divider_indices=[1, 4, 7]: 종목코드, 직전 순익, 최근 순익 우측에 구분선 강조
+    render_multi_header_table(
         display_df,
-        hide_index=True,
-        use_container_width=True
+        header_rows=header_rows,
+        divider_indices=[1, 4, 7],
+        has_naver_link=True
     )
