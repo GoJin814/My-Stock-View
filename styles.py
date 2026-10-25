@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-import streamlit.components.v1 as components
 
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* 1. 모바일(웨일/크롬) 아래로 당겨 새로고침 제스처 허용 */
+        /* 1. 모바일 당겨서 새로고침 허용 */
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
             overscroll-behavior-y: auto !important;
             touch-action: pan-y pinch-zoom !important;
@@ -59,7 +58,7 @@ def apply_custom_styles():
             font-size: 0.92rem !important;
         }
 
-        /* 4. 기본 탭과 통일된 외형 + 가로 스크롤 컨테이너 */
+        /* 4. 그리드 컨테이너 */
         .custom-grid-wrapper {
             overflow-x: auto !important;
             margin-bottom: 1.2rem;
@@ -114,7 +113,7 @@ def apply_custom_styles():
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* 5. 종목명 열 좌측 고정 (120px) */
+        /* 5. 종목명 120px 고정 (Sticky) */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
@@ -167,7 +166,7 @@ def apply_custom_styles():
 def render_multi_header_table(df, *args, **kwargs):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         st.info("표시할 데이터가 없습니다.")
-        return None
+        return
 
     header_rows = kwargs.get("header_rows", None)
     if not header_rows and args and isinstance(args[0], list):
@@ -201,6 +200,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 if r_idx == 0 and txt == "종목명":
                     th_classes.append("col-name-th")
 
+                # 하단 세부 열이거나 2행 병합된 단독 열인 경우 클릭 정렬 대상
                 if r_span_val > 1 or c_span_val == 1:
                     th_classes.append("sortable-th")
                     th_attrs = f' data-col-idx="{col_seq}"'
@@ -221,7 +221,7 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 행 조립 (각 행에 data-code 주입)
+    # 2. 본문 조립
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
@@ -259,22 +259,11 @@ def render_multi_header_table(df, *args, **kwargs):
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
 
-    html_code = f"""
-    <div class="custom-grid-wrapper">
-        <table id="{table_id}" class="custom-grid-table">
-            {"".join(thead_parts)}
-            {"".join(tbody_parts)}
-        </table>
-    </div>
-    """
-    st.markdown(html_code, unsafe_allow_html=True)
-
-    # ⚡ 3. 브라우저 정렬 후 정렬된 종목 순서를 모든 탭 동기화 세션으로 전달하는 컴포넌트
-    sorted_order = components.html(f"""
-    <script>
-    (function() {{
-        const doc = window.parent.document;
-        const table = doc.getElementById("{table_id}");
+    # ⚡ 3. 인라인 정렬 스크립트 (외부 components.html 대신 img onerror 이벤트로 브라우저에 직접 바인딩)
+    # Streamlit의 Markdown 필터를 완벽히 우회하여 클릭 즉각 정렬을 보장합니다.
+    bind_script = f"""
+    <img src="x" style="display:none;" onerror="(function(){{
+        const table = document.getElementById('{table_id}');
         if (!table) return;
 
         function parseFin(str) {{
@@ -295,8 +284,8 @@ def render_multi_header_table(df, *args, **kwargs):
 
         const thList = table.querySelectorAll('th.sortable-th');
         thList.forEach(th => {{
-            if (th.getAttribute('data-has-sync-listener') === 'true') return;
-            th.setAttribute('data-has-sync-listener', 'true');
+            if (th.getAttribute('data-has-listener') === 'true') return;
+            th.setAttribute('data-has-listener', 'true');
 
             th.addEventListener('click', function(e) {{
                 e.preventDefault();
@@ -328,18 +317,19 @@ def render_multi_header_table(df, *args, **kwargs):
                     return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
                 }});
 
-                // DOM 재배치
                 rows.forEach(r => tbody.appendChild(r));
-
-                // ⚡ 정렬된 종목 순서 리스트 추출 및 Streamlit 이벤트 전송
-                const orderedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
-                if (window.Streamlit) {{
-                    window.Streamlit.setComponentValue(orderedCodes);
-                }}
             }});
         }});
-    }})();
-    </script>
-    """, height=0, width=0, key=f"comp_{table_id}")
+    }})();">
+    """
 
-    return sorted_order
+    html_code = f"""
+    <div class="custom-grid-wrapper">
+        <table id="{table_id}" class="custom-grid-table">
+            {"".join(thead_parts)}
+            {"".join(tbody_parts)}
+        </table>
+    </div>
+    {bind_script}
+    """
+    st.markdown(html_code, unsafe_allow_html=True)
