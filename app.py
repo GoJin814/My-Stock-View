@@ -280,30 +280,7 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 1. 정렬 제어
-    sort_col1, sort_col2, _ = st.columns([2, 1.5, 3.5])
-    with sort_col1:
-        sort_metric = st.selectbox(
-            "🔽 정렬 기준 지표 (모든 탭 동기화)",
-            options=[
-                "기본 순서 (등록순)",
-                f"최근 PER ({most_latest_yr})",
-                f"최근 PBR ({most_latest_yr})",
-                f"최근 ROE ({most_latest_yr})",
-                f"최근 EPS ({most_latest_yr})",
-                f"최근 BPS ({most_latest_yr})",
-                f"직전 PER ({most_prev_yr})",
-                f"직전 PBR ({most_prev_yr})",
-                f"직전 ROE ({most_prev_yr})",
-                f"직전 EPS ({most_prev_yr})",
-                f"직전 BPS ({most_prev_yr})",
-            ],
-            index=0
-        )
-    with sort_col2:
-        sort_order = st.radio("정렬 방향", options=["오름차순 (▲)", "내림차순 (▼)"], horizontal=True)
-
-    # 2. 밸류에이션 필터링
+    # ⚡ 1. 밸류에이션 필터링 (상단 정렬 UI 및 정렬 로직 완전 삭제됨)
     with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):   
         f_c1, f_c2, f_c3 = st.columns(3)
         with f_c1:
@@ -322,51 +299,24 @@ if current_codes:
     target_pbr_col = f"_num_PBR{filter_prefix}"
 
     valid_mask = pd.Series(True, index=df_share.index)
-    if use_per_filter:
+    if use_per_filter and target_per_col in df_share.columns:
         valid_mask &= (df_share[target_per_col] >= per_min) & (df_share[target_per_col] <= per_max)
-    if use_pbr_filter:
+    if use_pbr_filter and target_pbr_col in df_share.columns:
         valid_mask &= (df_share[target_pbr_col] >= pbr_min) & (df_share[target_pbr_col] <= pbr_max)
 
-    df_basic = df_basic[valid_mask].copy()
-    df_perf = df_perf[valid_mask].copy()
-    df_share = df_share[valid_mask].copy()
+    df_basic = df_basic[valid_mask].reset_index(drop=True)
+    df_perf = df_perf[valid_mask].reset_index(drop=True)
+    df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 정렬 수행
-    metric_map = {
-        f"최근 PER ({most_latest_yr})": "_num_PER_최근",
-        f"최근 PBR ({most_latest_yr})": "_num_PBR_최근",
-        f"최근 ROE ({most_latest_yr})": "_num_ROE_최근",
-        f"최근 EPS ({most_latest_yr})": "_num_EPS_최근",
-        f"최근 BPS ({most_latest_yr})": "_num_BPS_최근",
-        f"직전 PER ({most_prev_yr})": "_num_PER_직전",
-        f"직전 PBR ({most_prev_yr})": "_num_PBR_직전",
-        f"직전 ROE ({most_prev_yr})": "_num_ROE_직전",
-        f"직전 EPS ({most_prev_yr})": "_num_EPS_직전",
-        f"직전 BPS ({most_prev_yr})": "_num_BPS_직전",
-    }
-
-    if sort_metric in metric_map and not df_share.empty:
-        target_col = metric_map[sort_metric]
-        is_asc = (sort_order == "오름차순 (▲)")
-        sorted_indices = df_share[target_col].sort_values(ascending=is_asc, na_position='last').index
-        
-        df_basic = df_basic.loc[sorted_indices].reset_index(drop=True)
-        df_perf = df_perf.loc[sorted_indices].reset_index(drop=True)
-        df_share = df_share.loc[sorted_indices].reset_index(drop=True)
-    else:
-        df_basic = df_basic.reset_index(drop=True)
-        df_perf = df_perf.reset_index(drop=True)
-        df_share = df_share.reset_index(drop=True)
-
-    # 4개 탭 분기 렌더링
+    # ⚡ 2. 4개 탭 명칭 단순화
     tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 현재 시세", 
-        "💰 주당 가치",
-        "📈 실적", 
-        "🌐 국내지수"
+        "현재 시세", 
+        "주당 가치",
+        "실적", 
+        "국내지수"
     ])
 
-    # 1. 기본 & 시세 탭: 종목 관리 컨트롤 및 종목 추가 패널 활성화
+    # 1. 현재 시세 탭: 종목 관리 컨트롤 및 종목 추가 패널 활성화
     with tab1:
         edited_basic_df = render_tab_basic(df_basic)
 
@@ -486,15 +436,15 @@ if current_codes:
                         except Exception as e:
                             st.error(f"파일 처리 중 오류 발생: {e}")
 
-    # 2. 주당 가치 탭: 조회 전용 (저장/추가/삭제 컨트롤 일체 미노출)
+    # 2. 주당 가치 탭
     with tab2:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
-    # 3. 실적 & 성장성 탭: 조회 전용 (저장/추가/삭제 컨트롤 일체 미노출)
+    # 3. 실적 탭
     with tab3:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
-    # 4. 국내지수 Monitor 탭: 국내지수 전용 삭제/백업 및 입력 패널만 활성화
+    # 4. 국내지수 탭
     with tab4:
         edited_market_df = render_tab_market()
         
