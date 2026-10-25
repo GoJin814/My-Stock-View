@@ -7,12 +7,13 @@ def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
         st.info("표시할 실적 데이터가 없습니다.")
         return
 
+    # 2단 복합 헤더 정의 ('년' 중복 제거)
     header_rows = [
         [
             {"text": "종목명", "rowspan": 2},
             {"text": "종목코드", "rowspan": 2},
-            {"text": f"{prev_yr}년", "colspan": 3},
-            {"text": f"{latest_yr}년", "colspan": 3},
+            {"text": f"{prev_yr}", "colspan": 3},
+            {"text": f"{latest_yr}", "colspan": 3},
             {"text": "YoY 성장률", "colspan": 3}
         ],
         [
@@ -31,7 +32,7 @@ def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
 
     display_df = df_perf[[c for c in source_cols if c in df_perf.columns]].copy()
 
-    # divider_indices=[1, 4, 7]: 종목코드, 직전 순익, 최근 순익 우측에 구분선 강조
+    # divider_indices: 종목코드(1), 직전 순익(4), 최근 순익(7) 우측 구분선 강조
     render_multi_header_table(
         display_df,
         header_rows=header_rows,
