@@ -1,25 +1,24 @@
 import streamlit as st
 import pandas as pd
+from styles import render_multi_header_table
 
 def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
     if df_share is None or df_share.empty:
         st.info("표시할 주당 가치 데이터가 없습니다.")
         return
 
-    # 1. 2단 복합 헤더 멀티인덱스 튜플 정의 (상단 연도 대분류 / 하단 세부 지표)
-    multi_cols = [
-        ("종목정보", "종목명"),
-        ("종목정보", "종목코드"),
-        (f"{prev_yr}년", "PER"),
-        (f"{prev_yr}년", "PBR"),
-        (f"{prev_yr}년", "ROE"),
-        (f"{prev_yr}년", "EPS"),
-        (f"{prev_yr}년", "BPS"),
-        (f"{latest_yr}년", "PER"),
-        (f"{latest_yr}년", "PBR"),
-        (f"{latest_yr}년", "ROE"),
-        (f"{latest_yr}년", "EPS"),
-        (f"{latest_yr}년", "BPS"),
+    # 좌측은 2행 통합(rowspan 2), 우측 연도는 5열 통합(colspan 5)
+    header_rows = [
+        [
+            {"text": "종목명", "rowspan": 2},
+            {"text": "종목코드", "rowspan": 2},
+            {"text": f"{prev_yr}년", "colspan": 5},
+            {"text": f"{latest_yr}년", "colspan": 5}
+        ],
+        [
+            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"},
+            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"}
+        ]
     ]
 
     source_cols = [
@@ -28,13 +27,12 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         "PER_최근", "PBR_최근", "ROE_최근", "EPS_최근", "BPS_최근"
     ]
 
-    # 데이터 추출 및 멀티인덱스 컬럼 적용
     display_df = df_share[[c for c in source_cols if c in df_share.columns]].copy()
-    display_df.columns = pd.MultiIndex.from_tuples(multi_cols[:len(display_df.columns)])
 
-    # 기본 탭과 100% 동일한 서식의 2단 헤더 그리드 출력
-    st.dataframe(
+    # divider_indices=[1, 6]: 종목코드(1) 우측, 직전 BPS(6) 우측에 연도 구분선 강조
+    render_multi_header_table(
         display_df,
-        hide_index=True,
-        use_container_width=True
+        header_rows=header_rows,
+        divider_indices=[1, 6],
+        has_naver_link=True
     )
