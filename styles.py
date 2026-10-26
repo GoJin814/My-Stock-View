@@ -136,8 +136,6 @@ def apply_custom_styles():
         .custom-grid-table th.col-chk-th {
             top: 0 !important;
             z-index: 100 !important;
-            font-size: 0.95rem !important;
-            color: #9ca3af !important;
         }
         .custom-grid-table td.col-chk {
             z-index: 5 !important;
@@ -248,11 +246,13 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
-        .stock-checkbox {
+        .stock-checkbox,
+        .header-select-all {
             cursor: pointer;
             width: 15px;
             height: 15px;
             accent-color: #3b82f6;
+            vertical-align: middle;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -285,6 +285,8 @@ def render_multi_header_table(df, *args, **kwargs):
 
     table_chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
 
+    chk_header_html = '<input type="checkbox" class="header-select-all" title="전체 선택/해제">'
+
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
@@ -304,10 +306,10 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes = []
                 th_attrs = ""
 
-                # ⚡ '선택' 글자 대신 깔끔한 체크박스 아이콘(☑)으로 변경
+                # ⚡ 헤더 선택 박스 렌더링
                 if txt == "선택":
                     th_classes.append("col-chk-th")
-                    display_txt = "☑"
+                    display_txt = chk_header_html
                 elif txt == "종목명":
                     th_classes.append("col-name-th")
                     display_txt = txt
@@ -349,10 +351,9 @@ def render_multi_header_table(df, *args, **kwargs):
             th_classes = []
             th_attrs = ""
             display_txt = c
-            # ⚡ 단일 헤더에서도 '선택' 글자 대신 ☑ 아이콘 사용
             if c == "선택":
                 th_classes.append("col-chk-th")
-                display_txt = "☑"
+                display_txt = chk_header_html
             elif c == "종목명":
                 th_classes.append("col-name-th")
 
@@ -589,7 +590,26 @@ def inject_client_sort_sync_engine():
             });
         }
 
+        // ⚡ [핵심] 헤더 전체 선택 체크박스 클릭 이벤트 리스너
+        doc.addEventListener('change', function(e) {
+            if (e.target && e.target.classList.contains('header-select-all')) {
+                const isChecked = e.target.checked;
+                const table = e.target.closest('table.custom-grid-table');
+                if (table) {
+                    const rowChks = table.querySelectorAll('tbody input.stock-checkbox');
+                    rowChks.forEach(chk => {
+                        chk.checked = isChecked;
+                    });
+                }
+            }
+        });
+
         doc.addEventListener('click', function(e) {
+            // 헤더 체크박스 클릭 시 정렬 방지
+            if (e.target && e.target.classList.contains('header-select-all')) {
+                return;
+            }
+
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
 
