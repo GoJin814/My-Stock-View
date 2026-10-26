@@ -3,35 +3,57 @@ import pandas as pd
 import json
 import os
 
-CACHE_FILE = "market_cache.json"
+# ⚡ 기존 저장 파일 후보들을 순서대로 탐색 (CSV 우선 -> JSON)
+POSSIBLE_FILES = [
+    "market_history.csv",
+    "market_data.csv",
+    "data/market_history.csv",
+    "data/market_data.csv",
+    "market_cache.json",
+    "market_data.json"
+]
+
+def get_cache_file():
+    for f in POSSIBLE_FILES:
+        if os.path.exists(f):
+            return f
+    return "market_history.csv"
 
 def load_market_cache():
-    """국내지수 캐시 데이터 로드"""
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return pd.DataFrame(data)
-        except Exception:
-            return pd.DataFrame()
+    """기존 파일에서 국내지수 히스토리 데이터 로드"""
+    # 1. 존재하는 파일 탐색
+    for f in POSSIBLE_FILES:
+        if os.path.exists(f):
+            try:
+                if f.endswith(".csv"):
+                    return pd.read_csv(f)
+                elif f.endswith(".json"):
+                    with open(f, "r", encoding="utf-8") as jf:
+                        return pd.DataFrame(json.load(jf))
+            except Exception:
+                continue
     return pd.DataFrame()
 
 def save_market_cache(df: pd.DataFrame):
-    """국내지수 캐시 데이터 저장"""
+    """국내지수 데이터 저장"""
     if df is not None:
+        target_file = get_cache_file()
         try:
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(df.to_dict(orient="records"), f, ensure_ascii=False, indent=2)
+            if target_file.endswith(".csv"):
+                df.to_csv(target_file, index=False, encoding="utf-8-sig")
+            else:
+                with open(target_file, "w", encoding="utf-8") as f:
+                    json.dump(df.to_dict(orient="records"), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            st.error(f"캐시 저장 실패: {e}")
+            st.error(f"저장 실패: {e}")
 
 def render_market_inputs(df_market: pd.DataFrame = None):
-    """국내지수 신규 데이터 입력 폼 (필요 시 app.py에서 호출)"""
+    """입력 폼 함수 호환 유지"""
     return None
 
 def render_tab_market(df_market: pd.DataFrame = None):
-    """국내지수 테이블 렌더링 함수 (인자 없이 호출 가능하도록 기본값 지원)"""
-    if df_market is None or df_market.empty:
+    """국내지수 탭 렌더링"""
+    if df_market is None or (isinstance(df_market, pd.DataFrame) and df_market.empty):
         df_market = load_market_cache()
 
     if df_market is None or df_market.empty:
@@ -67,7 +89,7 @@ def render_tab_market(df_market: pd.DataFrame = None):
             width="small"
         )
 
-    # 4. 시가총액 컬럼 폭 충분히 확보 (1의 자리가 잘리지 않도록 medium)
+    # 4. 시가총액 컬럼 폭 확보 (1의 자리가 안 잘리도록 medium)
     for c in df.columns:
         if "시가총액" in c:
             column_config[c] = st.column_config.TextColumn(
@@ -116,8 +138,7 @@ def render_tab_market(df_market: pd.DataFrame = None):
             width="small"
         )
 
-    # app.py 539번째 줄에서 edited_market_df = render_tab_market()로 받으므로
-    # 편집 가능한 st.data_editor를 렌더링하고 그 결과를 반환합니다.
+    # 편집 가능한 data_editor 렌더링 및 반환
     edited_df = st.data_editor(
         df,
         column_config=column_config,
