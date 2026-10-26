@@ -7,7 +7,6 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         st.info("표시할 주당 가치 데이터가 없습니다.")
         return
 
-    # 각 항목별 실제 컬럼명(col)을 명시하여 클릭 정렬 연동
     header_rows = [
         [
             {"text": "종목명", "rowspan": 2, "col": "종목명"},
@@ -42,5 +41,5 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         header_rows=header_rows,
         divider_indices=[1, 6],
         has_naver_link=True,
-        tab_name="share"
+        tab_name="share"  # ⚡ 탭 고정 식별자
     )
