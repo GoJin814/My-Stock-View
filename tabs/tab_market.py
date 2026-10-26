@@ -111,9 +111,12 @@ def render_tab_market():
         else:
             crd_ratio_str = "-"
 
+        # ⚡ 2. 일시 형식을 YYYY/MM/DD 형태로 변환
+        clean_date_str = d.replace("-", "/")
+
         row = {
             "선택": False,
-            "일시": d,
+            "일시": clean_date_str,
             "KOSPI": item.get("KOSPI", "-"),
             "시가총액(억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
@@ -129,19 +132,27 @@ def render_tab_market():
     df_market = pd.DataFrame(records)
 
     disabled_cols = [c for c in df_market.columns if c != "선택"]
+    
+    # ⚡ 1, 3, 4, 5, 6번 화면 개선 column_config 설정
     edited_df = st.data_editor(
         df_market,
         column_config={
+            # 1. 선택 열 폭 최소화
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
+            # 2. YYYY/MM/DD 일시
             "일시": st.column_config.TextColumn("일시", width="small"),
             "KOSPI": st.column_config.TextColumn("KOSPI", width="small"),
-            "시가총액(억원)": st.column_config.TextColumn("시가총액(억원)", width="small"),
+            # 3 & 4. 2줄 표기 및 1의 자리가 안 잘리도록 medium 너비 확보
+            "시가총액(억원)": st.column_config.TextColumn("시가총액\n(억원)", width="medium"),
+            # 5. PER, PBR 컬럼 폭 최소화
             "PER": st.column_config.TextColumn("PER", width="small"),
             "PBR": st.column_config.TextColumn("PBR", width="small"),
-            "고객예탁금고/지수": st.column_config.TextColumn("고객예탁금고/지수", width="small"),
-            "신용잔고지수": st.column_config.TextColumn("신용잔고지수", width="small"),
-            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금(억원)", width="small"),
-            "신용잔고(억원)": st.column_config.TextColumn("신용잔고(억원)", width="small"),
+            # 6. 헤더명 축약 및 2줄 표기
+            "고객예탁금고/지수": st.column_config.TextColumn("예탁금\n비율", width="small"),
+            "신용잔고지수": st.column_config.TextColumn("신용잔고\n비율", width="small"),
+            # 3. 긴 헤더 2줄 표기
+            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금\n(억원)", width="small"),
+            "신용잔고(억원)": st.column_config.TextColumn("신용잔고\n(억원)", width="small"),
             "환율": st.column_config.TextColumn("환율", width="small"),
         },
         disabled=disabled_cols,
@@ -162,7 +173,6 @@ def render_tab_market():
     return edited_df
 
 def render_market_inputs():
-    # ⚡ expander -> st.toggle 스위치로 교체 (삼성 브라우저 글자 겹침 원천 차단)
     show_market_input = st.toggle("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", value=False)
 
     if show_market_input:
