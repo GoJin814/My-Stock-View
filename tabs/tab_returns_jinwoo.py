@@ -185,7 +185,7 @@ def render_input_panel(data, prefix="jinwoo"):
                 existing_years = sorted(list(data.get("years", {}).keys()), reverse=True)
                 if existing_years:
                     del_yr = st.selectbox("삭제할 연도 선택", options=existing_years, key=f"{prefix}_del_sel")
-                    if st.button(f>🗑️ {del_yr}년 데이터 삭제", type="primary", key=f"{prefix}_del_btn"):
+                    if st.button(f"🗑️ {del_yr}년 데이터 삭제", type="primary", key=f"{prefix}_del_btn"):
                         del data["years"][del_yr]
                         save_data(data)
                         st.success(f"{del_yr}년 데이터 삭제 완료")
