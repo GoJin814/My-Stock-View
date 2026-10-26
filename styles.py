@@ -5,16 +5,26 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* 1. 모바일 당겨서 새로고침 허용 */
-        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
-            overscroll-behavior-y: auto !important;
-            touch-action: pan-y pinch-zoom !important;
-        }
+/* ⚡ 모바일 웨일 / 크롬 / 삼성인터넷 당겨서 새로고침(Pull-to-refresh) 강제 허용 */
+html, body {
+    overscroll-behavior-y: auto !important;
+    touch-action: pan-x pan-y pinch-zoom !important;
+    height: 100% !important;
+}
 
-        .block-container {
-            padding-top: 1.8rem;
-            padding-bottom: 3rem;
-        }
+.stApp, 
+[data-testid="stAppViewContainer"], 
+[data-testid="stMain"],
+.main {
+    overscroll-behavior-y: auto !important;
+    touch-action: pan-x pan-y pinch-zoom !important;
+}
+
+/* 최상단 당김 제스처를 가로채는 내부 고정 스크롤 차단 해제 */
+[data-testid="stAppViewContainer"] > section {
+    overscroll-behavior-y: auto !important;
+}
+
 
         /* 2. Expander 글자 겹침 방지 */
         [data-testid="stExpander"] summary {
