@@ -280,19 +280,31 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 1. 밸류에이션 필터링
-    with st.expander("🎯 밸류에이션(PER / PBR) 범위 조건 필터링", expanded=False):   
-        f_c1, f_c2, f_c3 = st.columns(3)
-        with f_c1:
-            filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
-        with f_c2:
-            use_per_filter = st.checkbox("PER 범위 필터 적용")
-            per_min = st.number_input("PER 최소값", value=0.0, step=1.0, disabled=not use_per_filter)
-            per_max = st.number_input("PER 최대값", value=30.0, step=1.0, disabled=not use_per_filter)
-        with f_c3:
-            use_pbr_filter = st.checkbox("PBR 범위 필터 적용")
-            pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
-            pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
+    # 1. 밸류에이션 필터링 (expander -> st.toggle 교체)
+    show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 범위 조건 필터링", value=False)
+    
+    # 토글이 꺼져 있을 때 기본값 유지
+    filter_year = f"최근 연도 ({most_latest_yr})"
+    use_per_filter = False
+    use_pbr_filter = False
+    per_min, per_max = 0.0, 30.0
+    pbr_min, pbr_max = 0.0, 3.0
+
+    if show_filter:
+        with st.container():
+            st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
+            f_c1, f_c2, f_c3 = st.columns(3)
+            with f_c1:
+                filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
+            with f_c2:
+                use_per_filter = st.checkbox("PER 범위 필터 적용")
+                per_min = st.number_input("PER 최소값", value=0.0, step=1.0, disabled=not use_per_filter)
+                per_max = st.number_input("PER 최대값", value=30.0, step=1.0, disabled=not use_per_filter)
+            with f_c3:
+                use_pbr_filter = st.checkbox("PBR 범위 필터 적용")
+                pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
+                pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
+            st.markdown('</div>', unsafe_allow_html=True)
 
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
     target_per_col = f"_num_PER{filter_prefix}"
