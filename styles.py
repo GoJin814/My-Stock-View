@@ -27,7 +27,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 글자 겹침 방지 (삼성 브라우저 아이콘 텍스트 강제 소멸) */
+        /* 2. Expander 글자 겹침 방지 및 제목 보존 */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -45,32 +45,12 @@ def apply_custom_styles():
             display: none !important;
         }
 
-        /* 텍스트 형태의 Material Icon 태그 강제 소멸 */
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
-        [data-testid="stExpander"] summary span:empty,
-        [data-testid="stExpander"] summary > span:first-child {
-            display: none !important;
-            visibility: hidden !important;
-            width: 0 !important;
-            height: 0 !important;
-            font-size: 0 !important;
-            line-height: 0 !important;
-            color: transparent !important;
-            opacity: 0 !important;
-        }
-
-        /* 순수 CSS 화살표 복원 */
-        [data-testid="stExpander"] summary::before {
-            content: "▶" !important;
-            display: inline-block !important;
-            font-size: 0.72rem !important;
+        [data-testid="stExpander"] summary svg {
+            width: 1.1rem !important;
+            height: 1.1rem !important;
+            min-width: 1.1rem !important;
+            fill: #9ca3af !important;
             color: #9ca3af !important;
-            margin-right: 4px !important;
-            transition: transform 0.2s ease !important;
-        }
-
-        details[open] > summary::before {
-            transform: rotate(90deg) !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -318,6 +298,17 @@ def inject_client_sort_sync_engine():
         const doc = window.parent.document;
         const win = window.parent;
         if (!doc || !win) return;
+
+        // ⚡ [0] 삼성 브라우저 버그: Expander 헤더 안의 'keyboard_arrow_right' 텍스트 노드만 직접 삭제
+        function cleanExpanderGlitchText() {
+            doc.querySelectorAll('[data-testid="stExpander"] summary *').forEach(el => {
+                if (el.children.length === 0 && el.textContent.includes('keyboard_arrow_right')) {
+                    el.textContent = '';
+                }
+            });
+        }
+        cleanExpanderGlitchText();
+        setInterval(cleanExpanderGlitchText, 500);
 
         // ==========================================
         // ⚡ [1] 전수 스크롤 검사 기반 스와이프 새로고침 엔진
