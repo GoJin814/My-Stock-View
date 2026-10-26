@@ -13,7 +13,8 @@ def to_num(val):
     if val is None or str(val).strip() in ["", "-", "None", "nan"]:
         return 0.0
     try:
-        clean = re.sub(r'[^0-9.-]', '', str(val))
+        s = str(val).strip().replace(',', '')
+        clean = re.sub(r'[^0-9.-]', '', s)
         return float(clean) if clean else 0.0
     except Exception:
         return 0.0
@@ -154,7 +155,6 @@ def render_tab_returns_living():
     tot_final_end = latest_end 
 
     # 전체 기간 총 수익 수식: =F3-B3-C3+D3 (여기에 예수금 B1이 반영되도록 계산)
-    # 총 수익 = 종료(최근 기말) - 시작(최초 기초) - 입고 + 출고 + 잔여예수금(B1)
     tot_profit = tot_final_end - first_start - tot_in + tot_out + float(new_cash)
 
     # 전체 기간 총 수익률 수식: =(F3+B1-B3-(C3-D3))/(B3+B1+0.5*C3-0.5*D3)
@@ -298,7 +298,7 @@ def render_input_panel(data):
                     st.info("삭제할 연도 데이터가 없습니다.")
                 else:
                     del_yr = st.selectbox("삭제할 연도 선택", options=existing_years, key="rl_sel_del_yr")
-                    if st.button(f"🗑️ {del_yr}년 데이터 삭제", type="primary", key="btn_del_rl_year"):
+                    if st.button("🗑️ 데이터 삭제", type="primary", key="btn_del_rl_year"):
                         if del_yr in data["years"]:
                             del data["years"][del_yr]
                             save_returns_living_data(data)
