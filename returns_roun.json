@@ -1,4 +1,11 @@
 {
   "cash_balance": 0,
-  "years": {}
+  "years": {
+    "2024": {
+      "start": 0.0,
+      "in": 0.0,
+      "out": 0.0,
+      "end": 0.0
+    }
+  }
 }
