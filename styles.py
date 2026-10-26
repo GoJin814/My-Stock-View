@@ -94,7 +94,6 @@ def apply_custom_styles():
             z-index: 10 !important;
         }
 
-        /* ⚡ 2줄 표기 강제 허용: white-space: normal, line-height 단축 */
         .custom-grid-table th {
             background-color: #161a22 !important;
             color: #9ca3af !important;
@@ -126,16 +125,19 @@ def apply_custom_styles():
         .custom-grid-table td.col-chk {
             position: sticky !important;
             left: 0 !important;
-            width: 44px !important;
-            min-width: 44px !important;
-            max-width: 44px !important;
+            width: 40px !important;
+            min-width: 40px !important;
+            max-width: 40px !important;
             text-align: center !important;
             background-color: #161a22 !important;
             border-right: 1px solid #262c36 !important;
+            padding: 6px 0 !important;
         }
         .custom-grid-table th.col-chk-th {
             top: 0 !important;
             z-index: 100 !important;
+            font-size: 0.95rem !important;
+            color: #9ca3af !important;
         }
         .custom-grid-table td.col-chk {
             z-index: 5 !important;
@@ -174,7 +176,7 @@ def apply_custom_styles():
 
         .table-has-chk th.col-name-th,
         .table-has-chk td.col-name {
-            left: 44px !important;
+            left: 40px !important;
         }
         .table-no-chk th.col-name-th,
         .table-no-chk td.col-name {
@@ -290,8 +292,6 @@ def render_multi_header_table(df, *args, **kwargs):
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
             cur_col_pos = 0
-
-            # 2행 헤더 인덱스 계산용 (주당가치, 실적용)
             multi_leaf_idx = 1 if not has_checkbox else 2
 
             for c_cell_idx, cell in enumerate(row):
@@ -304,18 +304,20 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes = []
                 th_attrs = ""
 
+                # ⚡ '선택' 글자 대신 깔끔한 체크박스 아이콘(☑)으로 변경
                 if txt == "선택":
                     th_classes.append("col-chk-th")
+                    display_txt = "☑"
                 elif txt == "종목명":
                     th_classes.append("col-name-th")
+                    display_txt = txt
+                else:
+                    display_txt = txt
 
                 is_leaf = (r_idx + r_span_val == num_header_rows)
-                
-                # ⚡ [정확한 정렬 컬럼 인덱스 부여]
                 if txt != "선택" and is_leaf:
                     th_classes.append("sortable-th")
                     if num_header_rows == 1:
-                        # 국내지수 등 단일 행 헤더는 배열 인덱스 그대로 매핑
                         assigned_idx = c_cell_idx
                     elif txt == "종목명":
                         assigned_idx = 0 if not has_checkbox else 1
@@ -339,15 +341,18 @@ def render_multi_header_table(df, *args, **kwargs):
                     th_classes.append("year-divider")
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{display_txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
         for idx, c in enumerate(df.columns):
             th_classes = []
             th_attrs = ""
+            display_txt = c
+            # ⚡ 단일 헤더에서도 '선택' 글자 대신 ☑ 아이콘 사용
             if c == "선택":
                 th_classes.append("col-chk-th")
+                display_txt = "☑"
             elif c == "종목명":
                 th_classes.append("col-name-th")
 
@@ -358,7 +363,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes.append("year-divider")
 
             class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
+            thead_parts.append(f'<th{class_str}{th_attrs}>{display_txt}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
@@ -525,7 +530,6 @@ def inject_client_sort_sync_engine():
             }
         };
 
-        // ⚡ [날짜 파싱 정밀화] YYYY/MM/DD 날짜를 온전한 숫자(20261026)로 변환
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '').trim();
@@ -595,7 +599,6 @@ def inject_client_sort_sync_engine():
             const tbody = table.querySelector('tbody');
             if (!tbody) return;
 
-            // ⚡ data-col-idx 속성 정확히 읽기
             const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
             if (isNaN(colIdx)) return;
 
@@ -603,7 +606,6 @@ def inject_client_sort_sync_engine():
             let isAsc = th.getAttribute('data-sort-asc') === 'true';
             let nextAsc = !isAsc;
 
-            // ⚡ innerHTML/textContent를 파괴하지 않고 sort-indicator만 교체 (<br> 2줄 유지)
             table.querySelectorAll('th.sortable-th').forEach(otherTh => {
                 otherTh.removeAttribute('data-sort-asc');
                 const ind = otherTh.querySelector('.sort-indicator');
@@ -616,7 +618,6 @@ def inject_client_sort_sync_engine():
             indicator.textContent = nextAsc ? ' ▲' : ' ▼';
             th.appendChild(indicator);
 
-            // 정렬 수행
             rows.sort((a, b) => {
                 let cellA = a.children[colIdx];
                 let cellB = b.children[colIdx];
@@ -634,7 +635,6 @@ def inject_client_sort_sync_engine():
 
             rows.forEach(r => tbody.appendChild(r));
 
-            // 국내지수는 종목코드 공유 대상 제외
             if (table.id !== 'table_tab_market') {
                 const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
                 win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
