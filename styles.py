@@ -71,7 +71,8 @@ def apply_custom_styles():
         .custom-grid-table {
             width: max-content !important;
             min-width: 100% !important;
-            border-collapse: collapse !important; /* ⚡ 셀 사이 틈 없이 테두리 완전 밀착 */
+            border-collapse: separate !important; /* ⚡ sticky 셀 밀림 방지 */
+            border-spacing: 0 !important;
             font-size: 0.82rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             color: #f3f4f6;
@@ -89,6 +90,7 @@ def apply_custom_styles():
             text-align: center !important;
             white-space: nowrap !important;
             user-select: none !important;
+            position: relative;
         }
 
         .custom-grid-table th.sortable-th {
@@ -109,27 +111,27 @@ def apply_custom_styles():
             white-space: nowrap !important;
             text-align: center !important;
             font-variant-numeric: tabular-nums !important;
+            position: relative;
         }
 
-        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 그라데이션 box-shadow 완전 제거 및 뚜렷한 실선 */
+        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 가상 요소(::after)로 절대 안 움직이는 고정선 구축 */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
-            z-index: 3 !important;
+            z-index: 5 !important;
             background-color: #161a22 !important;
             width: 120px !important;
             min-width: 120px !important;
             max-width: 120px !important;
             text-align: left !important;
             padding-left: 12px !important;
-            border-right: 2px solid #64748b !important; /* 선명한 고정 실선 */
-            box-shadow: none !important; /* ⚡ 번짐/그라데이션 원천 삭제 */
+            border-right: none !important;
         }
 
         .custom-grid-table td.col-name {
             position: sticky !important;
             left: 0 !important;
-            z-index: 2 !important;
+            z-index: 4 !important;
             background-color: #0e1117 !important;
             width: 120px !important;
             min-width: 120px !important;
@@ -140,8 +142,21 @@ def apply_custom_styles():
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            border-right: 2px solid #64748b !important; /* 선명한 고정 실선 */
-            box-shadow: none !important; /* ⚡ 번짐/그라데이션 원천 삭제 */
+            border-right: none !important;
+        }
+
+        /* 종목명 오른쪽 고정 벽 실선 (스크롤 시 절대 밀리지 않음) */
+        .custom-grid-table th.col-name-th::after,
+        .custom-grid-table td.col-name::after {
+            content: "" !important;
+            position: absolute !important;
+            top: 0 !important;
+            right: 0 !important;
+            width: 2.5px !important;
+            height: 100% !important;
+            background-color: #64748b !important;
+            pointer-events: none !important;
+            z-index: 6 !important;
         }
 
         .custom-grid-table tr:hover td {
@@ -151,9 +166,9 @@ def apply_custom_styles():
             background-color: #161a22 !important;
         }
 
-        /* ⚡ 2. 년도 구분용 굵고 선명한 구분선 클래스 */
+        /* ⚡ 2. 년도 구분용 굵은 실선 */
         .thick-border-r {
-            border-right: 2px solid #64748b !important;
+            border-right: 2.5px solid #64748b !important;
         }
 
         .naver-pc-link {
@@ -232,7 +247,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
-                # ⚡ 굵은 구분선 판별: 이 헤더 블록이 끝나는 지점이 구분선 위치인지 확인
+                # ⚡ 헤더 우측 구분선 판별
                 end_col_idx = cur_col_pos + c_span_val - 1
                 if end_col_idx in div_set or cell.get("border_right", False):
                     th_classes.append("thick-border-r")
@@ -276,6 +291,7 @@ def render_multi_header_table(df, *args, **kwargs):
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             
             td_classes = []
+            # 년도 구분선 적용
             if col_idx in div_set:
                 td_classes.append("thick-border-r")
 
