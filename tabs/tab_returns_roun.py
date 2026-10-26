@@ -3,12 +3,30 @@ import pandas as pd
 import numpy as np
 import json
 import os
-import re
 import base64
 import requests
-from tabs.tab_returns_pension import to_num, fmt_won, fmt_pct
 
 CACHE_FILE = "returns_roun.json"
+
+def to_num(val):
+    if val is None or str(val).strip() in ["", "-", "None", "nan"]:
+        return 0.0
+    try:
+        clean = re.sub(r'[^0-9.-]', '', str(val))
+        return float(clean) if clean else 0.0
+    except Exception:
+        return 0.0
+
+def fmt_won(val):
+    if pd.isna(val) or val is None:
+        return "-"
+    return f"{int(round(val)):,}"
+
+def fmt_pct(val):
+    if pd.isna(val) or val is None:
+        return "-"
+    sign = "+" if val > 0 else ""
+    return f"{sign}{val:.2f}%"
 
 def load_data():
     defaults = {"cash_balance": 0, "years": {}}
@@ -16,27 +34,36 @@ def load_data():
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
-                if isinstance(saved, dict) and "years" in saved: return saved
-        except Exception: pass
+                if isinstance(saved, dict) and "years" in saved:
+                    return saved
+        except Exception:
+            pass
     return defaults
 
-def save_data(data):
-    json_text = json.dumps(data, ensure_ascii=False, indent=2)
-    with open(CACHE_FILE, "w", encoding="utf-8") as f: f.write(json_text)
+def commit_to_github(filename, content_str):
     token = st.secrets.get("GITHUB_TOKEN")
     repo = st.secrets.get("GITHUB_REPO")
     branch = st.secrets.get("GITHUB_BRANCH", "main")
-    if token and repo:
-        url = f"https://api.github.com/repos/{repo}/contents/{CACHE_FILE}"
-        headers = {"Authorization": f"Bearer {token.strip()}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
-        try:
-            res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
-            sha = res.json().get("sha") if res.status_code == 200 else None
-            content_b64 = base64.b64encode(json_text.encode("utf-8")).decode("utf-8")
-            payload = {"message": "Auto-update returns roun", "content": content_b64, "branch": branch}
-            if sha: payload["sha"] = sha
-            requests.put(url, headers=headers, json=payload, timeout=7)
-        except Exception: pass
+    if not token or not repo:
+        return False
+    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
+    headers = {"Authorization": f"Bearer {token.strip()}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    try:
+        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
+        sha = res.json().get("sha") if res.status_code == 200 else None
+        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
+        payload = {"message": "Auto-update returns roun", "content": content_b64, "branch": branch}
+        if sha: payload["sha"] = sha
+        put_res = requests.put(url, headers=headers, json=payload, timeout=7)
+        return put_res.status_code in [200, 201]
+    except Exception:
+        return False
+
+def save_data(data):
+    json_text = json.dumps(data, ensure_ascii=False, indent=2)
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        f.write(json_text)
+    commit_to_github(CACHE_FILE, json_text)
 
 def render_tab_returns_roun():
     data = load_data()
@@ -48,7 +75,9 @@ def render_tab_returns_roun():
     with c_cash:
         new_cash = st.number_input("잔여 예수금 (원)", value=int(cash_bal), step=1000, format="%d", key="roun_cash")
         if new_cash != cash_bal:
-            data["cash_balance"] = new_cash; save_data(data); st.rerun()
+            data["cash_balance"] = new_cash
+            save_data(data)
+            st.rerun()
 
     sorted_years = sorted(list(years_data.keys()))
     if not sorted_years:
@@ -57,7 +86,11 @@ def render_tab_returns_roun():
         return
 
     year_records = []
-    tot_in = 0.0; tot_out = 0.0; first_start = 0.0; latest_end = 0.0; yearly_rates = []
+    tot_in = 0.0
+    tot_out = 0.0
+    first_start = 0.0
+    latest_end = 0.0
+    yearly_rates = []
 
     for idx, yr in enumerate(sorted_years):
         row = years_data[yr]
@@ -65,14 +98,18 @@ def render_tab_returns_roun():
         c_in = to_num(row.get("in", 0))
         d_out = to_num(row.get("out", 0))
         f_end = to_num(row.get("end", 0))
+
         if idx == 0: first_start = b_start
         if idx == len(sorted_years) - 1: latest_end = f_end
-        tot_in += c_in; tot_out += d_out
+
+        tot_in += c_in
+        tot_out += d_out
         e_net_in = c_in - d_out
         g_profit = f_end - b_start - c_in + d_out
         denom = b_start + (0.5 * c_in) - (0.5 * d_out)
         h_rate = ((f_end - b_start - (c_in - d_out)) / denom * 100.0) if denom != 0 else 0.0
         yearly_rates.append(h_rate)
+
         year_records.append({
             "연도": yr, "시작": fmt_won(b_start), "입고": fmt_won(c_in), "출고": fmt_won(d_out),
             "순 입금액": fmt_won(e_net_in), "종료": fmt_won(f_end), "총 수익": fmt_won(g_profit),
@@ -90,7 +127,8 @@ def render_tab_returns_roun():
         product_val = 1.0
         for r in yearly_rates: product_val *= (1.0 + (r / 100.0))
         avg_yearly_rate = (pow(product_val, 1.0 / n_years) - 1.0) * 100.0
-    else: avg_yearly_rate = 0.0
+    else:
+        avg_yearly_rate = 0.0
 
     summary_record = [{
         "구분": "전체", "시작": fmt_won(first_start), "입고": fmt_won(tot_in), "출고": fmt_won(tot_out),
@@ -103,6 +141,7 @@ def render_tab_returns_roun():
 
     st.write("")
     st.markdown("#### 📅 연도별 현황 (Roun)")
+    
     def style_performance(row):
         styles = [''] * len(row)
         if pd.notna(row["_num_rate"]) and row["_num_rate"] > 0: styles[row.index.get_loc("총 수익률*")] = 'color: #ff4b4b; font-weight: bold;'
