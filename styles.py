@@ -246,6 +246,7 @@ def render_multi_header_table(df, *args, **kwargs):
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
+        # ⚡ 2행 헤더의 실제 컬럼 인덱스 카운터 (체크박스 유무 반영)
         leaf_col_idx = 1 if not has_checkbox else 2
 
         for r_idx, row in enumerate(header_rows):
@@ -266,8 +267,17 @@ def render_multi_header_table(df, *args, **kwargs):
                     th_classes.append("col-name-th")
 
                 is_leaf = (r_idx + r_span_val == num_header_rows)
+
+                # ⚡ [정렬 복구 핵심]: 클릭 가능한 최하단 헤더에 정확한 data-col-idx 속성 부여
                 if txt != "선택" and is_leaf:
                     th_classes.append("sortable-th")
+                    # 종목명(단독 2행 차지)은 체크박스 유무에 따라 0번 또는 1번
+                    if txt == "종목명":
+                        assigned_idx = 0 if not has_checkbox else 1
+                    else:
+                        assigned_idx = leaf_col_idx
+                        leaf_col_idx += 1
+                    th_attrs = f' data-col-idx="{assigned_idx}"'
 
                 is_divider = False
                 if r_idx == 0:
@@ -276,9 +286,9 @@ def render_multi_header_table(df, *args, **kwargs):
                         is_divider = True
                     cur_col_pos += c_span_val
                 else:
-                    if leaf_col_idx in div_set or cell.get("border_right", False):
+                    target_div_idx = leaf_col_idx - 1
+                    if target_div_idx in div_set or cell.get("border_right", False):
                         is_divider = True
-                    leaf_col_idx += 1
 
                 if is_divider:
                     th_classes.append("year-divider")
