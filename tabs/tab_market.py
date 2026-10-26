@@ -6,6 +6,7 @@ import os
 import re
 import base64
 import requests
+from styles import render_multi_header_table
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
 
@@ -111,54 +112,51 @@ def render_tab_market():
         else:
             crd_ratio_str = "-"
 
-        # 2. 일시 형식 YYYY/MM/DD
+        # 일시 YYYY/MM/DD 형식 변환
         clean_date_str = str(d).replace("-", "/")
 
         row = {
             "선택": False,
             "일시": clean_date_str,
             "KOSPI": item.get("KOSPI", "-"),
-            "시가총액(억원)": mcap_val,
+            "시가총액": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
             "PBR": item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-"))),
-            "예탁금 비율": dep_ratio_str,
-            "신용잔고\n비율": crd_ratio_str,
-            "고객예탁금(억원)": dep_val,
-            "신용잔고(억원)": crd_val,
+            "예탁금비율": dep_ratio_str,
+            "신용잔고비율": crd_ratio_str,
+            "고객예탁금": dep_val,
+            "신용잔고": crd_val,
             "환율": item.get("환율", item.get("환율(원)", "-"))
         }
         records.append(row)
 
     df_market = pd.DataFrame(records)
 
-    disabled_cols = [c for c in df_market.columns if c != "선택"]
-    
-    # ⚡ 픽셀(px) 단위로 강제하여 불필요한 공백을 완전히 압축
-    edited_df = st.data_editor(
+    # ⚡ 1. 아이콘 없는 순수 텍스트 헤더
+    # ⚡ 2. <br> 태그로 제목 밑에 단위를 배치하여 깔끔한 2줄 표기
+    header_rows = [
+        [
+            {"text": "선택"},
+            {"text": "일시"},
+            {"text": "KOSPI"},
+            {"text": "시가총액<br>(억원)"},
+            {"text": "PER"},
+            {"text": "PBR"},
+            {"text": "예탁금<br>비율"},
+            {"text": "신용잔고<br>비율"},
+            {"text": "고객예탁금<br>(억원)"},
+            {"text": "신용잔고<br>(억원)"},
+            {"text": "환율"}
+        ]
+    ]
+
+    # 커스텀 그리드 엔진을 사용하여 아이콘 없이 컴팩트하고 2줄 헤더로 렌더링
+    render_multi_header_table(
         df_market,
-        column_config={
-            # 1. 선택 열 폭 최소화 (체크박스 크기에 맞춤)
-            "선택": st.column_config.CheckboxColumn("선택", default=False, width=38),
-            # 2. 일시 보이도록 충분한 폭 확보
-            "일시": st.column_config.TextColumn("일시", width=95),
-            "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
-            # 3 & 5. 시가총액 숫자(8자리+쉼표)에 맞춰 최소화 & 단위 줄바꿈
-            "시가총액(억원)": st.column_config.TextColumn("시가총액\n(억원)", width=105),
-            # 4. PER, PBR 폭 최소화
-            "PER": st.column_config.TextColumn("PER", width=55),
-            "PBR": st.column_config.TextColumn("PBR", width=55),
-            "예탁금 비율": st.column_config.TextColumn("예탁금\n비율", width=70),
-            # 6. 신용잔고 비율 2줄 표기
-            "신용잔고\n비율": st.column_config.TextColumn("신용잔고\n비율", width=70),
-            # 5. 단위 있는 헤더 줄바꿈
-            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금\n(억원)", width=95),
-            "신용잔고(억원)": st.column_config.TextColumn("신용잔고\n(억원)", width=95),
-            "환율": st.column_config.TextColumn("환율", width=70),
-        },
-        disabled=disabled_cols,
-        hide_index=True,
-        use_container_width=True,
-        key="market_monitor_editor"
+        header_rows=header_rows,
+        tab_name="tab_market",
+        has_checkbox=True,
+        has_naver_link=False
     )
 
     json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
@@ -170,7 +168,7 @@ def render_tab_market():
         help="지수 데이터를 로컬 백업용 파일로 다운로드합니다."
     )
 
-    return edited_df
+    return df_market
 
 def render_market_inputs():
     show_market_input = st.toggle("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", value=False)
