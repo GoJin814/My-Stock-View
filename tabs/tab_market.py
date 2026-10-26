@@ -1,7 +1,36 @@
 import streamlit as st
 import pandas as pd
+import json
+import os
+
+CACHE_FILE = "market_cache.json"
+
+def load_market_cache():
+    """국내지수 캐시 데이터 로드"""
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return pd.DataFrame(data)
+        except Exception:
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+def save_market_cache(df: pd.DataFrame):
+    """국내지수 캐시 데이터 저장"""
+    if df is not None:
+        try:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(df.to_dict(orient="records"), f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            st.error(f"캐시 저장 실패: {e}")
+
+def render_market_inputs(df_market: pd.DataFrame = None):
+    """국내지수 신규 데이터 입력 폼 (필요 시 app.py에서 호출)"""
+    return None
 
 def render_tab_market(df_market: pd.DataFrame):
+    """국내지수 테이블 렌더링 함수"""
     if df_market is None or df_market.empty:
         st.info("표시할 국내지수 데이터가 없습니다.")
         return
@@ -16,11 +45,8 @@ def render_tab_market(df_market: pd.DataFrame):
             break
 
     if date_col:
-        # 문자열 또는 날짜형 데이터를 YYYY/MM/DD 형태로 변환
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce").dt.strftime("%Y/%m/%d").fillna(df[date_col].astype(str))
 
-    # 3 & 6. 컬럼 헤더명 2줄 줄바꿈 및 축약
-    # st.dataframe에서는 개행문자(\n)를 컬럼 레이블에 주입하면 헤더가 자연스럽게 2단(2줄)으로 표시됩니다.
     column_config = {}
 
     # 1. 선택 열 폭 최소화
@@ -38,15 +64,15 @@ def render_tab_market(df_market: pd.DataFrame):
             width="small"
         )
 
-    # 4. 시가총액 컬럼 폭 충분히 확보 (1의 자리가 잘리지 않도록 medium으로 지정)
-    market_cap_cols = [c for c in df.columns if "시가총액" in c]
-    for c in market_cap_cols:
-        column_config[c] = st.column_config.TextColumn(
-            label="시가총액\n(억원)",
-            width="medium"
-        )
+    # 4. 시가총액 컬럼 폭 충분히 확보 (1의 자리가 잘리지 않도록 medium)
+    for c in df.columns:
+        if "시가총액" in c:
+            column_config[c] = st.column_config.TextColumn(
+                label="시가총액\n(억원)",
+                width="medium"
+            )
 
-    # 5. PER, PBR 폭 최소화 (small 지정)
+    # 5. PER, PBR 폭 최소화
     if "PER" in df.columns:
         column_config["PER"] = st.column_config.TextColumn(
             label="PER",
@@ -59,34 +85,27 @@ def render_tab_market(df_market: pd.DataFrame):
         )
 
     # 6 & 3. 고객예탁금 비율, 신용잔고 비율 축약 및 2줄 표기
-    deposit_ratio_cols = [c for c in df.columns if "고객예탁금" in c and ("비율" in c or "지수" in c or "%" in c)]
-    for c in deposit_ratio_cols:
-        column_config[c] = st.column_config.TextColumn(
-            label="예탁금\n비율",
-            width="small"
-        )
-
-    credit_ratio_cols = [c for c in df.columns if "신용잔고" in c and ("비율" in c or "지수" in c or "%" in c)]
-    for c in credit_ratio_cols:
-        column_config[c] = st.column_config.TextColumn(
-            label="신용잔고\n비율",
-            width="small"
-        )
-
-    # 3. 그 외 긴 헤더명(예탁금액, 신용잔고액)도 2줄로 표기
-    deposit_amt_cols = [c for c in df.columns if "고객예탁금" in c and c not in deposit_ratio_cols]
-    for c in deposit_amt_cols:
-        column_config[c] = st.column_config.TextColumn(
-            label="고객예탁금\n(억원)",
-            width="small"
-        )
-
-    credit_amt_cols = [c for c in df.columns if "신용잔고" in c and c not in credit_ratio_cols]
-    for c in credit_amt_cols:
-        column_config[c] = st.column_config.TextColumn(
-            label="신용잔고\n(억원)",
-            width="small"
-        )
+    for c in df.columns:
+        if "고객예탁금" in c and ("비율" in c or "지수" in c or "%" in c):
+            column_config[c] = st.column_config.TextColumn(
+                label="예탁금\n비율",
+                width="small"
+            )
+        elif "신용잔고" in c and ("비율" in c or "지수" in c or "%" in c):
+            column_config[c] = st.column_config.TextColumn(
+                label="신용잔고\n비율",
+                width="small"
+            )
+        elif "고객예탁금" in c:
+            column_config[c] = st.column_config.TextColumn(
+                label="고객예탁금\n(억원)",
+                width="small"
+            )
+        elif "신용잔고" in c:
+            column_config[c] = st.column_config.TextColumn(
+                label="신용잔고\n(억원)",
+                width="small"
+            )
 
     if "환율" in df.columns:
         column_config["환율"] = st.column_config.TextColumn(
