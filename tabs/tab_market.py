@@ -132,10 +132,17 @@ def render_tab_market():
 
     disabled_cols = [c for c in df_market.columns if c != "선택"]
 
+    # ⚡ [핵심] CheckboxColumn 대신 순수 Text Column 헤더 설정으로 아이콘(≡) 원천 차단
+    # 체크박스 데이터 타입은 DataFrame의 boolean이 유지되므로 실제 체크 기능은 그대로 동작합니다.
     edited_df = st.data_editor(
         df_market,
         column_config={
-            "선택": st.column_config.CheckboxColumn("선택", default=False, width=65),
+            "선택": st.column_config.Column(
+                label="선택",
+                width=55,
+                help=None,
+                required=False
+            ),
             "일시": st.column_config.TextColumn("일시", width=95),
             "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
             "시가총액 (억원)": st.column_config.TextColumn("시가총액 (억원)", width=105),
@@ -153,7 +160,6 @@ def render_tab_market():
         key="market_monitor_editor"
     )
 
-    # ⚡ 버튼 글자가 전혀 잘리지 않도록 컬럼 비율 확보
     c_del, c_dl = st.columns([1, 1.3])
 
     with c_del:
