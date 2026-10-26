@@ -125,7 +125,7 @@ def apply_custom_styles():
             z-index: 10 !important;
         }
 
-        /* ⚡ 체크박스 열(선택) 좌측 고정 설정 */
+        /* 체크박스 열(선택) 좌측 고정 설정 */
         .custom-grid-table th.col-chk-th,
         .custom-grid-table td.col-chk {
             position: sticky !important;
@@ -146,7 +146,7 @@ def apply_custom_styles():
             background-color: #0e1117 !important;
         }
 
-        /* ⚡ 종목명 헤더: 체크박스가 있을 때는 left 44px, 없을 때는 left 0 */
+        /* 종목명 헤더: 체크박스가 있을 때는 left 44px, 없을 때는 left 0 */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             top: 0 !important;
@@ -161,7 +161,7 @@ def apply_custom_styles():
             vertical-align: middle !important;
         }
 
-        /* ⚡ 본문 종목명 셀 */
+        /* 본문 종목명 셀 */
         .custom-grid-table td.col-name {
             position: sticky !important;
             z-index: 5 !important;
@@ -283,7 +283,6 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
-    # 체크박스 유무 클래스 부착
     table_chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
 
     # 1. 헤더 HTML 조립
@@ -422,7 +421,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """웨일 스와이프 새로고침 + 무새로고침 정렬/동기화 엔진"""
+    """URL 쿼리 기반 정렬 동기화 + 웨일 스와이프 새로고침 + 무새로고침 정렬 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -469,29 +468,18 @@ def inject_client_sort_sync_engine():
             const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
             const bodyEl = doc.body ? doc.body.scrollTop : 0;
             const winY = win.scrollY || win.pageYOffset || 0;
-            
             const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
             const c2 = doc.querySelector('[data-testid="stMain"]');
             const c3 = doc.querySelector('section.main');
             const c4 = doc.querySelector('.main');
-
-            const s1 = c1 ? c1.scrollTop : 0;
-            const s2 = c2 ? c2.scrollTop : 0;
-            const s3 = c3 ? c3.scrollTop : 0;
-            const s4 = c4 ? c4.scrollTop : 0;
-
-            return Math.max(winY, docEl, bodyEl, s1, s2, s3, s4);
+            return Math.max(winY, docEl, bodyEl, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0, c3 ? c3.scrollTop : 0, c4 ? c4.scrollTop : 0);
         }
 
         win.ontouchstart = function(e) {
-            if (e.touches.length === 1) {
-                if (getRealScrollTop() <= 1) {
-                    touchStartY = e.touches[0].clientY;
-                    touchStartX = e.touches[0].clientX;
-                    canPull = true;
-                } else {
-                    canPull = false;
-                }
+            if (e.touches.length === 1 && getRealScrollTop() <= 1) {
+                touchStartY = e.touches[0].clientY;
+                touchStartX = e.touches[0].clientX;
+                canPull = true;
             } else {
                 canPull = false;
             }
@@ -499,25 +487,19 @@ def inject_client_sort_sync_engine():
 
         win.ontouchmove = function(e) {
             if (!canPull) return;
-
             if (getRealScrollTop() > 1) {
                 canPull = false;
                 ptrBox.style.top = '-65px';
                 ptrBox.style.opacity = '0';
                 return;
             }
-
-            const currentY = e.touches[0].clientY;
-            const currentX = e.touches[0].clientX;
-            const distY = currentY - touchStartY;
-            const distX = Math.abs(currentX - touchStartX);
-
+            const distY = e.touches[0].clientY - touchStartY;
+            const distX = Math.abs(e.touches[0].clientX - touchStartX);
             if (distY <= 0 || distX > distY) {
                 ptrBox.style.top = '-65px';
                 ptrBox.style.opacity = '0';
                 return;
             }
-
             if (distY > 15) {
                 const pullY = Math.min((distY - 15) * 0.45, 80);
                 ptrBox.style.top = (pullY - 45) + 'px';
@@ -531,20 +513,10 @@ def inject_client_sort_sync_engine():
             if (!canPull) return;
             canPull = false;
             const distY = e.changedTouches[0].clientY - touchStartY;
-
             if (distY >= 100 && getRealScrollTop() <= 1) {
                 ptrBox.style.top = '20px';
                 ptrBox.style.opacity = '1';
-                const svg = ptrBox.querySelector('#ptr_svg');
-                if (svg) {
-                    svg.animate([
-                        { transform: 'rotate(0deg)' },
-                        { transform: 'rotate(360deg)' }
-                    ], { duration: 600, iterations: Infinity });
-                }
-                setTimeout(function() {
-                    win.location.reload();
-                }, 120);
+                setTimeout(function() { win.location.reload(); }, 120);
             } else {
                 ptrBox.style.top = '-65px';
                 ptrBox.style.opacity = '0';
@@ -585,15 +557,22 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
         }
 
-        function applySavedOrderToAll() {
+        function getActiveCodeOrder() {
+            const urlParams = new URLSearchParams(win.location.search);
+            const urlCodes = urlParams.get('sort_codes');
+            if (urlCodes) {
+                return urlCodes.split(',');
+            }
             const saved = win.sessionStorage.getItem('stock_sync_order');
-            if (!saved) return;
-            try {
-                const codeOrder = JSON.parse(saved);
-                doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
-                    sortTableByCodeList(tbl, codeOrder);
-                });
-            } catch (e) {}
+            return saved ? JSON.parse(saved) : null;
+        }
+
+        function applySavedOrderToAll() {
+            const codeOrder = getActiveCodeOrder();
+            if (!codeOrder) return;
+            doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+                sortTableByCodeList(tbl, codeOrder);
+            });
         }
 
         doc.addEventListener('click', function(e) {
@@ -623,7 +602,6 @@ def inject_client_sort_sync_engine():
             rows.sort((a, b) => {
                 let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
                 let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
-
                 let pA = parseFin(valA);
                 let pB = parseFin(valB);
 
@@ -637,6 +615,12 @@ def inject_client_sort_sync_engine():
 
             const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
             win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
+
+            try {
+                const url = new URL(win.location.href);
+                url.searchParams.set('sort_codes', sortedCodes.join(','));
+                win.history.replaceState(null, '', url.toString());
+            } catch (err) {}
 
             doc.querySelectorAll('table.custom-grid-table').forEach(otherTable => {
                 if (otherTable !== table) {
