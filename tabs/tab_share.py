@@ -29,7 +29,7 @@ def render_tab_share(df_share, most_prev_yr, most_latest_yr):
         ]
     ]
 
-    # ⚡ 5번(BPS_직전 우측)과 10번(BPS_최근 우측)에 세로 구분선 강제 지정
+    # ⚡ 5번(BPS_직전) 우측, 10번(BPS_최근) 우측에 세로 구분선 강제 전달
     render_multi_header_table(
         df_disp,
         header_rows=header_rows,
