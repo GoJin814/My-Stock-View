@@ -368,11 +368,89 @@ if current_codes:
             )
 
         st.write("")
-        with st.expander("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", expanded=False):
-            tab_single, tab_bulk_text, tab_bulk_file = st.tabs(["단건 추가", "텍스트 일괄 붙여넣기", "파일 일괄 업로드(TXT/CSV/XLSX)"])
+        # ⚡ 하단 expander -> st.toggle 스위치로 교체 (삼성 브라우저 글자 겹침 원천 방지)
+        show_add_box = st.toggle("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", value=False)
+        
+        if show_add_box:
+            with st.container():
+                tab_single, tab_bulk_text, tab_bulk_file = st.tabs(["단건 추가", "텍스트 일괄 붙여넣기", "파일 일괄 업로드(TXT/CSV/XLSX)"])
 
-            with tab_single:
-                c_code, c_btn = st.columns([3, 1])
+                with tab_single:
+                    c_code, c_btn = st.columns([3, 1])
+                    with c_code:
+                        new_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6, key="single_code_input")
+                    with c_btn:
+                        st.write("")
+                        if st.button("종목 추가", use_container_width=True, key="btn_single_add"):
+                            if new_code.strip():
+                                formatted = new_code.strip().zfill(6)
+                                if formatted not in current_codes:
+                                    current_codes.append(formatted)
+                                    save_codes(current_codes)
+                                    st.success(f"{formatted} 추가 및 GitHub 커밋 완료")
+                                    st.rerun()
+
+                with tab_bulk_text:
+                    bulk_text = st.text_area(
+                        "종목코드 목록 붙여넣기 (줄바꿈, 쉼표, 공백 구분)",
+                        placeholder="예시:\n005930\n000660, 035420 035720",
+                        height=120,
+                        key="area_bulk_codes"
+                    )
+                    if st.button("📥 텍스트 목록 일괄 추가", type="primary", key="btn_bulk_text_add"):
+                        if bulk_text.strip():
+                            found_codes = re.findall(r'\b\d{6}\b', bulk_text)
+                            if found_codes:
+                                new_unique = [c for c in dict.fromkeys(found_codes) if c not in current_codes]
+                                if new_unique:
+                                    current_codes.extend(new_unique)
+                                    save_codes(current_codes)
+                                    st.success(f"총 {len(new_unique)}개 종목이 추가되었습니다.")
+                                    st.rerun()
+                                else:
+                                    st.info("입력된 종목코드가 이미 모두 등록되어 있습니다.")
+                            else:
+                                st.warning("유효한 6자리 종목코드를 찾을 수 없습니다.")
+
+                with tab_bulk_file:
+                    up_file = st.file_uploader(
+                        "종목코드가 포함된 파일 업로드",
+                        type=["txt", "csv", "xlsx", "xls"],
+                        key="stock_code_file_uploader"
+                    )
+                    if up_file is not None:
+                        if st.button("📥 파일에서 종목코드 일괄 추출/추가", type="primary", key="btn_bulk_file_add"):
+                            try:
+                                extracted = []
+                                if up_file.name.endswith(".txt"):
+                                    content = up_file.read().decode("utf-8", errors="ignore")
+                                    extracted = re.findall(r'\b\d{6}\b', content)
+                                elif up_file.name.endswith((".xlsx", ".xls")):
+                                    df_file = pd.read_excel(up_file, dtype=str)
+                                    for col in df_file.columns:
+                                        items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
+                                        valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
+                                        extracted.extend(valid_codes)
+                                elif up_file.name.endswith(".csv"):
+                                    df_file = pd.read_csv(up_file, dtype=str)
+                                    for col in df_file.columns:
+                                        items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
+                                        valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
+                                        extracted.extend(valid_codes)
+
+                                if extracted:
+                                    new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
+                                    if new_unique:
+                                        current_codes.extend(new_unique)
+                                        save_codes(current_codes)
+                                        st.success(f"파일에서 {len(new_unique)}개 종목이 등록되었습니다.")
+                                        st.rerun()
+                                    else:
+                                        st.info("파일 내 종목코드가 이미 등록되어 있습니다.")
+                                else:
+                                    st.warning("파일에서 6자리 종목코드를 추출하지 못했습니다.")
+                            except Exception as e:
+                                st.error(f"파일 처리 중 오류 발생: {e}")
                 with c_code:
                     new_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930 (삼성전자)", max_chars=6, key="single_code_input")
                 with c_btn:
@@ -483,7 +561,8 @@ if current_codes:
 
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
-    with st.expander("➕ 종목코드 추가 및 일괄 등록", expanded=True):
+    with st.container(border=True):
+        st.markdown("##### ➕ 종목코드 추가 및 일괄 등록")
         c_code, c_btn = st.columns([3, 1])
         with c_code:
             init_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930", max_chars=6, key="init_single_code")
