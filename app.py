@@ -14,6 +14,10 @@ from tabs.tab_share import render_tab_share
 from tabs.tab_perf import render_tab_perf
 from tabs.tab_market import render_tab_market, render_market_inputs, load_market_cache, save_market_cache
 from tabs.tab_returns_living import render_tab_returns_living
+from tabs.tab_returns_pension import render_tab_returns_pension
+from tabs.tab_returns_rowun import render_tab_returns_rowun
+from tabs.tab_returns_jinwoo import render_tab_returns_jinwoo
+
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 apply_custom_styles()
@@ -320,13 +324,16 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 2. 5개 탭 분기 렌더링
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # 2. 8개 탭 분기 렌더링
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📊 현재 시세", 
     "💰 주당 가치",
     "📈 실적", 
     "🌐 국내지수",
-    "📈 수익률-생활비"
+    "📈 수익률-생활비",
+    "📈 수익률-연금",
+    "📈 수익률-로운",
+    "📈 수익률-진우"
 ])
 
     # 1. 현재 시세 탭
@@ -488,7 +495,17 @@ else:
                     save_codes([formatted])
                     st.success(f"{formatted} 등록 완료")
                     st.rerun()
+
 with tab5:
     render_tab_returns_living()
+
+with tab6:
+    render_tab_returns_pension()
+
+with tab7:
+    render_tab_returns_rowun()
+
+with tab8:
+    render_tab_returns_jinwoo()
 
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
