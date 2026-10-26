@@ -27,36 +27,57 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 글자 겹침 방지 */
+        /* 2. Expander 글자 겹침 방지 (삼성 브라우저 텍스트 겹침 완벽 차단) */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            gap: 6px !important;
+            justify-content: flex-start !important;
+            gap: 8px !important;
             padding: 8px 12px !important;
             font-size: 0.92rem !important;
             font-weight: 500 !important;
             color: #fafafa !important;
             white-space: nowrap !important;
-            overflow: hidden !important;
+            cursor: pointer !important;
         }
 
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
-            font-size: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 1.2rem !important;
+            min-width: 1.2rem !important;
+            max-width: 1.2rem !important;
+            height: 1.2rem !important;
+            font-size: 0px !important;
             line-height: 0 !important;
             color: transparent !important;
-            width: 1.1rem !important;
-            height: 1.1rem !important;
-            min-width: 1.1rem !important;
+            text-indent: -9999px !important;
             overflow: hidden !important;
+            position: relative !important;
         }
 
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] svg {
-            display: inline-block !important;
+            text-indent: 0 !important;
+            display: block !important;
             width: 1.1rem !important;
             height: 1.1rem !important;
-            fill: #fafafa !important;
-            color: #fafafa !important;
+            fill: #9ca3af !important;
+            color: #9ca3af !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+        }
+
+        [data-testid="stExpander"] summary > div:not([data-testid="stExpanderToggleIcon"]),
+        [data-testid="stExpander"] summary > p,
+        [data-testid="stExpander"] summary span {
+            display: inline-block !important;
+            text-indent: 0 !important;
+            margin: 0 !important;
+            line-height: 1.4 !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -174,7 +195,6 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
-        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -365,7 +385,6 @@ def inject_client_sort_sync_engine():
             win.addEventListener('touchstart', function(e) {
                 if (e.touches.length === 1) {
                     const st = getRealScrollTop();
-                    // 단 1px이라도 스크롤되어 내려가 있으면 당김 모드 원천 차단
                     if (st <= 1) {
                         touchStartY = e.touches[0].clientY;
                         touchStartX = e.touches[0].clientX;
@@ -381,7 +400,6 @@ def inject_client_sort_sync_engine():
             win.addEventListener('touchmove', function(e) {
                 if (!canPull) return;
 
-                // 스크롤이 단 1px이라도 내려가 있다면 즉각 취소
                 if (getRealScrollTop() > 1) {
                     canPull = false;
                     ptrBox.style.top = '-65px';
@@ -414,7 +432,6 @@ def inject_client_sort_sync_engine():
                 canPull = false;
                 const distY = e.changedTouches[0].clientY - touchStartY;
 
-                // 최상단(0)에서 110px 이상 당겼을 때만 새로고침 트리거
                 if (distY >= 110 && getRealScrollTop() <= 1) {
                     ptrBox.style.top = '20px';
                     ptrBox.style.opacity = '1';
