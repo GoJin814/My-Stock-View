@@ -87,7 +87,6 @@ def render_tab_returns_living():
     cash_bal = float(data.get("cash_balance", 0))
     years_data = data.get("years", {})
 
-    st.markdown("##### 📌 잔여 예수금")
     c_cash, _ = st.columns([2, 5])
     with c_cash:
         new_cash = st.number_input(
