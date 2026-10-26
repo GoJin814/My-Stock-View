@@ -83,7 +83,7 @@ def render_tab_returns_pension():
     sorted_years = sorted(list(years_data.keys()))
     if not sorted_years:
         st.info("등록된 연도별 데이터가 없습니다. 아래에서 데이터를 추가해 주세요.")
-        render_input_panel(data)
+        render_input_panel(data, "pension")
         return
 
     year_records = []
@@ -156,7 +156,7 @@ def render_tab_returns_pension():
     st.write("")
     render_input_panel(data, "pension")
 
-def render_input_panel(data, prefix):
+def render_input_panel(data, prefix="pension"):
     show_box = st.toggle("✍️ 연도별 현황 등록 / 수정 / 삭제", value=False, key=f"{prefix}_toggle")
     if show_box:
         with st.container():
