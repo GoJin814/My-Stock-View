@@ -19,6 +19,17 @@ def to_clean_num(val):
     except Exception:
         return np.nan
 
+# ⚡ [신규] 숫자만 입력되더라도 천 단위 콤마를 자동으로 붙여주는 함수
+def format_with_commas(val, is_float=False, decimal_places=2):
+    if val is None or str(val).strip() in ["", "-", "N/A", "nan", "None"]:
+        return "-"
+    num = to_clean_num(val)
+    if pd.isna(num):
+        return str(val).strip()
+    if is_float:
+        return f"{num:,.{decimal_places}f}"
+    return f"{int(round(num)):,}"
+
 def normalize_date(val):
     if not val or pd.isna(val):
         return ""
@@ -154,13 +165,22 @@ def render_tab_market():
     records = []
     for d in sorted_dates:
         item = m_cache[d]
-        mcap_val = item.get("시가총액(억원)", "-")
-        dep_val = item.get("고객예탁금(억원)", "-")
-        crd_val = item.get("신용잔고(억원)", "-")
+        raw_mcap = item.get("시가총액(억원)", "-")
+        raw_dep = item.get("고객예탁금(억원)", "-")
+        raw_crd = item.get("신용잔고(억원)", "-")
+        raw_kospi = item.get("KOSPI", "-")
+        raw_fx = item.get("환율", item.get("환율(원)", "-"))
 
-        num_mcap = to_clean_num(mcap_val)
-        num_dep = to_clean_num(dep_val)
-        num_crd = to_clean_num(crd_val)
+        num_mcap = to_clean_num(raw_mcap)
+        num_dep = to_clean_num(raw_dep)
+        num_crd = to_clean_num(raw_crd)
+
+        # ⚡ 콤마가 빠져 있어도 화면에 천 단위 콤마가 자동으로 찍히도록 서식화
+        mcap_val = format_with_commas(raw_mcap)
+        dep_val = format_with_commas(raw_dep)
+        crd_val = format_with_commas(raw_crd)
+        kospi_val = format_with_commas(raw_kospi, is_float=True, decimal_places=2)
+        fx_val = format_with_commas(raw_fx, is_float=True, decimal_places=1)
 
         if pd.notna(num_dep) and pd.notna(num_mcap) and num_mcap > 0:
             dep_ratio_num = round((num_dep / num_mcap) * 100.0, 2)
@@ -184,15 +204,15 @@ def render_tab_market():
         row = {
             "선택": select_all,
             "일시": clean_date_str,
-            "KOSPI": item.get("KOSPI", "-"),
-            "시가총액\n(억원)": mcap_val,
+            "KOSPI": kospi_val,
+            "시가총액 (억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
             "PBR": str(raw_pbr),
-            "예탁금\n비율": dep_ratio_str,
-            "신용잔고\n비율": crd_ratio_str,
-            "고객예탁금\n(억원)": dep_val,
-            "신용잔고\n(억원)": crd_val,
-            "환율": item.get("환율", item.get("환율(원)", "-")),
+            "예탁금 비율": dep_ratio_str,
+            "신용잔고 비율": crd_ratio_str,
+            "고객예탁금 (억원)": dep_val,
+            "신용잔고 (억원)": crd_val,
+            "환율": fx_val,
             "_num_pbr": num_pbr,
             "_num_dep": dep_ratio_num,
             "_num_crd": crd_ratio_num
@@ -204,8 +224,8 @@ def render_tab_market():
     def highlight_ranges(row):
         styles = [''] * len(row)
         idx_pbr = row.index.get_loc("PBR")
-        idx_dep = row.index.get_loc("예탁금\n비율")
-        idx_crd = row.index.get_loc("신용잔고\n비율")
+        idx_dep = row.index.get_loc("예탁금 비율")
+        idx_crd = row.index.get_loc("신용잔고 비율")
 
         red_style = 'color: #ff4b4b; font-weight: bold;'
 
@@ -238,13 +258,13 @@ def render_tab_market():
             ),
             "일시": st.column_config.TextColumn("일시", width=95),
             "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
-            "시가총액\n(억원)": st.column_config.TextColumn("시가총액\n(억원)", width=105),
+            "시가총액 (억원)": st.column_config.TextColumn("시가총액 (억원)", width=105),
             "PER": st.column_config.TextColumn("PER", width=55),
             "PBR": st.column_config.TextColumn("PBR", width=55),
-            "예탁금\n비율": st.column_config.TextColumn("예탁금\n비율", width=75),
-            "신용잔고\n비율": st.column_config.TextColumn("신용잔고\n비율", width=75),
-            "고객예탁금\n(억원)": st.column_config.TextColumn("고객예탁금\n(억원)", width=100),
-            "신용잔고\n(억원)": st.column_config.TextColumn("신용잔고\n(억원)", width=100),
+            "예탁금 비율": st.column_config.TextColumn("예탁금 비율", width=80),
+            "신용잔고 비율": st.column_config.TextColumn("신용잔고 비율", width=80),
+            "고객예탁금 (억원)": st.column_config.TextColumn("고객예탁금 (억원)", width=100),
+            "신용잔고 (억원)": st.column_config.TextColumn("신용잔고 (억원)", width=100),
             "환율": st.column_config.TextColumn("환율", width=70),
             "_num_pbr": None,
             "_num_dep": None,
@@ -326,14 +346,16 @@ def render_market_inputs():
                     cache = load_market_cache()
                     if date_str not in cache:
                         cache[date_str] = {}
+
+                    # ⚡ 저장할 때 자동으로 천 단위 콤마 포맷 적용
                     cache[date_str].update({
-                        "KOSPI": in_kospi.strip() or "-",
-                        "시가총액(억원)": in_mcap.strip() or "-",
-                        "PER": in_per.strip() or "-",
-                        "PBR": in_pbr.strip() or "-",
-                        "고객예탁금(억원)": in_deposit.strip() or "-",
-                        "신용잔고(억원)": in_credit.strip() or "-",
-                        "환율": in_fx.strip() or "-",
+                        "KOSPI": format_with_commas(in_kospi, is_float=True, decimal_places=2),
+                        "시가총액(억원)": format_with_commas(in_mcap),
+                        "PER": str(in_per).strip() or "-",
+                        "PBR": str(in_pbr).strip() or "-",
+                        "고객예탁금(억원)": format_with_commas(in_deposit),
+                        "신용잔고(억원)": format_with_commas(in_credit),
+                        "환율": format_with_commas(in_fx, is_float=True, decimal_places=1),
                     })
                     save_market_cache(cache)
                     st.success(f"{date_str} KOSPI 데이터가 저장 및 GitHub에 자동 커밋되었습니다.")
@@ -389,19 +411,19 @@ def render_market_inputs():
                                             val_str = "-"
 
                                         if "시가총액" in col:
-                                            cache[d_str]["시가총액(억원)"] = val_str
+                                            cache[d_str]["시가총액(억원)"] = format_with_commas(val_str)
                                         elif "고객예탁금" in col or "예탁금" in col:
-                                            cache[d_str]["고객예탁금(억원)"] = val_str
+                                            cache[d_str]["고객예탁금(억원)"] = format_with_commas(val_str)
                                         elif "신용잔고" in col or "신용융자" in col:
-                                            cache[d_str]["신용잔고(억원)"] = val_str
+                                            cache[d_str]["신용잔고(억원)"] = format_with_commas(val_str)
                                         elif "환율" in col:
-                                            cache[d_str]["환율"] = val_str
+                                            cache[d_str]["환율"] = format_with_commas(val_str, is_float=True, decimal_places=1)
                                         elif col.upper() == "PER":
                                             cache[d_str]["PER"] = val_str
                                         elif col.upper() == "PBR":
                                             cache[d_str]["PBR"] = val_str
                                         elif col in ["KOSPI", "코스피"]:
-                                            cache[d_str]["KOSPI"] = val_str
+                                            cache[d_str]["KOSPI"] = format_with_commas(val_str, is_float=True, decimal_places=2)
                                         else:
                                             cache[d_str][col] = val_str
 
