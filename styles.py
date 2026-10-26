@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* 1. 기본 레이아웃 및 스크롤 정리 */
+        /* 1. 기본 레이아웃 및 브라우저 스크롤 개방 */
         html, body {
             overscroll-behavior-y: auto !important;
             touch-action: pan-x pan-y pinch-zoom !important;
@@ -27,7 +27,12 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 스타일 (유령 빈 공간 완전 제거 + 단일 삼각형 화살표) */
+        /* 2. Expander 깜빡임 및 기본 기호 '>' 완벽 박멸 */
+        [data-testid="stExpander"] details {
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 6px !important;
+        }
+
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -42,23 +47,27 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        [data-testid="stExpander"] summary::-webkit-details-marker {
+        /* 브라우저 기본 삼각형 마커 영구 제거 */
+        [data-testid="stExpander"] summary::-webkit-details-marker,
+        [data-testid="stExpander"] summary::marker {
             display: none !important;
+            content: "" !important;
         }
 
-        /* 기본 기호 컨테이너를 완벽히 제거하여 빨간 원 공간 소멸 */
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
-        [data-testid="stExpander"] summary svg,
-        [data-testid="stExpander"] summary > span[aria-hidden="true"] {
+        /* Streamlit 내장 기본 아이콘 영역(첫 번째 자식) 완전 삭제 -> '>' 깜빡임 원천 봉쇄 */
+        [data-testid="stExpander"] summary > [data-testid="stExpanderToggleIcon"],
+        [data-testid="stExpander"] summary > div:first-child,
+        [data-testid="stExpander"] summary > span:first-child:not(:last-child) {
             display: none !important;
             width: 0 !important;
             height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
+            font-size: 0 !important;
             visibility: hidden !important;
         }
 
-        /* 오직 왼쪽의 단 하나의 회전 화살표만 유지 */
+        /* 왼쪽 고정 단일 삼각형 (닫힘: ▶ / 열림: ▼) */
         [data-testid="stExpander"] summary::before {
             content: "▶" !important;
             display: inline-block !important;
@@ -70,14 +79,6 @@ def apply_custom_styles():
 
         details[open] > summary::before {
             transform: rotate(90deg) !important;
-        }
-
-        [data-testid="stExpander"] summary > div,
-        [data-testid="stExpander"] summary > span {
-            display: inline-flex !important;
-            align-items: center !important;
-            margin: 0 !important;
-            padding: 0 !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -126,7 +127,6 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -318,7 +318,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """모던 원형 스피너 새로고침 + 무새로고침 정렬/동기화 통합 엔진"""
+    """웨일 확실 스와이프 새로고침 + 무새로고침 정렬/동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -326,24 +326,13 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ⚡ 삼성 브라우저 대응: 닫힘/열림 시 튀어나오는 모든 arrow 텍스트 노드 자동 소멸
-        function cleanExpanderGlitchText() {
-            doc.querySelectorAll('[data-testid="stExpander"] summary *').forEach(el => {
-                if (el.children.length === 0 && /(keyboard_)?arrow_(right|down)/i.test(el.textContent)) {
-                    el.textContent = '';
-                }
-            });
-        }
-        cleanExpanderGlitchText();
-        setInterval(cleanExpanderGlitchText, 250);
-
         // ==========================================
-        // ⚡ [1] 전수 스크롤 검사 기반 스와이프 새로고침 엔진
+        // ⚡ [1] 웨일 스와이프 새로고침 엔진 (리스너 갱신 및 완전 최상단 검증)
         // ==========================================
-        if (!win.__ptr_installed) {
-            win.__ptr_installed = true;
-
-            const ptrBox = doc.createElement('div');
+        // 기존 인디케이터 잔여물 청소 후 재등록
+        let ptrBox = doc.getElementById('native_ptr_box');
+        if (!ptrBox) {
+            ptrBox = doc.createElement('div');
             ptrBox.id = 'native_ptr_box';
             ptrBox.style.cssText = `
                 position: fixed;
@@ -363,7 +352,6 @@ def inject_client_sort_sync_engine():
                 opacity: 0;
                 pointer-events: none;
             `;
-
             ptrBox.innerHTML = `
                 <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
@@ -371,98 +359,100 @@ def inject_client_sort_sync_engine():
                 </svg>
             `;
             doc.body.appendChild(ptrBox);
+        }
 
-            let touchStartY = 0;
-            let touchStartX = 0;
-            let canPull = false;
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let canPull = false;
 
-            function getRealScrollTop() {
-                const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
-                const bodyEl = doc.body ? doc.body.scrollTop : 0;
-                const winY = win.scrollY || win.pageYOffset || 0;
-                
-                const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
-                const c2 = doc.querySelector('[data-testid="stMain"]');
-                const c3 = doc.querySelector('section.main');
-                const c4 = doc.querySelector('.main');
+        function getRealScrollTop() {
+            const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
+            const bodyEl = doc.body ? doc.body.scrollTop : 0;
+            const winY = win.scrollY || win.pageYOffset || 0;
+            
+            const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
+            const c2 = doc.querySelector('[data-testid="stMain"]');
+            const c3 = doc.querySelector('section.main');
+            const c4 = doc.querySelector('.main');
 
-                const s1 = c1 ? c1.scrollTop : 0;
-                const s2 = c2 ? c2.scrollTop : 0;
-                const s3 = c3 ? c3.scrollTop : 0;
-                const s4 = c4 ? c4.scrollTop : 0;
+            const s1 = c1 ? c1.scrollTop : 0;
+            const s2 = c2 ? c2.scrollTop : 0;
+            const s3 = c3 ? c3.scrollTop : 0;
+            const s4 = c4 ? c4.scrollTop : 0;
 
-                return Math.max(winY, docEl, bodyEl, s1, s2, s3, s4);
+            return Math.max(winY, docEl, bodyEl, s1, s2, s3, s4);
+        }
+
+        // 터치 핸들러 교체 등록
+        win.ontouchstart = function(e) {
+            if (e.touches.length === 1) {
+                // 단 1px이라도 내려가 있으면 당김 모드 진입 불가
+                if (getRealScrollTop() <= 1) {
+                    touchStartY = e.touches[0].clientY;
+                    touchStartX = e.touches[0].clientX;
+                    canPull = true;
+                } else {
+                    canPull = false;
+                }
+            } else {
+                canPull = false;
+            }
+        };
+
+        win.ontouchmove = function(e) {
+            if (!canPull) return;
+
+            if (getRealScrollTop() > 1) {
+                canPull = false;
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+                return;
             }
 
-            win.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) {
-                    const st = getRealScrollTop();
-                    if (st <= 1) {
-                        touchStartY = e.touches[0].clientY;
-                        touchStartX = e.touches[0].clientX;
-                        canPull = true;
-                    } else {
-                        canPull = false;
-                    }
-                } else {
-                    canPull = false;
+            const currentY = e.touches[0].clientY;
+            const currentX = e.touches[0].clientX;
+            const distY = currentY - touchStartY;
+            const distX = Math.abs(currentX - touchStartX);
+
+            if (distY <= 0 || distX > distY) {
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+                return;
+            }
+
+            if (distY > 15) {
+                const pullY = Math.min((distY - 15) * 0.45, 80);
+                ptrBox.style.top = (pullY - 45) + 'px';
+                ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
+                const svg = ptrBox.querySelector('#ptr_svg');
+                if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
+            }
+        };
+
+        win.ontouchend = function(e) {
+            if (!canPull) return;
+            canPull = false;
+            const distY = e.changedTouches[0].clientY - touchStartY;
+
+            // 최상단에서 100px 이상 당겼을 때 새로고침 발동
+            if (distY >= 100 && getRealScrollTop() <= 1) {
+                ptrBox.style.top = '20px';
+                ptrBox.style.opacity = '1';
+                const svg = ptrBox.querySelector('#ptr_svg');
+                if (svg) {
+                    svg.animate([
+                        { transform: 'rotate(0deg)' },
+                        { transform: 'rotate(360deg)' }
+                    ], { duration: 600, iterations: Infinity });
                 }
-            }, { passive: true });
-
-            win.addEventListener('touchmove', function(e) {
-                if (!canPull) return;
-
-                if (getRealScrollTop() > 1) {
-                    canPull = false;
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                const currentY = e.touches[0].clientY;
-                const currentX = e.touches[0].clientX;
-                const distY = currentY - touchStartY;
-                const distX = Math.abs(currentX - touchStartX);
-
-                if (distY <= 0 || distX > distY) {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                if (distY > 20) {
-                    const pullY = Math.min((distY - 20) * 0.45, 80);
-                    ptrBox.style.top = (pullY - 45) + 'px';
-                    ptrBox.style.opacity = Math.min((distY - 20) / 50, 1);
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
-                }
-            }, { passive: true });
-
-            win.addEventListener('touchend', function(e) {
-                if (!canPull) return;
-                canPull = false;
-                const distY = e.changedTouches[0].clientY - touchStartY;
-
-                if (distY >= 110 && getRealScrollTop() <= 1) {
-                    ptrBox.style.top = '20px';
-                    ptrBox.style.opacity = '1';
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) {
-                        svg.animate([
-                            { transform: 'rotate(0deg)' },
-                            { transform: 'rotate(360deg)' }
-                        ], { duration: 600, iterations: Infinity });
-                    }
-                    setTimeout(function() {
-                        win.location.reload();
-                    }, 120);
-                } else {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                }
-            }, { passive: true });
-        }
+                setTimeout(function() {
+                    win.location.reload();
+                }, 120);
+            } else {
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+            }
+        };
 
         // ==========================================
         // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
