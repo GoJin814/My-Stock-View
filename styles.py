@@ -224,7 +224,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
     thick_border_style = "border-right: 2.5px solid #ffffff !important;"
 
-    # 1. 헤더 HTML 조립
+    # 1. 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
@@ -254,7 +254,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
-                # ⚡ 끝 열 위치 확인 또는 border_right 명시 검사
                 end_col_idx = cur_col_pos + c_span_val - 1
                 is_divider = (end_col_idx in div_set) or cell.get("border_right", False)
                 border_inline = f' style="{thick_border_style}"' if is_divider else ""
@@ -262,7 +261,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 cur_col_pos += c_span_val
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>' if not border_inline else f'<th{r_span}{c_span}{class_str}{th_attrs}{border_inline}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
@@ -282,7 +281,7 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 행 HTML 조립
+    # 2. 본문 데이터 행 조립
     tbody_parts = ["<tbody>"]
     for row_i, (_, row) in enumerate(df.iterrows()):
         code_val = ""
