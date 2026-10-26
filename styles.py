@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import streamlit.components.v1 as components
 import re
 
 def apply_custom_styles():
@@ -94,18 +95,16 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* ⚡ 정렬 헤더 링크 스타일 */
-        .th-sort-link {
-            color: #9ca3af !important;
-            text-decoration: none !important;
-            display: inline-block !important;
-            width: 100% !important;
+        /* ⚡ 클릭 가능한 정렬 헤더 (링크 태그 제거, 순수 커서 및 호버 효과) */
+        .custom-grid-table th.sortable-th {
             cursor: pointer !important;
+            transition: background-color 0.15s ease, color 0.15s ease;
         }
-        .th-sort-link:hover {
+        .custom-grid-table th.sortable-th:hover {
+            background-color: rgba(255, 255, 255, 0.09) !important;
             color: #60a5fa !important;
         }
-        .th-sort-active {
+        .custom-grid-table th.sortable-th.th-sort-active {
             color: #60a5fa !important;
             font-weight: 700 !important;
         }
@@ -172,7 +171,6 @@ def apply_custom_styles():
     """, unsafe_allow_html=True)
 
 def parse_val_to_num(v):
-    """원, 배, %, 억, 조 단위 문자열을 정렬 가능한 실수(float)로 변환"""
     if pd.isna(v) or v in ["", "-", "N/A", "nan", "None"]:
         return -999999999999.0
     val_str = str(v).strip()
@@ -207,14 +205,14 @@ def render_multi_header_table(df, *args, **kwargs):
     div_set = set(divider_indices) if divider_indices else set()
 
     has_naver_link = kwargs.get("has_naver_link", True)
-    tab_name = kwargs.get("tab_name", "basic")
+    tab_name = kwargs.get("tab_name", "tab")
+    table_id = f"table_{tab_name}"
 
-    # 1. 쿼리 파라미터에서 현재 정렬 상태 확인
-    qp = st.query_params
-    cur_sort_col = qp.get("sort_col", "")
-    cur_sort_order = qp.get("sort_order", "desc")
+    # 현재 정렬 상태 확인
+    cur_sort = st.session_state.get("global_sort_col", "")
+    cur_order = st.session_state.get("global_sort_order", "desc")
 
-    # 2. 2단 복합 헤더 조립
+    # 1. 2단 복합 헤더 조립 (링크 <a> 태그 제거, 순수 data 속성 부여)
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
@@ -227,35 +225,39 @@ def render_multi_header_table(df, *args, **kwargs):
                 txt = cell.get("text", "")
                 target_col = cell.get("col", None)
 
-                th_class = ' class="col-name-th"' if (r_idx == 0 and txt == "종목명") else ""
+                th_classes = []
+                th_attrs = ""
+
+                if r_idx == 0 and txt == "종목명":
+                    th_classes.append("col-name-th")
 
                 if target_col:
-                    next_order = "desc" if (cur_sort_col == target_col and cur_sort_order == "asc") else "asc"
-                    arrow = ""
-                    active_cls = ""
-                    if cur_sort_col == target_col:
-                        arrow = " ▲" if cur_sort_order == "asc" else " ▼"
-                        active_cls = " th-sort-active"
+                    th_classes.append("sortable-th")
+                    th_attrs = f' data-col="{target_col}"'
+                    if cur_sort == target_col:
+                        th_classes.append("th-sort-active")
+                        txt += (" ▲" if cur_order == "asc" else " ▼")
 
-                    header_content = f'<a href="?sort_col={target_col}&sort_order={next_order}&tab={tab_name}" target="_self" class="th-sort-link{active_cls}">{txt}{arrow}</a>'
-                else:
-                    header_content = txt
-
-                thead_parts.append(f'<th{r_span}{c_span}{th_class}>{header_content}</th>')
+                class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
         for c in df.columns:
-            th_class = ' class="col-name-th"' if c == "종목명" else ""
-            thead_parts.append(f'<th{th_class}>{c}</th>')
+            th_classes = ["sortable-th"]
+            if c == "종목명":
+                th_classes.append("col-name-th")
+            class_str = f' class="{" ".join(th_classes)}"'
+            th_attrs = f' data-col="{c}"'
+            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 3. 본문 조립
+    # 2. 본문 조립
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
-        tbody_parts.append("<tr>")
+        tbody_parts.append(f'<tr data-code="{code_val}">')
 
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
@@ -291,7 +293,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
     html_code = f"""
     <div class="custom-grid-wrapper">
-        <table class="custom-grid-table">
+        <table id="{table_id}" class="custom-grid-table">
             {"".join(thead_parts)}
             {"".join(tbody_parts)}
         </table>
