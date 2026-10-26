@@ -201,7 +201,6 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 종목코드가 있다면 행 식별 속성(data-code)용으로 추출하고 화면 출력에서는 분리
     code_series = None
     if "종목코드" in df.columns:
         code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
@@ -255,8 +254,10 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
+                # ⚡ 끝 열 위치 확인 또는 border_right 명시 검사
                 end_col_idx = cur_col_pos + c_span_val - 1
-                border_inline = f' style="{thick_border_style}"' if (end_col_idx in div_set or cell.get("border_right", False)) else ""
+                is_divider = (end_col_idx in div_set) or cell.get("border_right", False)
+                border_inline = f' style="{thick_border_style}"' if is_divider else ""
 
                 cur_col_pos += c_span_val
 
