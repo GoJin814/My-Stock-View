@@ -87,7 +87,7 @@ def render_tab_returns_living():
     cash_bal = float(data.get("cash_balance", 0))
     years_data = data.get("years", {})
 
-    st.markdown("##### 📌 잔여 예수금 설정 (셀 B1)")
+    st.markdown("##### 📌 잔여 예수금")
     c_cash, _ = st.columns([2, 5])
     with c_cash:
         new_cash = st.number_input(
@@ -184,8 +184,7 @@ def render_tab_returns_living():
     df_summary = pd.DataFrame(summary_record)
     df_years = pd.DataFrame(year_records)
 
-    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함")
-    st.caption("생활비에서 투자한 항목만 고려한 수익률입니다.")
+    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함, 생활비에서 투자한 항목만 고려한 수익률입니다.")
 
     # 1. 상단 요약 테이블 스타일링 함수
     def style_summary(row):
