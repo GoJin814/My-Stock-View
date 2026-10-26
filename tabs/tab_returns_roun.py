@@ -84,7 +84,6 @@ def render_tab_returns_roun():
     cash_bal = float(data.get("cash_balance", 0))
     years_data = data.get("years", {})
 
-    st.markdown("##### 📌 잔여 예수금 설정 (셀 B1)")
     c_cash, _ = st.columns([2, 5])
     with c_cash:
         new_cash = st.number_input(
@@ -191,7 +190,9 @@ def render_tab_returns_roun():
         elif pd.notna(avg_val) and avg_val < 0: styles[row.index.get_loc("전체 기간\n평균 수익률")] = 'color: #60a5fa; font-weight: bold;'
         return styles
 
-    st.markdown("#### 📊 전체 기간 성과 요약 (Roun)")
+    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함, 개인 용돈에서 투자한 항목만 고려한 수익률입니다.")
+    
+    st.markdown("#### 📊 전체 기간 성과 요약")
     st.dataframe(
         df_summary.style.apply(style_summary, axis=1),
         column_config={
@@ -213,7 +214,7 @@ def render_tab_returns_roun():
     )
 
     st.write("")
-    st.markdown("#### 📅 연도별 현황 (Roun)")
+    st.markdown("#### 📅 연도별 현황")
     
     def style_performance(row):
         styles = [''] * len(row)
