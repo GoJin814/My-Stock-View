@@ -90,6 +90,10 @@ def render_tab_market():
         return None
 
     sorted_dates = sorted(list(m_cache.keys()), reverse=True)
+
+    # ⚡ [국내지수] 표 상단 전체 선택 체크박스
+    select_all_market = st.checkbox("전체 일자 선택", value=False, key="chk_market_select_all")
+
     records = []
     for d in sorted_dates:
         item = m_cache[d]
@@ -114,7 +118,7 @@ def render_tab_market():
         clean_date_str = str(d).replace("-", "/")
 
         row = {
-            "선택": False,
+            "선택": select_all_market,
             "일시": clean_date_str,
             "KOSPI": item.get("KOSPI", "-"),
             "시가총액 (억원)": mcap_val,
@@ -132,7 +136,6 @@ def render_tab_market():
 
     disabled_cols = [c for c in df_market.columns if c != "선택"]
 
-    # ⚡ 본래의 편리한 Checkbox 방식 유지 + 헤더 텍스트 충돌 제거(빈 문자열로 폭 최소화)
     edited_df = st.data_editor(
         df_market,
         column_config={
@@ -156,7 +159,7 @@ def render_tab_market():
         disabled=disabled_cols,
         hide_index=True,
         use_container_width=True,
-        key="market_monitor_editor"
+        key=f"market_monitor_editor_{select_all_market}"
     )
 
     c_del, c_dl = st.columns([1, 1.3])
