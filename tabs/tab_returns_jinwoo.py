@@ -12,7 +12,9 @@ def to_num(val):
     if val is None or str(val).strip() in ["", "-", "None", "nan"]:
         return 0.0
     try:
-        clean = re.sub(r'[^0-9.-]', '', str(val))
+        # 콤마 및 기타 기호 제거 후 숫자만 추출
+        s = str(val).strip().replace(',', '')
+        clean = re.sub(r'[^0-9.-]', '', s)
         return float(clean) if clean else 0.0
     except Exception:
         return 0.0
