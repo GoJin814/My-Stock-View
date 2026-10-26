@@ -27,7 +27,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 글자 겹침 방지 (삼성 브라우저 텍스트 노출 원천 차단) */
+        /* 2. Expander 글자 겹침 방지 (삼성 브라우저 아이콘 텍스트 강제 소멸) */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -45,7 +45,7 @@ def apply_custom_styles():
             display: none !important;
         }
 
-        /* ⚡ 텍스트 형태의 Material Icon 태그 강제 소멸 */
+        /* 텍스트 형태의 Material Icon 태그 강제 소멸 */
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
         [data-testid="stExpander"] summary span:empty,
         [data-testid="stExpander"] summary > span:first-child {
@@ -59,7 +59,7 @@ def apply_custom_styles():
             opacity: 0 !important;
         }
 
-        /* ⚡ 순수 CSS 화살표를 앞에 직접 배치 (삼성 브라우저 폰트 오류 우회) */
+        /* 순수 CSS 화살표 복원 */
         [data-testid="stExpander"] summary::before {
             content: "▶" !important;
             display: inline-block !important;
@@ -69,8 +69,6 @@ def apply_custom_styles():
             transition: transform 0.2s ease !important;
         }
 
-        /* Expander 열렸을 때 화살표 회전 */
-        [data-testid="stExpander"] details[open] summary::before,
         details[open] > summary::before {
             transform: rotate(90deg) !important;
         }
@@ -190,6 +188,7 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
+        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
