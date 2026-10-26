@@ -271,7 +271,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """새로고침 없는 순수 클라이언트 정렬 및 sessionStorage 동기화 엔진"""
+    """무한 루프(MutationObserver)를 배제한 초경량 클라이언트 정렬 및 탭 동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -294,8 +294,8 @@ def inject_client_sort_sync_engine():
             return isNaN(num) ? str.trim() : num;
         }
 
-        // 저장된 순서대로 특정 테이블 정렬
-        function applyOrderToTable(table, codeOrder) {
+        // 특정 테이블을 저장된 종목 순서로 단 1회 정렬
+        function sortTableByCodeList(table, codeOrder) {
             if (!table || !codeOrder || codeOrder.length === 0) return;
             const tbody = table.querySelector('tbody');
             if (!tbody) return;
@@ -313,118 +313,81 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
         }
 
-        // 모든 테이블에 순서 동기화
-        function syncAllTables(codeOrder) {
-            window.parent.sessionStorage.setItem('stock_sync_order', JSON.stringify(codeOrder));
-            doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
-                applyOrderToTable(tbl, codeOrder);
-            });
-        }
-
-        // 정렬 클릭 이벤트 등록
-        function attachHeaderListeners() {
-            doc.querySelectorAll('table.custom-grid-table').forEach(table => {
-                const thList = table.querySelectorAll('th.sortable-th');
-                thList.forEach(th => {
-                    if (th.getAttribute('data-sync-attached') === 'true') return;
-                    th.setAttribute('data-sync-attached', 'true');
-
-                    th.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        const tbody = table.querySelector('tbody');
-                        if (!tbody) return;
-
-                        const colIdx = parseInt(this.getAttribute('data-col-idx'), 10);
-                        const rows = Array.from(tbody.querySelectorAll('tr'));
-
-                        let isAsc = this.getAttribute('data-sort-asc') === 'true';
-                        let nextAsc = !isAsc;
-
-                        thList.forEach(otherTh => {
-                            otherTh.removeAttribute('data-sort-asc');
-                            otherTh.textContent = otherTh.textContent.replace(/[ ▲▼]/g, '').trim();
-                        });
-
-                        this.setAttribute('data-sort-asc', nextAsc);
-                        this.textContent = this.textContent.trim() + (nextAsc ? ' ▲' : ' ▼');
-
-                        // 1. 해당 테이블 정렬
-                        rows.sort((a, b) => {
-                            let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
-                            let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
-
-                            let pA = parseFin(valA);
-                            let pB = parseFin(valB);
-
-                            if (typeof pA === 'number' && typeof pB === 'number') {
-                                return nextAsc ? (pA - pB) : (pB - pA);
-                            }
-                            return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
-                        });
-
-                        rows.forEach(r => tbody.appendChild(r));
-
-                        // 2. 종목 순서 추출 후 전체 탭 테이블에 실시간 동기화
-                        const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
-                        syncAllTables(sortedCodes);
-                    });
-                });
-            });
-        }
-
-        // 탭 전환 감지 및 저장된 순서 복원
-        function attachTabSwitchListeners() {
-            doc.querySelectorAll('.stTabs [data-baseweb="tab"]').forEach(tabBtn => {
-                if (tabBtn.getAttribute('data-sync-tab-bound') === 'true') return;
-                tabBtn.setAttribute('data-sync-tab-bound', 'true');
-
-                tabBtn.addEventListener('click', function() {
-                    setTimeout(() => {
-                        const saved = window.parent.sessionStorage.getItem('stock_sync_order');
-                        if (saved) {
-                            try {
-                                const codeOrder = JSON.parse(saved);
-                                doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
-                                    applyOrderToTable(tbl, codeOrder);
-                                });
-                            } catch (err) {}
-                        }
-                    }, 50);
-                });
-            });
-        }
-
-        // 초기 동기화 실행
-        const savedOrder = window.parent.sessionStorage.getItem('stock_sync_order');
-        if (savedOrder) {
+        // 전체 탭에 저장된 순서 일괄 적용
+        function applySavedOrderToAll() {
+            const saved = window.parent.sessionStorage.getItem('stock_sync_order');
+            if (!saved) return;
             try {
-                const codeOrder = JSON.parse(savedOrder);
+                const codeOrder = JSON.parse(saved);
                 doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
-                    applyOrderToTable(tbl, codeOrder);
+                    sortTableByCodeList(tbl, codeOrder);
                 });
-            } catch (err) {}
+            } catch (e) {}
         }
 
-        attachHeaderListeners();
-        attachTabSwitchListeners();
+        // 이벤트 위임(Event Delegation)으로 헤더 클릭을 안정적으로 감지 (중복 리스너 방지)
+        doc.addEventListener('click', function(e) {
+            const th = e.target.closest('th.sortable-th');
+            if (!th) return;
 
-        // DOM 동적 생성 감지 (탭 전환 시 DOM 재렌더링 대응)
-        const obs = new MutationObserver(() => {
-            attachHeaderListeners();
-            attachTabSwitchListeners();
-            const currentSaved = window.parent.sessionStorage.getItem('stock_sync_order');
-            if (currentSaved) {
-                try {
-                    const codeOrder = JSON.parse(currentSaved);
-                    doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
-                        applyOrderToTable(tbl, codeOrder);
-                    });
-                } catch (err) {}
+            const table = th.closest('table.custom-grid-table');
+            if (!table) return;
+
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            let isAsc = th.getAttribute('data-sort-asc') === 'true';
+            let nextAsc = !isAsc;
+
+            // 헤더 화살표 표기 업데이트
+            table.querySelectorAll('th.sortable-th').forEach(otherTh => {
+                otherTh.removeAttribute('data-sort-asc');
+                otherTh.textContent = otherTh.textContent.replace(/[ ▲▼]/g, '').trim();
+            });
+
+            th.setAttribute('data-sort-asc', nextAsc);
+            th.textContent = th.textContent.trim() + (nextAsc ? ' ▲' : ' ▼');
+
+            // 1. 클릭된 테이블 즉각 정렬
+            rows.sort((a, b) => {
+                let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
+                let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
+
+                let pA = parseFin(valA);
+                let pB = parseFin(valB);
+
+                if (typeof pA === 'number' && typeof pB === 'number') {
+                    return nextAsc ? (pA - pB) : (pB - pA);
+                }
+                return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+
+            // 2. 정렬된 종목 순서를 세션에 보관하고 다른 테이블에도 1회 반영
+            const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+            window.parent.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
+
+            doc.querySelectorAll('table.custom-grid-table').forEach(otherTable => {
+                if (otherTable !== table) {
+                    sortTableByCodeList(otherTable, sortedCodes);
+                }
+            });
+        });
+
+        // 3. 사용자가 다른 탭 버튼을 눌렀을 때만 보관된 순서 동기화
+        doc.addEventListener('click', function(e) {
+            const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
+            if (tabBtn) {
+                setTimeout(applySavedOrderToAll, 40);
             }
         });
-        obs.observe(doc.body, { childList: true, subtree: true });
+
+        // 초기 로드 시 기존 정렬 순서 복원
+        setTimeout(applySavedOrderToAll, 100);
     })();
     </script>
     """, height=0, width=0)
