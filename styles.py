@@ -4,9 +4,6 @@ import streamlit.components.v1 as components
 
 def apply_custom_styles():
     st.markdown("""
-        <!-- ⚡ 1. 삼성 브라우저 아이콘 폰트 깨짐 방지: Material Symbols 명시적 임포트 -->
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-
         <style>
         /* 1. 기본 레이아웃 및 브라우저 스크롤 개방 */
         html, body {
@@ -30,7 +27,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 순정 아이콘 삼성 브라우저 완벽 정상화 */
+        /* 2. Expander 순정 화살표 정상화 (가짜 기호 제거 + 삼성 브라우저 텍스트 겹침 박멸) */
         [data-testid="stExpander"] details {
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             border-radius: 6px !important;
@@ -50,43 +47,37 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 브라우저 기본 못생긴 삼각형 마커만 제거 */
+        /* 기본 마커 및 가짜 화살표 완전 제거 */
         [data-testid="stExpander"] summary::-webkit-details-marker,
-        [data-testid="stExpander"] summary::marker {
+        [data-testid="stExpander"] summary::marker,
+        [data-testid="stExpander"] summary::before,
+        [data-testid="stExpander"] summary::after {
             display: none !important;
             content: "" !important;
         }
 
-        /* ⚡ 임의로 넣었던 가짜 맨 앞 삼각형(::before) 완전 제거 */
-        [data-testid="stExpander"] summary::before {
-            display: none !important;
-            content: "" !important;
-        }
-
-        /* ⚡ Streamlit 기본 토글 아이콘 영역 정상화 및 폰트 강제 적용 */
+        /* ⚡ 텍스트 형태의 Material 심볼 글자(arrow...)를 0px로 완벽 소멸 */
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            width: 1.25rem !important;
-            min-width: 1.25rem !important;
-            height: 1.25rem !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            font-family: 'Material Symbols Rounded', sans-serif !important;
-            font-size: 1.25rem !important;
-            line-height: 1 !important;
-            color: #9ca3af !important;
-            visibility: visible !important;
-            user-select: none !important;
-            transition: transform 0.2s ease !important;
+            width: 1.2rem !important;
+            min-width: 1.2rem !important;
+            height: 1.2rem !important;
+            font-size: 0px !important;
+            line-height: 0 !important;
+            color: transparent !important;
+            overflow: hidden !important;
+            position: relative !important;
         }
 
-        /* SVG 아이콘인 경우의 정렬 */
+        /* ⚡ 순정 SVG 화살표만 정위치에 선명하게 출력 */
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] svg {
             display: block !important;
             width: 1.1rem !important;
             height: 1.1rem !important;
+            min-width: 1.1rem !important;
+            min-height: 1.1rem !important;
             fill: #9ca3af !important;
             color: #9ca3af !important;
         }
@@ -94,6 +85,7 @@ def apply_custom_styles():
         /* 열렸을 때 기본 아이콘 회전 */
         details[open] > summary [data-testid="stExpanderToggleIcon"] {
             transform: rotate(90deg) !important;
+            transition: transform 0.2s ease !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -334,13 +326,27 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """웨일 확실 스와이프 새로고침 + 무새로고침 정렬/동기화 엔진"""
+    """웨일 스와이프 새로고침 + 텍스트 노드 자동 소멸 + 무새로고침 정렬/동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
         const doc = window.parent.document;
         const win = window.parent;
         if (!doc || !win) return;
+
+        // ⚡ [0] 삼성 브라우저 전용: Expander 아이콘 태그 내부의 텍스트 노드만 깨끗이 제거
+        function cleanExpanderGlitchText() {
+            doc.querySelectorAll('[data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"]').forEach(iconEl => {
+                // SVG를 제외한 텍스트 노드 제거
+                Array.from(iconEl.childNodes).forEach(node => {
+                    if (node.nodeType === 3 || node.nodeName !== 'svg') {
+                        node.remove ? node.remove() : (node.textContent = '');
+                    }
+                });
+            });
+        }
+        cleanExpanderGlitchText();
+        setInterval(cleanExpanderGlitchText, 250);
 
         // ==========================================
         // ⚡ [1] 웨일 스와이프 새로고침 엔진 (완전 최상단 검증)
