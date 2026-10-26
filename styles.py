@@ -67,7 +67,7 @@ def apply_custom_styles():
             font-size: 0.92rem !important;
         }
 
-        /* 4. 그리드 컨테이너 */
+        /* 4. 그리드 컨테이너: 상하 70vh 한도 내 고정 스크롤 */
         .custom-grid-wrapper {
             overflow-x: auto !important;
             overflow-y: auto !important;
@@ -92,7 +92,7 @@ def apply_custom_styles():
             background-color: #0e1117;
         }
 
-        /* ⚡ [헤더 상단 고정 기본 세팅] */
+        /* ⚡ [헤더 기본 Sticky 속성] */
         .custom-grid-table thead {
             position: sticky !important;
             top: 0 !important;
@@ -104,49 +104,30 @@ def apply_custom_styles():
             color: #9ca3af !important;
             font-weight: 500 !important;
             font-size: 0.81rem !important;
-            padding: 0 10px !important;
+            padding: 7px 10px !important;
             border-bottom: 1px solid #334155 !important;
             border-right: 1px solid #262c36 !important;
             text-align: center !important;
             white-space: nowrap !important;
             user-select: none !important;
             box-sizing: border-box !important;
-            position: sticky !important;
         }
 
-        /* 1행 연도 헤더 (높이 34px 고정) */
-        .custom-grid-table thead tr:first-child th {
-            top: 0 !important;
-            height: 34px !important;
-            line-height: 34px !important;
-            z-index: 10 !important;
-        }
-
-        /* 2행 지표 헤더 (1행 바로 아래인 34px에 밀착, 높이 34px) */
-        .custom-grid-table thead tr:nth-child(2) th {
-            top: 34px !important;
-            height: 34px !important;
-            line-height: 34px !important;
-            z-index: 10 !important;
-        }
-
-        /* ⚡ [핵심 수정: 좌상단 모서리 '종목명' 헤더] */
-        /* rowspan="2"이므로 1행과 2행 전체 높이(68px)를 차지하며 좌상단에 영구 고정 */
+        /* ⚡ [가로 스크롤 시 좌상단 완벽 차폐: 최상위 z-index 100] */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
             top: 0 !important;
-            z-index: 50 !important; /* 가로/세로 모든 헤더와 셀보다 최상위 */
+            z-index: 100 !important; /* 지나가는 모든 헤더 텍스트를 완벽히 덮어 가림 */
             background-color: #161a22 !important;
             width: 120px !important;
             min-width: 120px !important;
             max-width: 120px !important;
-            height: 68px !important;
-            line-height: 68px !important;
             text-align: left !important;
             padding-left: 12px !important;
             border-right: none !important;
-            box-sizing: border-box !important;
+            box-shadow: none !important;
+            vertical-align: middle !important;
         }
 
         /* 본문 데이터 셀 */
@@ -162,7 +143,7 @@ def apply_custom_styles():
             position: relative;
         }
 
-        /* 본문 종목명: 좌측만 고정 */
+        /* 본문 종목명 좌측 고정 */
         .custom-grid-table td.col-name {
             position: sticky !important;
             left: 0 !important;
@@ -191,7 +172,7 @@ def apply_custom_styles():
             height: 100% !important;
             background-color: #ffffff !important;
             pointer-events: none !important;
-            z-index: 51 !important;
+            z-index: 101 !important;
         }
 
         /* 연도별 구분을 위한 3px 화이트 세로선 클래스 */
