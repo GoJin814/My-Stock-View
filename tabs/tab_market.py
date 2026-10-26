@@ -113,7 +113,6 @@ def render_tab_market():
 
         clean_date_str = str(d).replace("-", "/")
 
-        # ⚡ 아이콘 강제 출력을 막기 위해 boolean 대신 체크 기호 사용
         row = {
             "선택": False,
             "일시": clean_date_str,
@@ -131,22 +130,17 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # ⚡ '선택' 컬럼을 CheckboxColumn 대신 SelectboxColumn(체크/미체크)으로 주면
-    # 헤더에 ≡ 아이콘이 전혀 생기지 않고 깔끔하게 '선택' 두 글자만 남습니다.
-    # 더블클릭/클릭 한 번으로 ☑ 변경 가능
-    df_market["선택"] = "☐"
-
     disabled_cols = [c for c in df_market.columns if c != "선택"]
 
+    # ⚡ 본래의 편리한 Checkbox 방식 유지 + 헤더 텍스트 충돌 제거(빈 문자열로 폭 최소화)
     edited_df = st.data_editor(
         df_market,
         column_config={
-            "선택": st.column_config.SelectboxColumn(
-                "선택",
-                help=None,
-                width=55,
-                options=["☐", "☑"],
-                required=True
+            "선택": st.column_config.CheckboxColumn(
+                "",
+                help="삭제할 일자 선택",
+                default=False,
+                width=38
             ),
             "일시": st.column_config.TextColumn("일시", width=95),
             "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
@@ -170,10 +164,9 @@ def render_tab_market():
     with c_del:
         if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_native_market_primary"):
             if edited_df is not None:
-                # ⚡ ☑ 표시된 행을 추출하여 삭제
-                selected_rows = edited_df[edited_df["선택"] == "☑"]
+                selected_rows = edited_df[edited_df["선택"] == True]
                 if selected_rows.empty:
-                    st.warning("삭제할 일자의 선택 컬럼을 ☑로 변경한 후 눌러주세요.")
+                    st.warning("삭제할 일자의 체크박스를 먼저 선택하세요.")
                 else:
                     deleted_dates = []
                     for _, r in selected_rows.iterrows():
