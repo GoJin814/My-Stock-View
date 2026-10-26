@@ -537,22 +537,6 @@ if current_codes:
     # 4. 국내지수 탭
     with tab4:
         edited_market_df = render_tab_market()
-        
-        m_col1, m_col2 = st.columns([1.5, 4.5])
-        with m_col1:
-            if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_market"):
-                if edited_market_df is not None and not edited_market_df.empty:
-                    selected_dates = edited_market_df[edited_market_df["선택"] == True]["일시"].tolist()
-                    if selected_dates:
-                        m_cache = load_market_cache()
-                        for d in selected_dates:
-                            m_cache.pop(d, None)
-                        save_market_cache(m_cache)
-                        st.success(f"지수 데이터 {len(selected_dates)}일자 삭제 및 GitHub 저장 완료")
-                        st.rerun()
-                    else:
-                        st.warning("삭제할 일자의 체크박스를 먼저 선택해 주세요.")
-
         st.write("")
         render_market_inputs()
 
