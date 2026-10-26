@@ -42,5 +42,5 @@ def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
         header_rows=header_rows,
         divider_indices=[1, 4, 7],
         has_naver_link=True,
-        tab_name="perf"
+        tab_name="perf"  # ⚡ 탭 고정 식별자
     )
