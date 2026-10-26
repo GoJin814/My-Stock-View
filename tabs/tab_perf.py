@@ -18,7 +18,7 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
     if "종목코드" in df_perf.columns:
         df_disp["종목코드"] = df_perf["종목코드"]
 
-    # ⚡ 상단 연도 헤더 블록에 border_right 플래그 직접 명시
+    # ⚡ 2025년 끝과 2026년 끝에 border_right 플래그 직접 부여
     header_rows = [
         [
             {"text": "종목명", "rowspan": 2},
@@ -33,7 +33,7 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
         ]
     ]
 
-    # ⚡ 3번(순익_직전 우측)과 6번(순익_최근 우측)에 세로 구분선 강제 지정
+    # ⚡ 3번(순익_직전) 우측, 6번(순익_최근) 우측에 세로 구분선 강제 전달
     render_multi_header_table(
         df_disp,
         header_rows=header_rows,
