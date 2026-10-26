@@ -27,7 +27,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. 필터 토글 스위치 및 필터 컨테이너 커스텀 */
+        /* 2. 필터 토글 스위치 및 컨테이너 */
         div[data-testid="stToggle"] {
             margin-bottom: 0.5rem !important;
         }
@@ -86,7 +86,7 @@ def apply_custom_styles():
             font-size: 0.81rem !important;
             padding: 7px 10px !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
             text-align: center !important;
             white-space: nowrap !important;
             user-select: none !important;
@@ -107,13 +107,13 @@ def apply_custom_styles():
             color: #f3f4f6 !important;
             padding: 6px 10px !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
             white-space: nowrap !important;
             text-align: center !important;
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* ⚡ 1. 종목명 열 우측 구분선 굵게 고정 (Sticky) */
+        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) 및 우측 굵은 경계선 */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
@@ -124,7 +124,7 @@ def apply_custom_styles():
             max-width: 120px !important;
             text-align: left !important;
             padding-left: 12px !important;
-            border-right: 2px solid rgba(255, 255, 255, 0.45) !important;
+            border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;
             box-shadow: 3px 0 6px rgba(0, 0, 0, 0.5) !important;
         }
 
@@ -142,7 +142,7 @@ def apply_custom_styles():
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            border-right: 2px solid rgba(255, 255, 255, 0.45) !important;
+            border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;
             box-shadow: 3px 0 6px rgba(0, 0, 0, 0.5) !important;
         }
 
@@ -177,6 +177,15 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
+    # 종목코드가 있다면 행 속성용으로 보관하고 화면 출력용 DF에서는 제외
+    code_series = None
+    if "종목코드" in df.columns:
+        code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
+        # 종목코드가 컬럼 목록에 포함되어 있다면 화면용에서는 제외 (현재 시세 탭 제외)
+        tab_name = kwargs.get("tab_name", "tab")
+        if tab_name != "tab_basic":
+            df = df.drop(columns=["종목코드"])
+
     header_rows = kwargs.get("header_rows", None)
     if not header_rows and args and isinstance(args[0], list):
         header_rows = args[0]
@@ -191,13 +200,18 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
-    # 1. 헤더 조립
+    # 1. 헤더 생성
     thead_parts = ["<thead>"]
     if header_rows:
+        num_header_rows = len(header_rows)
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
-            col_seq = 0 if r_idx == 0 else (3 if has_checkbox else 2)
-            for cell_idx, cell in enumerate(row):
+            # data-col-idx 계산
+            col_seq = 0 if r_idx == 0 else (1 if not has_checkbox else 2)
+            
+            # 현재 행의 누적 열 위치 계산 (구분선 위치 판별용)
+            cur_col_pos = 0
+            for cell in row:
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
                 r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
@@ -210,17 +224,21 @@ def render_multi_header_table(df, *args, **kwargs):
                 if txt == "종목명":
                     th_classes.append("col-name-th")
 
-                if txt != "선택" and (r_span_val > 1 or c_span_val == 1):
+                is_leaf = (r_idx + r_span_val == num_header_rows)
+                if txt != "선택" and is_leaf:
                     th_classes.append("sortable-th")
                     th_attrs = f' data-col-idx="{col_seq}"'
                     col_seq += 1
                 elif txt == "선택":
                     col_seq += 1
 
-                # ⚡ 2. 헤더 상단 대분류(연도) 우측에도 굵은 선 부여
+                # ⚡ 굵은 구분선 판별: 해당 블록의 끝 열 인덱스가 div_set에 속하는지 검사
+                end_col_idx = cur_col_pos + c_span_val - 1
                 border_style = ""
-                if cell.get("border_right", False):
-                    border_style = ' style="border-right: 2px solid rgba(255, 255, 255, 0.45) !important;"'
+                if end_col_idx in div_set or cell.get("border_right", False):
+                    border_style = ' style="border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;"'
+
+                cur_col_pos += c_span_val
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
                 thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}{border_style}>{txt}</th>')
@@ -235,28 +253,33 @@ def render_multi_header_table(df, *args, **kwargs):
             if c != "선택":
                 th_classes.append("sortable-th")
                 th_attrs = f' data-col-idx="{idx}"'
-            
+
             border_style = ""
             if idx in div_set:
-                border_style = ' style="border-right: 2px solid rgba(255, 255, 255, 0.45) !important;"'
+                border_style = ' style="border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;"'
 
             class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
             thead_parts.append(f'<th{class_str}{th_attrs}{border_style}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 조립
+    # 2. 본문 행 생성
     tbody_parts = ["<tbody>"]
-    for _, row in df.iterrows():
-        code_val = str(row.get("종목코드", "")).strip().zfill(6)
+    for row_i, (_, row) in enumerate(df.iterrows()):
+        code_val = ""
+        if code_series is not None and row_i < len(code_series):
+            code_val = code_series.iloc[row_i]
+        elif "종목코드" in row:
+            code_val = str(row["종목코드"]).strip().zfill(6)
+
         tbody_parts.append(f'<tr data-code="{code_val}">')
 
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             
-            # ⚡ 2. 년도 구분선 컬럼 우측에 굵은 선 (2px 흰색 45% 투명도) 적용
-            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.45) !important;" if col_idx in div_set else ""
+            # ⚡ 굵은 구분선 인덱스 컬럼의 우측에 2.5px 흰색 경계선 부여
+            border_r = "border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;" if col_idx in div_set else ""
 
             if col_name == "선택":
                 tbody_parts.append(f'<td style="{border_r}"><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
