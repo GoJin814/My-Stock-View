@@ -30,13 +30,13 @@ def render_tab_basic(df_basic: pd.DataFrame):
 
     display_df = df_basic[[c for c in source_cols if c in df_basic.columns]].copy()
 
-    render_multi_header_table(
-        display_df,
-        header_rows=header_rows,
-        divider_indices=[2, 4],  # 종목코드, 시총 우측 구분선
-        has_naver_link=True,
-        tab_name="basic",
-        has_checkbox=True  # ⚡ 0번째 열 체크박스 렌더링
-    )
+# tabs/tab_basic.py 내부 render_multi_header_table 호출 부분
+render_multi_header_table(
+    df_basic,
+    header_rows=header_rows_basic,
+    divider_indices=[1, 4, 6],  # 1: 종목명 우측, 4: 시총 우측, 6: PBR 우측
+    tab_name="tab_basic",
+    has_checkbox=True
+)
 
     return display_df
