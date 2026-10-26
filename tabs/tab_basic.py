@@ -6,16 +6,27 @@ def render_tab_basic(df_basic):
         st.info("표시할 현재 시세 데이터가 없습니다.")
         return None
 
-    # ⚡ 표 바로 위에 깔끔한 전체 선택 체크박스 배치
+    # 1. 탭 간 정렬 동기화 (주당가치/실적 탭에서 정렬한 종목 순서 반영)
+    sort_codes_param = st.query_params.get("sort_codes", "")
+    if sort_codes_param:
+        code_order = [c.strip().zfill(6) for c in str(sort_codes_param).split(",") if c.strip()]
+        if code_order and "종목코드" in df_basic.columns:
+            order_map = {code: idx for idx, code in enumerate(code_order)}
+            df_basic = df_basic.copy()
+            df_basic["_sort_rank"] = df_basic["종목코드"].astype(str).str.strip().str.zfill(6).map(order_map).fillna(9999)
+            df_basic = df_basic.sort_values(by="_sort_rank").drop(columns=["_sort_rank"]).reset_index(drop=True)
+
+    # 2. 전체 선택 체크박스
     c_all, _ = st.columns([1.5, 8.5])
     with c_all:
         select_all = st.checkbox("전체 선택", value=False, key="chk_basic_select_all")
 
     df_display = df_basic.copy()
-    
-    # 전체 선택 체크 상태를 데이터프레임 초기값에 즉시 반영
     if select_all:
         df_display["선택"] = True
+
+    # 3. 네이버 증권 링크 URL 생성
+    df_display["링크"] = "https://finance.naver.com/item/main.naver?code=" + df_display["종목코드"].astype(str).str.strip().str.zfill(6)
 
     disabled_cols = [c for c in df_display.columns if c != "선택"]
 
@@ -28,7 +39,15 @@ def render_tab_basic(df_basic):
                 default=False,
                 width=38
             ),
-            "종목명": st.column_config.TextColumn("종목명", width=110),
+            # 종목명을 클릭하면 네이버 증권 페이지로 새 창 이동
+            "종목명": st.column_config.LinkColumn(
+                "종목명",
+                help="클릭 시 네이버 증권 페이지로 이동합니다.",
+                validate=r"^https://finance\.naver\.com/.*",
+                display_text=r".*",  # DataFrame의 종목명 텍스트 그대로 표시
+                width=110
+            ),
+            "링크": None,  # 링크 전용 보조 컬럼 숨김
             "종목코드": st.column_config.TextColumn("종목코드", width=75),
             "현재가": st.column_config.TextColumn("현재가", width=90),
             "시총": st.column_config.TextColumn("시총", width=105),
@@ -40,7 +59,7 @@ def render_tab_basic(df_basic):
         disabled=disabled_cols,
         hide_index=True,
         use_container_width=True,
-        key=f"basic_table_editor_{select_all}"
+        key=f"basic_table_editor_{select_all}_{sort_codes_param}"
     )
 
     return edited_df
