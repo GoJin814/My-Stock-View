@@ -6,7 +6,6 @@ import os
 import re
 import base64
 import requests
-from styles import render_multi_header_table
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
 
@@ -90,6 +89,11 @@ def render_tab_market():
         st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 수기로 등록하거나 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
+    # 전체 선택 체크박스
+    c_all, _ = st.columns([1.5, 8.5])
+    with c_all:
+        select_all = st.checkbox("전체 선택", value=False, key="chk_market_select_all")
+
     sorted_dates = sorted(list(m_cache.keys()), reverse=True)
     records = []
     for d in sorted_dates:
@@ -115,37 +119,70 @@ def render_tab_market():
         clean_date_str = str(d).replace("-", "/")
 
         row = {
-            "선택": False,
+            "선택": select_all,
             "일시": clean_date_str,
             "KOSPI": item.get("KOSPI", "-"),
-            "시가총액<br>(억원)": mcap_val,
+            "시가총액 (억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
             "PBR": item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-"))),
-            "예탁금<br>비율": dep_ratio_str,
-            "신용잔고<br>비율": crd_ratio_str,
-            "고객예탁금<br>(억원)": dep_val,
-            "신용잔고<br>(억원)": crd_val,
+            "예탁금 비율": dep_ratio_str,
+            "신용잔고 비율": crd_ratio_str,
+            "고객예탁금 (억원)": dep_val,
+            "신용잔고 (억원)": crd_val,
             "환율": item.get("환율", item.get("환율(원)", "-"))
         }
         records.append(row)
 
     df_market = pd.DataFrame(records)
+    disabled_cols = [c for c in df_market.columns if c != "선택"]
 
-    # ⚡ 현재 시세와 완전히 동일한 엔진으로 렌더링 (헤더 체크박스 자동 탑재)
-    render_multi_header_table(
+    edited_df = st.data_editor(
         df_market,
-        tab_name="tab_market",
-        has_checkbox=True,
-        has_naver_link=False
+        column_config={
+            "선택": st.column_config.CheckboxColumn(
+                "",
+                help="삭제할 일자 선택",
+                default=False,
+                width=38
+            ),
+            "일시": st.column_config.TextColumn("일시", width=95),
+            "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
+            "시가총액 (억원)": st.column_config.TextColumn("시가총액 (억원)", width=105),
+            "PER": st.column_config.TextColumn("PER", width=55),
+            "PBR": st.column_config.TextColumn("PBR", width=55),
+            "예탁금 비율": st.column_config.TextColumn("예탁금 비율", width=75),
+            "신용잔고 비율": st.column_config.TextColumn("신용잔고 비율", width=75),
+            "고객예탁금 (억원)": st.column_config.TextColumn("고객예탁금 (억원)", width=100),
+            "신용잔고 (억원)": st.column_config.TextColumn("신용잔고 (억원)", width=100),
+            "환율": st.column_config.TextColumn("환율", width=70),
+        },
+        disabled=disabled_cols,
+        hide_index=True,
+        use_container_width=True,
+        key=f"market_data_editor_{select_all}"
     )
 
     c_del, c_dl = st.columns([1, 1.3])
 
     with c_del:
-        if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_native_market_primary"):
-            # HTML 체크박스 상태는 세션에서 읽어오도록 클라이언트와 통신
-            st.session_state["trigger_market_delete"] = True
-            st.rerun()
+        if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_market_confirmed"):
+            if edited_df is not None:
+                # 선택된 행 필터링
+                selected_rows = edited_df[edited_df["선택"] == True]
+                if selected_rows.empty:
+                    st.warning("삭제할 일자의 체크박스를 먼저 선택해 주세요.")
+                else:
+                    deleted_dates = []
+                    for _, r in selected_rows.iterrows():
+                        target_key = str(r["일시"]).replace("/", "-")
+                        if target_key in m_cache:
+                            del m_cache[target_key]
+                            deleted_dates.append(target_key)
+                    
+                    if deleted_dates:
+                        save_market_cache(m_cache)
+                        st.success(f"{len(deleted_dates)}개 일자 지수 삭제 및 GitHub 저장 완료")
+                        st.rerun()
 
     with c_dl:
         json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
@@ -158,7 +195,7 @@ def render_tab_market():
             help="지수 데이터를 로컬 백업용 파일로 다운로드합니다."
         )
 
-    return df_market
+    return edited_df
 
 def render_market_inputs():
     show_market_input = st.toggle("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", value=False)
