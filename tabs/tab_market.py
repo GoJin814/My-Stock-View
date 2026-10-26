@@ -89,6 +89,31 @@ def render_tab_market():
         st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 수기로 등록하거나 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
+    # ⚡ [신규 기능] 특정 범위(0 ~ 입력값) 빨간색 강조 필터 UI
+    show_highlight_box = st.toggle("🚨 주요 지표 범위 하이라이트 (0 ~ 지정값 빨간색 강조)", value=False)
+    
+    use_pbr_hl = False
+    pbr_threshold = 0.90
+    use_dep_hl = False
+    dep_threshold = 2.50
+    use_crd_hl = False
+    crd_threshold = 0.85
+
+    if show_highlight_box:
+        with st.container():
+            st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
+            c_hl1, c_hl2, c_hl3 = st.columns(3)
+            with c_hl1:
+                use_pbr_hl = st.checkbox("PBR 강조 적용", value=True)
+                pbr_threshold = st.number_input("PBR 최대 상한선", value=0.90, step=0.05, format="%.2f", disabled=not use_pbr_hl)
+            with c_hl2:
+                use_dep_hl = st.checkbox("예탁금 비율 강조 적용", value=True)
+                dep_threshold = st.number_input("예탁금 비율(%) 최대 상한선", value=2.50, step=0.10, format="%.2f", disabled=not use_dep_hl)
+            with c_hl3:
+                use_crd_hl = st.checkbox("신용잔고 비율 강조 적용", value=True)
+                crd_threshold = st.number_input("신용잔고 비율(%) 최대 상한선", value=0.85, step=0.05, format="%.2f", disabled=not use_crd_hl)
+            st.markdown('</div>', unsafe_allow_html=True)
+
     # 전체 선택 체크박스
     c_all, _ = st.columns([1.5, 8.5])
     with c_all:
@@ -107,14 +132,21 @@ def render_tab_market():
         num_crd = to_clean_num(crd_val)
 
         if pd.notna(num_dep) and pd.notna(num_mcap) and num_mcap > 0:
-            dep_ratio_str = f"{(num_dep / num_mcap) * 100.0:.2f}%"
+            dep_ratio_num = round((num_dep / num_mcap) * 100.0, 2)
+            dep_ratio_str = f"{dep_ratio_num:.2f}%"
         else:
+            dep_ratio_num = np.nan
             dep_ratio_str = "-"
 
         if pd.notna(num_crd) and pd.notna(num_mcap) and num_mcap > 0:
-            crd_ratio_str = f"{(num_crd / num_mcap) * 100.0:.2f}%"
+            crd_ratio_num = round((num_crd / num_mcap) * 100.0, 2)
+            crd_ratio_str = f"{crd_ratio_num:.2f}%"
         else:
+            crd_ratio_num = np.nan
             crd_ratio_str = "-"
+
+        raw_pbr = item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-")))
+        num_pbr = to_clean_num(raw_pbr)
 
         clean_date_str = str(d).replace("-", "/")
 
@@ -124,20 +156,50 @@ def render_tab_market():
             "KOSPI": item.get("KOSPI", "-"),
             "시가총액 (억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
-            "PBR": item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-"))),
+            "PBR": str(raw_pbr),
             "예탁금 비율": dep_ratio_str,
             "신용잔고 비율": crd_ratio_str,
             "고객예탁금 (억원)": dep_val,
             "신용잔고 (억원)": crd_val,
-            "환율": item.get("환율", item.get("환율(원)", "-"))
+            "환율": item.get("환율", item.get("환율(원)", "-")),
+            "_num_pbr": num_pbr,
+            "_num_dep": dep_ratio_num,
+            "_num_crd": crd_ratio_num
         }
         records.append(row)
 
     df_market = pd.DataFrame(records)
+
+    # ⚡ 조건부 빨간색 스타일링 함수 (0 ~ 입력 상한선 범위)
+    def highlight_ranges(row):
+        styles = [''] * len(row)
+        idx_pbr = row.index.get_loc("PBR")
+        idx_dep = row.index.get_loc("예탁금 비율")
+        idx_crd = row.index.get_loc("신용잔고 비율")
+
+        red_style = 'color: #ff4b4b; font-weight: bold;'
+
+        if use_pbr_hl and pd.notna(row["_num_pbr"]):
+            if 0.0 <= row["_num_pbr"] <= pbr_threshold:
+                styles[idx_pbr] = red_style
+
+        if use_dep_hl and pd.notna(row["_num_dep"]):
+            if 0.0 <= row["_num_dep"] <= dep_threshold:
+                styles[idx_dep] = red_style
+
+        if use_crd_hl and pd.notna(row["_num_crd"]):
+            if 0.0 <= row["_num_crd"] <= crd_threshold:
+                styles[idx_crd] = red_style
+
+        return styles
+
+    # 표시용 데이터프레임 (계산용 내부 컬럼은 제외하지 않고 Styler 적용 후 config로 숨김)
+    styled_df = df_market.style.apply(highlight_ranges, axis=1)
+
     disabled_cols = [c for c in df_market.columns if c != "선택"]
 
     edited_df = st.data_editor(
-        df_market,
+        styled_df,
         column_config={
             "선택": st.column_config.CheckboxColumn(
                 "",
@@ -150,16 +212,19 @@ def render_tab_market():
             "시가총액 (억원)": st.column_config.TextColumn("시가총액 (억원)", width=105),
             "PER": st.column_config.TextColumn("PER", width=55),
             "PBR": st.column_config.TextColumn("PBR", width=55),
-            "예탁금 비율": st.column_config.TextColumn("예탁금 비율", width=75),
-            "신용잔고 비율": st.column_config.TextColumn("신용잔고 비율", width=75),
+            "예탁금 비율": st.column_config.TextColumn("예탁금 비율", width=80),
+            "신용잔고 비율": st.column_config.TextColumn("신용잔고 비율", width=80),
             "고객예탁금 (억원)": st.column_config.TextColumn("고객예탁금 (억원)", width=100),
             "신용잔고 (억원)": st.column_config.TextColumn("신용잔고 (억원)", width=100),
             "환율": st.column_config.TextColumn("환율", width=70),
+            "_num_pbr": None,
+            "_num_dep": None,
+            "_num_crd": None,
         },
         disabled=disabled_cols,
         hide_index=True,
         use_container_width=True,
-        key=f"market_data_editor_{select_all}"
+        key=f"market_data_editor_{select_all}_{use_pbr_hl}_{pbr_threshold}_{use_dep_hl}_{dep_threshold}_{use_crd_hl}_{crd_threshold}"
     )
 
     c_del, c_dl = st.columns([1, 1.3])
@@ -167,7 +232,6 @@ def render_tab_market():
     with c_del:
         if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_market_confirmed"):
             if edited_df is not None:
-                # 선택된 행 필터링
                 selected_rows = edited_df[edited_df["선택"] == True]
                 if selected_rows.empty:
                     st.warning("삭제할 일자의 체크박스를 먼저 선택해 주세요.")
