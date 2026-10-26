@@ -5,19 +5,28 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 스크롤 및 레이아웃 정리 */
-        html, body {
+        /* ⚡ 1. 웨일 / 삼성인터넷 / 크롬 순정 브라우저 새로고침 애니메이션 활성화 */
+        html {
             overscroll-behavior-y: auto !important;
-            touch-action: pan-x pan-y pinch-zoom !important;
-            height: auto !important;
-            min-height: 100% !important;
+            overscroll-behavior: auto !important;
+            height: 100% !important;
+            overflow-y: auto !important;
         }
 
+        body {
+            overscroll-behavior-y: auto !important;
+            overscroll-behavior: auto !important;
+            min-height: 100% !important;
+            height: auto !important;
+        }
+
+        /* Streamlit 내부 스크롤 박스가 제스처를 가로채지 못하도록 관통 처리 */
         .stApp, 
         [data-testid="stAppViewContainer"], 
         [data-testid="stMain"],
         section.main {
             overscroll-behavior-y: auto !important;
+            overscroll-behavior: auto !important;
             -webkit-overflow-scrolling: touch !important;
         }
 
@@ -298,7 +307,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """1. 무새로고침 클라이언트 정렬/동기화 + 2. 웨일 최상위 스와이프 새로고침 보장 엔진"""
+    """무새로고침 클라이언트 정렬 및 탭 간 동기화 엔진 (가짜 인디케이터 제거 완료)"""
     components.html("""
     <script>
     (function initEngine() {
@@ -306,91 +315,10 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ==========================================
-        // ⚡ [1] 웨일/크롬/삼성 스와이프 새로고침 엔진 (최상위 부모 창 직접 주입)
-        // ==========================================
-        if (!win.__swipe_refresh_injected) {
-            win.__swipe_refresh_injected = true;
+        // 이전에 삽입되었던 가짜 이모지 인디케이터 잔여물 자동 제거
+        const oldPtr = doc.getElementById('ptr_indicator');
+        if (oldPtr) oldPtr.remove();
 
-            // 시각적 당김 안내 인디케이터 생성
-            const pullIndicator = doc.createElement('div');
-            pullIndicator.id = 'ptr_indicator';
-            pullIndicator.style.cssText = `
-                position: fixed;
-                top: -60px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 44px;
-                height: 44px;
-                background: #1e293b;
-                border: 2px solid #3b82f6;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: #60a5fa;
-                font-size: 20px;
-                z-index: 9999999;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                transition: transform 0.1s ease, top 0.1s ease;
-                pointer-events: none;
-            `;
-            pullIndicator.innerHTML = '🔄';
-            doc.body.appendChild(pullIndicator);
-
-            let touchStartY = 0;
-            let isPulling = false;
-
-            function getScrollTop() {
-                const container = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
-                return Math.max(win.scrollY || 0, container.scrollTop || 0, doc.documentElement.scrollTop || 0);
-            }
-
-            win.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1 && getScrollTop() <= 3) {
-                    touchStartY = e.touches[0].clientY;
-                    isPulling = true;
-                } else {
-                    isPulling = false;
-                }
-            }, { passive: true });
-
-            win.addEventListener('touchmove', function(e) {
-                if (!isPulling) return;
-                const currentY = e.touches[0].clientY;
-                const pullDistance = currentY - touchStartY;
-
-                if (pullDistance > 10 && getScrollTop() <= 3) {
-                    const movePx = Math.min(pullDistance * 0.45, 90);
-                    pullIndicator.style.top = `${movePx - 50}px`;
-                    pullIndicator.style.transform = `translateX(-50%) rotate(${pullDistance * 2}deg)`;
-                } else {
-                    pullIndicator.style.top = '-60px';
-                }
-            }, { passive: true });
-
-            win.addEventListener('touchend', function(e) {
-                if (!isPulling) return;
-                isPulling = false;
-                const endY = e.changedTouches[0].clientY;
-                const distance = endY - touchStartY;
-
-                // 90px 이상 당겼을 때 새로고침 발동
-                if (distance > 90 && getScrollTop() <= 3) {
-                    pullIndicator.style.top = '25px';
-                    pullIndicator.innerHTML = '⏳';
-                    setTimeout(() => {
-                        win.location.reload();
-                    }, 100);
-                } else {
-                    pullIndicator.style.top = '-60px';
-                }
-            }, { passive: true });
-        }
-
-        // ==========================================
-        // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
-        // ==========================================
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '');
@@ -436,7 +364,7 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 표 헤더 클릭 정렬
+        // 헤더 클릭 정렬 이벤트
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
