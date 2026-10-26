@@ -239,7 +239,6 @@ def apply_custom_styles():
         .naver-pc-link {
             color: #58a6ff !important;
             text-decoration: none !important;
-            font-weight: 500 !important;
         }
         .naver-pc-link:hover {
             text-decoration: underline !important;
@@ -287,6 +286,16 @@ def render_multi_header_table(df, *args, **kwargs):
 
     chk_header_html = '<input type="checkbox" class="header-select-all" title="전체 선택/해제">'
 
+    # URL 쿼리 파라미터에서 현재 체크된 종목 코드 확인
+    checked_codes_from_param = set()
+    try:
+        q_params = st.query_params
+        del_p = q_params.get("del_codes", "")
+        if del_p:
+            checked_codes_from_param = set(str(del_p).split(","))
+    except Exception:
+        pass
+
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
@@ -306,7 +315,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes = []
                 th_attrs = ""
 
-                # ⚡ 헤더 선택 박스 렌더링
                 if txt == "선택":
                     th_classes.append("col-chk-th")
                     display_txt = chk_header_html
@@ -376,6 +384,9 @@ def render_multi_header_table(df, *args, **kwargs):
         elif "종목코드" in row:
             code_val = str(row["종목코드"]).strip().zfill(6)
 
+        if not code_val and "일시" in row:
+            code_val = str(row["일시"]).replace("/", "-").strip()
+
         tbody_parts.append(f'<tr data-code="{code_val}">')
 
         for col_idx, col_name in enumerate(df.columns):
@@ -389,7 +400,8 @@ def render_multi_header_table(df, *args, **kwargs):
             if col_name == "선택":
                 td_classes.append("col-chk")
                 class_str = f' class="{" ".join(td_classes)}"'
-                tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
+                is_chk = "checked" if code_val in checked_codes_from_param else ""
+                tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}" {is_chk}></td>')
                 continue
 
             if col_name == "종목명":
@@ -590,22 +602,65 @@ def inject_client_sort_sync_engine():
             });
         }
 
-        // ⚡ [핵심] 헤더 전체 선택 체크박스 클릭 이벤트 리스너
+        // ⚡ [핵심] 현재 활성화된 테이블의 체크된 코드 목록을 URL 파라미터 및 다른 테이블과 완벽 동기화
+        function syncCheckedStateToUrlAndTables(activeTable) {
+            if (!activeTable) return;
+            const checkedBoxes = Array.from(activeTable.querySelectorAll('tbody input.stock-checkbox:checked'));
+            const checkedCodes = checkedBoxes.map(chk => chk.getAttribute('data-code')).filter(Boolean);
+
+            // 1. 모든 다른 테이블의 체크박스 상태도 동일하게 동기화
+            doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+                if (tbl !== activeTable) {
+                    tbl.querySelectorAll('tbody input.stock-checkbox').forEach(chk => {
+                        const code = chk.getAttribute('data-code');
+                        chk.checked = checkedCodes.includes(code);
+                    });
+                    const hChk = tbl.querySelector('th input.header-select-all');
+                    if (hChk) {
+                        const total = tbl.querySelectorAll('tbody input.stock-checkbox').length;
+                        hChk.checked = (total > 0 && checkedCodes.length === total);
+                    }
+                }
+            });
+
+            // 2. Streamlit 서버가 읽을 수 있도록 URL searchParams에 즉시 주입
+            try {
+                const url = new URL(win.location.href);
+                if (checkedCodes.length > 0) {
+                    url.searchParams.set('del_codes', checkedCodes.join(','));
+                } else {
+                    url.searchParams.delete('del_codes');
+                }
+                win.history.replaceState(null, '', url.toString());
+            } catch (err) {}
+        }
+
+        // ⚡ 체크박스 변경 시 (개별 클릭 또는 헤더 전체선택 클릭)
         doc.addEventListener('change', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) {
                 const isChecked = e.target.checked;
                 const table = e.target.closest('table.custom-grid-table');
                 if (table) {
-                    const rowChks = table.querySelectorAll('tbody input.stock-checkbox');
-                    rowChks.forEach(chk => {
+                    table.querySelectorAll('tbody input.stock-checkbox').forEach(chk => {
                         chk.checked = isChecked;
                     });
+                    syncCheckedStateToUrlAndTables(table);
+                }
+            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
+                const table = e.target.closest('table.custom-grid-table');
+                if (table) {
+                    const total = table.querySelectorAll('tbody input.stock-checkbox').length;
+                    const checkedCount = table.querySelectorAll('tbody input.stock-checkbox:checked').length;
+                    const hChk = table.querySelector('th input.header-select-all');
+                    if (hChk) {
+                        hChk.checked = (total > 0 && total === checkedCount);
+                    }
+                    syncCheckedStateToUrlAndTables(table);
                 }
             }
         });
 
         doc.addEventListener('click', function(e) {
-            // 헤더 체크박스 클릭 시 정렬 방지
             if (e.target && e.target.classList.contains('header-select-all')) {
                 return;
             }
