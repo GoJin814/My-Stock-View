@@ -94,7 +94,7 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* ⚡ 정렬 헤더 링크 스타일 */
+        /* 정렬 헤더 링크 스타일 */
         .th-sort-link {
             color: #9ca3af !important;
             text-decoration: none !important;
@@ -207,25 +207,14 @@ def render_multi_header_table(df, *args, **kwargs):
     div_set = set(divider_indices) if divider_indices else set()
 
     has_naver_link = kwargs.get("has_naver_link", True)
-    tab_name = kwargs.get("tab_name", "tab")
+    tab_name = kwargs.get("tab_name", "basic")
 
     # 1. 쿼리 파라미터에서 현재 정렬 상태 확인
     qp = st.query_params
     cur_sort_col = qp.get("sort_col", "")
     cur_sort_order = qp.get("sort_order", "desc")
 
-    # 2. 데이터프레임 정렬 수행
-    display_df = df.copy()
-    if cur_sort_col and cur_sort_col in display_df.columns:
-        is_asc = (cur_sort_order == "asc")
-        num_keys = display_df[cur_sort_col].apply(parse_val_to_num)
-        if (num_keys != -999999999999.0).any():
-            display_df["_sort_tmp"] = num_keys
-            display_df = display_df.sort_values(by="_sort_tmp", ascending=is_asc).drop(columns=["_sort_tmp"])
-        else:
-            display_df = display_df.sort_values(by=cur_sort_col, ascending=is_asc)
-
-    # 3. 2단 복합 헤더 조립
+    # 2. 2단 복합 헤더 조립 (링크에 ?tab={tab_name} 부여)
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
@@ -240,7 +229,6 @@ def render_multi_header_table(df, *args, **kwargs):
 
                 th_class = ' class="col-name-th"' if (r_idx == 0 and txt == "종목명") else ""
 
-                # 정렬 가능한 셀 처리
                 if target_col:
                     next_order = "desc" if (cur_sort_col == target_col and cur_sort_order == "asc") else "asc"
                     arrow = ""
@@ -257,19 +245,19 @@ def render_multi_header_table(df, *args, **kwargs):
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
-        for c in display_df.columns:
+        for c in df.columns:
             th_class = ' class="col-name-th"' if c == "종목명" else ""
             thead_parts.append(f'<th{th_class}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 4. 본문 조립
+    # 3. 본문 조립
     tbody_parts = ["<tbody>"]
-    for _, row in display_df.iterrows():
+    for _, row in df.iterrows():
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
         tbody_parts.append("<tr>")
 
-        for col_idx, col_name in enumerate(display_df.columns):
+        for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
 
