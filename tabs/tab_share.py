@@ -20,16 +20,16 @@ def render_tab_share(df_share, most_prev_yr, most_latest_yr):
     header_rows = [
         [
             {"text": "종목명", "rowspan": 2},
-            {"text": f"{most_prev_yr}", "colspan": 5},
-            {"text": f"{most_latest_yr}", "colspan": 5}
+            {"text": f"{most_prev_yr}", "colspan": 5, "border_right": True},
+            {"text": f"{most_latest_yr}", "colspan": 5, "border_right": True}
         ],
         [
-            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"},
-            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"}
+            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS", "border_right": True},
+            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS", "border_right": True}
         ]
     ]
 
-    # ⚡ 5: 2025년 끝(BPS_직전), 10: 2026년 끝(BPS_최근)
+    # ⚡ 5번(BPS_직전 우측)과 10번(BPS_최근 우측)에 세로 구분선 강제 지정
     render_multi_header_table(
         df_disp,
         header_rows=header_rows,
