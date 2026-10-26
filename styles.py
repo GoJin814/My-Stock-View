@@ -248,8 +248,8 @@ def apply_custom_styles():
         .stock-checkbox,
         .header-select-all {
             cursor: pointer;
-            width: 15px;
-            height: 15px;
+            width: 16px;
+            height: 16px;
             accent-color: #3b82f6;
             vertical-align: middle;
         }
@@ -288,7 +288,6 @@ def render_multi_header_table(df, *args, **kwargs):
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
-
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
             cur_col_pos = 0
@@ -437,99 +436,35 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        let ptrBox = doc.getElementById('native_ptr_box');
-        if (!ptrBox) {
-            ptrBox = doc.createElement('div');
-            ptrBox.id = 'native_ptr_box';
-            ptrBox.style.cssText = `
-                position: fixed;
-                top: -65px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 42px;
-                height: 42px;
-                background: #ffffff;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-                z-index: 99999999;
-                transition: top 0.15s ease, opacity 0.15s ease;
-                opacity: 0;
-                pointer-events: none;
-            `;
-            ptrBox.innerHTML = `
-                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
-                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
-                </svg>
-            `;
-            doc.body.appendChild(ptrBox);
-        }
-
-        let touchStartY = 0;
-        let touchStartX = 0;
-        let canPull = false;
-
-        function getRealScrollTop() {
-            const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
-            const bodyEl = doc.body ? doc.body.scrollTop : 0;
-            const winY = win.scrollY || win.pageYOffset || 0;
-            const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
-            const c2 = doc.querySelector('[data-testid="stMain"]');
-            const c3 = doc.querySelector('section.main');
-            const c4 = doc.querySelector('.main');
-            return Math.max(winY, docEl, bodyEl, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0, c3 ? c3.scrollTop : 0, c4 ? c4.scrollTop : 0);
-        }
-
-        win.ontouchstart = function(e) {
-            if (e.touches.length === 1 && getRealScrollTop() <= 1) {
-                touchStartY = e.touches[0].clientY;
-                touchStartX = e.touches[0].clientX;
-                canPull = true;
-            } else {
-                canPull = false;
+        // 전체 선택 체크박스 핸들러
+        doc.addEventListener('change', function(e) {
+            if (e.target && e.target.classList.contains('header-select-all')) {
+                const isChecked = e.target.checked;
+                const tbl = e.target.closest('table');
+                if (tbl) {
+                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => {
+                        cb.checked = isChecked;
+                    });
+                }
             }
-        };
+        });
 
-        win.ontouchmove = function(e) {
-            if (!canPull) return;
-            if (getRealScrollTop() > 1) {
-                canPull = false;
-                ptrBox.style.top = '-65px';
-                ptrBox.style.opacity = '0';
-                return;
+        // 🗑️ 선택 종목 삭제 버튼 클릭 시 체크된 코드들을 URL 파라미터로 동기화
+        doc.addEventListener('click', function(e) {
+            const btn = e.target.closest('button');
+            if (btn && btn.innerText.includes('선택 종목 삭제')) {
+                const checkedCodes = [];
+                doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
+                    const c = cb.getAttribute('data-code');
+                    if (c) checkedCodes.push(c);
+                });
+                try {
+                    const url = new URL(win.location.href);
+                    url.searchParams.set('del_codes', checkedCodes.join(','));
+                    win.history.replaceState(null, '', url.toString());
+                } catch(err) {}
             }
-            const distY = e.touches[0].clientY - touchStartY;
-            const distX = Math.abs(e.touches[0].clientX - touchStartX);
-            if (distY <= 0 || distX > distY) {
-                ptrBox.style.top = '-65px';
-                ptrBox.style.opacity = '0';
-                return;
-            }
-            if (distY > 15) {
-                const pullY = Math.min((distY - 15) * 0.45, 80);
-                ptrBox.style.top = (pullY - 45) + 'px';
-                ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
-                const svg = ptrBox.querySelector('#ptr_svg');
-                if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
-            }
-        };
-
-        win.ontouchend = function(e) {
-            if (!canPull) return;
-            canPull = false;
-            const distY = e.changedTouches[0].clientY - touchStartY;
-            if (distY >= 100 && getRealScrollTop() <= 1) {
-                ptrBox.style.top = '20px';
-                ptrBox.style.opacity = '1';
-                setTimeout(function() { win.location.reload(); }, 120);
-            } else {
-                ptrBox.style.top = '-65px';
-                ptrBox.style.opacity = '0';
-            }
-        };
+        }, true);
 
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
@@ -590,51 +525,8 @@ def inject_client_sort_sync_engine():
             });
         }
 
-        // ⚡ [핵심 수정] 체크박스 선택 시 모든 파라미터(del_codes, selected_codes)를 동시에 브라우저 URL과 세션에 완벽 동기화
-        function syncCheckedState() {
-            const checkedBoxes = Array.from(doc.querySelectorAll('table.custom-grid-table tbody input.stock-checkbox:checked'));
-            const checkedCodes = Array.from(new Set(checkedBoxes.map(chk => chk.getAttribute('data-code')).filter(Boolean)));
-            const codesStr = checkedCodes.join(',');
-
-            // 세션스토리지 저장
-            win.sessionStorage.setItem('selected_stock_codes', JSON.stringify(checkedCodes));
-            win.sessionStorage.setItem('del_codes', codesStr);
-
-            // URL 쿼리 파라미터 양쪽 모두 기록 (app.py가 무엇을 참조하든 반드시 걸리도록 보장)
-            try {
-                const url = new URL(win.location.href);
-                if (codesStr) {
-                    url.searchParams.set('selected_codes', codesStr);
-                    url.searchParams.set('del_codes', codesStr);
-                } else {
-                    url.searchParams.delete('selected_codes');
-                    url.searchParams.delete('del_codes');
-                }
-                win.history.replaceState(null, '', url.toString());
-            } catch (err) {}
-        }
-
-        // 헤더 전체 선택 및 개별 체크
-        doc.addEventListener('change', function(e) {
-            if (e.target && e.target.classList.contains('header-select-all')) {
-                const isChecked = e.target.checked;
-                const table = e.target.closest('table.custom-grid-table');
-                if (table) {
-                    table.querySelectorAll('tbody input.stock-checkbox').forEach(chk => {
-                        chk.checked = isChecked;
-                    });
-                }
-                syncCheckedState();
-            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
-                syncCheckedState();
-            }
-        });
-
-        // 컬럼 헤더 정렬
         doc.addEventListener('click', function(e) {
-            if (e.target && e.target.classList.contains('header-select-all')) {
-                return;
-            }
+            if (e.target && e.target.classList.contains('header-select-all')) return;
 
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -691,6 +583,7 @@ def inject_client_sort_sync_engine():
                     win.history.replaceState(null, '', url.toString());
                 } catch (err) {}
 
+                // 다른 탭들의 테이블도 즉시 동일한 행 순서로 정렬 적용
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
                         sortTableByCodeList(otherTable, sortedCodes);
@@ -702,7 +595,7 @@ def inject_client_sort_sync_engine():
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
-                setTimeout(applySavedOrderToAll, 40);
+                setTimeout(applySavedOrderToAll, 50);
             }
         });
 
