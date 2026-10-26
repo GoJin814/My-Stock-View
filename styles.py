@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import re
 
 def apply_custom_styles():
     st.markdown("""
@@ -94,20 +93,14 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 정렬 헤더 링크 스타일 */
-        .th-sort-link {
-            color: #9ca3af !important;
-            text-decoration: none !important;
-            display: inline-block !important;
-            width: 100% !important;
+        /* ⚡ 클릭 가능한 정렬 헤더 */
+        .custom-grid-table th.sortable-th {
             cursor: pointer !important;
+            transition: background-color 0.15s ease, color 0.15s ease;
         }
-        .th-sort-link:hover {
+        .custom-grid-table th.sortable-th:hover {
+            background-color: rgba(255, 255, 255, 0.09) !important;
             color: #60a5fa !important;
-        }
-        .th-sort-active {
-            color: #60a5fa !important;
-            font-weight: 700 !important;
         }
 
         .custom-grid-table td {
@@ -169,28 +162,97 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
         </style>
-    """, unsafe_allow_html=True)
 
-def parse_val_to_num(v):
-    """원, 배, %, 억, 조 단위 문자열을 정렬 가능한 실수(float)로 변환"""
-    if pd.isna(v) or v in ["", "-", "N/A", "nan", "None"]:
-        return -999999999999.0
-    val_str = str(v).strip()
-    clean = re.sub(r'[,%원배\s]', '', val_str)
-    
-    if '조' in clean:
-        parts = clean.split('조')
-        jo = float(re.sub(r'[^0-9.-]', '', parts[0])) if parts[0] else 0.0
-        rest = float(re.sub(r'[^0-9.-]', '', parts[1].replace('억', ''))) if len(parts) > 1 and parts[1] else 0.0
-        return (jo * 10000.0) + rest
-    elif '억' in clean:
-        clean = clean.replace('억', '')
-        return float(re.sub(r'[^0-9.-]', '', clean)) if clean else 0.0
-        
-    try:
-        return float(re.sub(r'[^0-9.-]', '', clean))
-    except Exception:
-        return -999999999999.0
+        <!-- ⚡ 6. 새로고침 없는 전역 정렬 및 모든 탭 실시간 동기화 스크립트 -->
+        <script>
+        function parseFinValue(str) {
+            if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
+            let clean = str.replace(/[,%원배\s]/g, '');
+            if (clean.includes('조')) {
+                let parts = clean.split('조');
+                let jo = parseFloat(parts[0]) || 0;
+                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
+                return (jo * 10000) + rest;
+            } else if (clean.includes('억')) {
+                clean = clean.replace(/억/g, '');
+                return parseFloat(clean) || 0;
+            }
+            let num = parseFloat(clean);
+            return isNaN(num) ? str.trim() : num;
+        }
+
+        function handleHeaderSort(thElem) {
+            const table = thElem.closest('table');
+            const tbody = table.querySelector('tbody');
+            const colIdx = parseInt(thElem.getAttribute('data-col-idx'), 10);
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            let isAsc = thElem.getAttribute('data-sort-asc') === 'true';
+            let nextAsc = !isAsc;
+
+            // 모든 헤더 표시 초기화
+            document.querySelectorAll('th.sortable-th').forEach(th => {
+                th.removeAttribute('data-sort-asc');
+                th.innerText = th.innerText.replace(/[ ▲▼]/g, '').trim();
+            });
+
+            // 클릭된 헤더 화살표 표기
+            thElem.setAttribute('data-sort-asc', nextAsc);
+            thElem.innerText = thElem.innerText.trim() + (nextAsc ? ' ▲' : ' ▼');
+
+            // 1. 클릭된 테이블 행 정렬
+            rows.sort((a, b) => {
+                let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
+                let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
+
+                let pA = parseFinValue(valA);
+                let pB = parseFinValue(valB);
+
+                if (typeof pA === 'number' && typeof pB === 'number') {
+                    return nextAsc ? (pA - pB) : (pB - pA);
+                }
+                return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+
+            // ⚡ 2. 정렬된 종목 순서(data-code)대로 화면 내 다른 모든 탭의 테이블도 동일하게 재배치
+            const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+            document.querySelectorAll('table.custom-grid-table').forEach(otherTable => {
+                if (otherTable === table) return;
+                const otherTbody = otherTable.querySelector('tbody');
+                if (!otherTbody) return;
+
+                const otherRows = Array.from(otherTbody.querySelectorAll('tr'));
+                otherRows.sort((a, b) => {
+                    let codeA = a.getAttribute('data-code');
+                    let codeB = b.getAttribute('data-code');
+                    let idxA = sortedCodes.indexOf(codeA);
+                    let idxB = sortedCodes.indexOf(codeB);
+                    if (idxA === -1) idxA = 9999;
+                    if (idxB === -1) idxB = 9999;
+                    return idxA - idxB;
+                });
+                otherRows.forEach(r => otherTbody.appendChild(r));
+            });
+        }
+
+        // DOM 관찰자: 탭 전환 등으로 테이블이 재렌더링되어도 이벤트 바인딩 유지
+        const observer = new MutationObserver(() => {
+            document.querySelectorAll('th.sortable-th').forEach(th => {
+                if (th.getAttribute('data-bound') === 'true') return;
+                th.setAttribute('data-bound', 'true');
+                th.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleHeaderSort(this);
+                });
+            });
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+        </script>
+    """, unsafe_allow_html=True)
 
 def render_multi_header_table(df, *args, **kwargs):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
@@ -207,55 +269,54 @@ def render_multi_header_table(df, *args, **kwargs):
     div_set = set(divider_indices) if divider_indices else set()
 
     has_naver_link = kwargs.get("has_naver_link", True)
-    tab_name = kwargs.get("tab_name", "basic")
+    tab_name = kwargs.get("tab_name", "tab")
+    table_id = f"table_{tab_name}"
 
-    # 1. 쿼리 파라미터에서 현재 정렬 상태 확인
-    qp = st.query_params
-    cur_sort_col = qp.get("sort_col", "")
-    cur_sort_order = qp.get("sort_order", "desc")
-
-    # 2. 2단 복합 헤더 조립 (링크에 ?tab={tab_name} 부여)
+    # 1. 2단 복합 헤더 조립 (URL 링크가 아닌 data-col-idx를 가진 순수 헤더 셀)
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
+            col_seq = 0 if r_idx == 0 else 2
             for cell in row:
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
                 r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
                 c_span = f' colspan="{c_span_val}"' if c_span_val > 1 else ""
                 txt = cell.get("text", "")
-                target_col = cell.get("col", None)
 
-                th_class = ' class="col-name-th"' if (r_idx == 0 and txt == "종목명") else ""
+                th_classes = []
+                th_attrs = ""
 
-                if target_col:
-                    next_order = "desc" if (cur_sort_col == target_col and cur_sort_order == "asc") else "asc"
-                    arrow = ""
-                    active_cls = ""
-                    if cur_sort_col == target_col:
-                        arrow = " ▲" if cur_sort_order == "asc" else " ▼"
-                        active_cls = " th-sort-active"
+                if r_idx == 0 and txt == "종목명":
+                    th_classes.append("col-name-th")
 
-                    header_content = f'<a href="?sort_col={target_col}&sort_order={next_order}&tab={tab_name}" target="_self" class="th-sort-link{active_cls}">{txt}{arrow}</a>'
-                else:
-                    header_content = txt
+                # 하위 지표 열 또는 단독 열
+                if r_span_val > 1 or c_span_val == 1:
+                    th_classes.append("sortable-th")
+                    th_attrs = f' data-col-idx="{col_seq}"'
+                    col_seq += 1
 
-                thead_parts.append(f'<th{r_span}{c_span}{th_class}>{header_content}</th>')
+                class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
-        for c in df.columns:
-            th_class = ' class="col-name-th"' if c == "종목명" else ""
-            thead_parts.append(f'<th{th_class}>{c}</th>')
+        for idx, c in enumerate(df.columns):
+            th_classes = ["sortable-th"]
+            if c == "종목명":
+                th_classes.append("col-name-th")
+            class_str = f' class="{" ".join(th_classes)}"'
+            th_attrs = f' data-col-idx="{idx}"'
+            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 3. 본문 조립
+    # 2. 본문 조립 (data-code 속성 부여)
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
-        tbody_parts.append("<tr>")
+        tbody_parts.append(f'<tr data-code="{code_val}">')
 
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
@@ -291,7 +352,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
     html_code = f"""
     <div class="custom-grid-wrapper">
-        <table class="custom-grid-table">
+        <table id="{table_id}" class="custom-grid-table">
             {"".join(thead_parts)}
             {"".join(tbody_parts)}
         </table>
