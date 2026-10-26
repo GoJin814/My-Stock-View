@@ -5,26 +5,31 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-/* ⚡ 모바일 웨일 / 크롬 / 삼성인터넷 당겨서 새로고침(Pull-to-refresh) 강제 허용 */
-html, body {
-    overscroll-behavior-y: auto !important;
-    touch-action: pan-x pan-y pinch-zoom !important;
-    height: 100% !important;
-}
+        /* ⚡ 1. 웨일 / 크롬 / 삼성인터넷 모바일 당겨서 새로고침(Pull-to-refresh) 활성화 */
+        html {
+            overscroll-behavior-y: contain !important;
+            touch-action: pan-x pan-y pinch-zoom !important;
+        }
 
-.stApp, 
-[data-testid="stAppViewContainer"], 
-[data-testid="stMain"],
-.main {
-    overscroll-behavior-y: auto !important;
-    touch-action: pan-x pan-y pinch-zoom !important;
-}
+        body {
+            overscroll-behavior-y: contain !important;
+            touch-action: pan-x pan-y pinch-zoom !important;
+            min-height: 100vh !important;
+        }
 
-/* 최상단 당김 제스처를 가로채는 내부 고정 스크롤 차단 해제 */
-[data-testid="stAppViewContainer"] > section {
-    overscroll-behavior-y: auto !important;
-}
+        /* Streamlit 내부 스크롤 컨테이너의 제스처 잠금 해제 */
+        .stApp, 
+        [data-testid="stAppViewContainer"], 
+        [data-testid="stMain"],
+        section.main {
+            overscroll-behavior-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
 
+        .block-container {
+            padding-top: 1.8rem;
+            padding-bottom: 3rem;
+        }
 
         /* 2. Expander 글자 겹침 방지 */
         [data-testid="stExpander"] summary {
@@ -104,6 +109,7 @@ html, body {
             user-select: none !important;
         }
 
+        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -180,6 +186,33 @@ html, body {
             accent-color: #3b82f6;
         }
         </style>
+
+        <!-- ⚡ 6. 모바일 브라우저 최상단 스와이프 새로고침 보장 스크립트 -->
+        <script>
+        (function() {
+            let startY = 0;
+            let isAtTop = false;
+
+            window.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    const scrollContainer = document.querySelector('[data-testid="stAppViewContainer"]') || window;
+                    const scrollTop = scrollContainer.scrollTop !== undefined ? scrollContainer.scrollTop : window.scrollY;
+                    isAtTop = (scrollTop <= 2);
+                    startY = e.touches[0].clientY;
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchend', function(e) {
+                if (!isAtTop) return;
+                const endY = e.changedTouches[0].clientY;
+                const distance = endY - startY;
+
+                if (distance > 130) {
+                    window.location.reload();
+                }
+            }, { passive: true });
+        })();
+        </script>
     """, unsafe_allow_html=True)
 
 def render_multi_header_table(df, *args, **kwargs):
@@ -206,7 +239,6 @@ def render_multi_header_table(df, *args, **kwargs):
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
-            # 2층 헤더가 있는 경우 col_seq 보정
             col_seq = 0 if r_idx == 0 else (3 if has_checkbox else 2)
             for cell in row:
                 r_span_val = cell.get("rowspan", 1)
@@ -221,7 +253,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 if txt == "종목명":
                     th_classes.append("col-name-th")
 
-                # 선택 열을 제외한 모든 항목 정렬 허용
                 if txt != "선택" and (r_span_val > 1 or c_span_val == 1):
                     th_classes.append("sortable-th")
                     th_attrs = f' data-col-idx="{col_seq}"'
@@ -258,12 +289,10 @@ def render_multi_header_table(df, *args, **kwargs):
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            # 체크박스 열
             if col_name == "선택":
                 tbody_parts.append(f'<td style="{border_r}"><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
                 continue
 
-            # 종목명 열: 120px 고정 + 링크
             if col_name == "종목명":
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
@@ -275,7 +304,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 tbody_parts.append(f'<td class="col-name" {style_attr}>{content}</td>')
                 continue
 
-            # 수치 컬러링
             color_css = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
@@ -302,7 +330,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """모든 탭(현재 시세, 주당 가치, 실적) 간 무새로고침 순서 동기화 엔진"""
+    """모든 탭 간 무새로고침 순서 동기화 엔진 (무한 루프 방지형)"""
     components.html("""
     <script>
     (function initEngine() {
@@ -354,7 +382,7 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 1. 헤더 클릭 정렬 이벤트
+        // 헤더 클릭 정렬 이벤트
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -394,7 +422,6 @@ def inject_client_sort_sync_engine():
 
             rows.forEach(r => tbody.appendChild(r));
 
-            // 정렬된 종목 순서를 세션에 저장하고 다른 탭 테이블들에도 즉시 동기화
             const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
             window.parent.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
 
@@ -405,7 +432,7 @@ def inject_client_sort_sync_engine():
             });
         });
 
-        // 2. 탭 전환 시 보관된 순서 동기화
+        // 탭 전환 시 보관된 순서 동기화
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
