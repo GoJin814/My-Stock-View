@@ -6,10 +6,17 @@ def render_tab_basic(df_basic):
         st.info("표시할 현재 시세 데이터가 없습니다.")
         return None
 
-    # 종목명/종목코드 링크 및 기본 표시 컬럼 정리
+    # ⚡ 표 바로 위에 깔끔한 전체 선택 체크박스 배치
+    c_all, _ = st.columns([1.5, 8.5])
+    with c_all:
+        select_all = st.checkbox("전체 선택", value=False, key="chk_basic_select_all")
+
     df_display = df_basic.copy()
     
-    # 선택 열을 제외한 컬럼들은 읽기 전용으로 보호
+    # 전체 선택 체크 상태를 데이터프레임 초기값에 즉시 반영
+    if select_all:
+        df_display["선택"] = True
+
     disabled_cols = [c for c in df_display.columns if c != "선택"]
 
     edited_df = st.data_editor(
@@ -33,7 +40,7 @@ def render_tab_basic(df_basic):
         disabled=disabled_cols,
         hide_index=True,
         use_container_width=True,
-        key="basic_table_editor"
+        key=f"basic_table_editor_{select_all}"
     )
 
     return edited_df
