@@ -42,7 +42,6 @@ def load_market_cache():
             pass
     return {}
 
-# ⚡ [신규] 어느 기기에서 열어도 유지되도록 설정값 불러오기
 def load_market_thresholds():
     defaults = {
         "use_pbr": True, "pbr": 0.90,
@@ -100,7 +99,6 @@ def save_market_cache(cache_data):
         f.write(json_text)
     commit_to_github(MARKET_CACHE_FILE, json_text, "Auto-commit market_indices_cache.json")
 
-# ⚡ [신규] 변경된 설정값을 GitHub에 영구 저장하는 함수
 def save_market_thresholds(th_dict):
     json_text = json.dumps(th_dict, ensure_ascii=False, indent=2)
     with open(THRESHOLDS_FILE, "w", encoding="utf-8") as f:
@@ -114,7 +112,6 @@ def render_tab_market():
         st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 수기로 등록하거나 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
-    # 영구 저장된 마지막 설정값 불러오기
     saved_th = load_market_thresholds()
 
     show_highlight_box = st.toggle("🚨 주요 지표 범위", value=False)
@@ -141,7 +138,6 @@ def render_tab_market():
                 crd_threshold = st.number_input("하한선 (%)", value=float(saved_th["crd"]), step=0.05, format="%.2f", disabled=not use_crd_hl, key="cfg_val_crd")
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # 사용자가 값을 수정했으면 자동으로 감지하여 GitHub에 즉시 영구 저장
             current_th = {
                 "use_pbr": bool(use_pbr_hl), "pbr": round(float(pbr_threshold), 2),
                 "use_dep": bool(use_dep_hl), "dep": round(float(dep_threshold), 2),
@@ -150,7 +146,6 @@ def render_tab_market():
             if current_th != saved_th:
                 save_market_thresholds(current_th)
 
-    # 전체 선택 체크박스
     c_all, _ = st.columns([1.5, 8.5])
     with c_all:
         select_all = st.checkbox("전체 선택", value=False, key="chk_market_select_all")
@@ -190,13 +185,13 @@ def render_tab_market():
             "선택": select_all,
             "일시": clean_date_str,
             "KOSPI": item.get("KOSPI", "-"),
-            "시가총액 (억원)": mcap_val,
+            "시가총액\n(억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
             "PBR": str(raw_pbr),
-            "예탁금 비율": dep_ratio_str,
-            "신용잔고 비율": crd_ratio_str,
-            "고객예탁금 (억원)": dep_val,
-            "신용잔고 (억원)": crd_val,
+            "예탁금\n비율": dep_ratio_str,
+            "신용잔고\n비율": crd_ratio_str,
+            "고객예탁금\n(억원)": dep_val,
+            "신용잔고\n(억원)": crd_val,
             "환율": item.get("환율", item.get("환율(원)", "-")),
             "_num_pbr": num_pbr,
             "_num_dep": dep_ratio_num,
@@ -206,12 +201,11 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # 조건부 빨간색 스타일링 함수 (PBR: 0~상한선 / 예탁금·신용: 하한선 이상)
     def highlight_ranges(row):
         styles = [''] * len(row)
         idx_pbr = row.index.get_loc("PBR")
-        idx_dep = row.index.get_loc("예탁금 비율")
-        idx_crd = row.index.get_loc("신용잔고 비율")
+        idx_dep = row.index.get_loc("예탁금\n비율")
+        idx_crd = row.index.get_loc("신용잔고\n비율")
 
         red_style = 'color: #ff4b4b; font-weight: bold;'
 
@@ -244,13 +238,13 @@ def render_tab_market():
             ),
             "일시": st.column_config.TextColumn("일시", width=95),
             "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
-            "시가총액 (억원)": st.column_config.TextColumn("시가총액 (억원)", width=105),
+            "시가총액\n(억원)": st.column_config.TextColumn("시가총액\n(억원)", width=105),
             "PER": st.column_config.TextColumn("PER", width=55),
             "PBR": st.column_config.TextColumn("PBR", width=55),
-            "예탁금 비율": st.column_config.TextColumn("예탁금 비율", width=80),
-            "신용잔고 비율": st.column_config.TextColumn("신용잔고 비율", width=80),
-            "고객예탁금 (억원)": st.column_config.TextColumn("고객예탁금 (억원)", width=100),
-            "신용잔고 (억원)": st.column_config.TextColumn("신용잔고 (억원)", width=100),
+            "예탁금\n비율": st.column_config.TextColumn("예탁금\n비율", width=75),
+            "신용잔고\n비율": st.column_config.TextColumn("신용잔고\n비율", width=75),
+            "고객예탁금\n(억원)": st.column_config.TextColumn("고객예탁금\n(억원)", width=100),
+            "신용잔고\n(억원)": st.column_config.TextColumn("신용잔고\n(억원)", width=100),
             "환율": st.column_config.TextColumn("환율", width=70),
             "_num_pbr": None,
             "_num_dep": None,
