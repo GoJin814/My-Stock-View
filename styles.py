@@ -105,6 +105,7 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
+        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -173,6 +174,7 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
+        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -304,7 +306,7 @@ def inject_client_sort_sync_engine():
         if (!doc || !win) return;
 
         // ==========================================
-        // ⚡ [1] 네이티브 스타일 원형 스피너 Pull-to-Refresh
+        // ⚡ [1] 전수 스크롤 검사 기반 스와이프 새로고침 엔진
         // ==========================================
         if (!win.__ptr_installed) {
             win.__ptr_installed = true;
@@ -342,17 +344,35 @@ def inject_client_sort_sync_engine():
             let touchStartX = 0;
             let canPull = false;
 
-            function getScrollTop() {
-                const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
-                return Math.max(win.scrollY || 0, sc.scrollTop || 0, doc.documentElement.scrollTop || 0);
+            function getRealScrollTop() {
+                const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
+                const bodyEl = doc.body ? doc.body.scrollTop : 0;
+                const winY = win.scrollY || win.pageYOffset || 0;
+                
+                const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
+                const c2 = doc.querySelector('[data-testid="stMain"]');
+                const c3 = doc.querySelector('section.main');
+                const c4 = doc.querySelector('.main');
+
+                const s1 = c1 ? c1.scrollTop : 0;
+                const s2 = c2 ? c2.scrollTop : 0;
+                const s3 = c3 ? c3.scrollTop : 0;
+                const s4 = c4 ? c4.scrollTop : 0;
+
+                return Math.max(winY, docEl, bodyEl, s1, s2, s3, s4);
             }
 
             win.addEventListener('touchstart', function(e) {
                 if (e.touches.length === 1) {
-                    touchStartY = e.touches[0].clientY;
-                    touchStartX = e.touches[0].clientX;
-                    // 손가락을 댄 최초 시점에 최상단(<= 5px 오차 허용)에 완전히 멈춰 있었는지 확인
-                    canPull = (getScrollTop() <= 5);
+                    const st = getRealScrollTop();
+                    // 단 1px이라도 스크롤되어 내려가 있으면 당김 모드 원천 차단
+                    if (st <= 1) {
+                        touchStartY = e.touches[0].clientY;
+                        touchStartX = e.touches[0].clientX;
+                        canPull = true;
+                    } else {
+                        canPull = false;
+                    }
                 } else {
                     canPull = false;
                 }
@@ -361,8 +381,8 @@ def inject_client_sort_sync_engine():
             win.addEventListener('touchmove', function(e) {
                 if (!canPull) return;
 
-                // 스크롤이 아래로 내려가면 즉시 취소
-                if (getScrollTop() > 5) {
+                // 스크롤이 단 1px이라도 내려가 있다면 즉각 취소
+                if (getRealScrollTop() > 1) {
                     canPull = false;
                     ptrBox.style.top = '-65px';
                     ptrBox.style.opacity = '0';
@@ -374,17 +394,16 @@ def inject_client_sort_sync_engine():
                 const distY = currentY - touchStartY;
                 const distX = Math.abs(currentX - touchStartX);
 
-                // 손가락을 위로 밀거나 좌우 스크롤 폭이 크면 취소
                 if (distY <= 0 || distX > distY) {
                     ptrBox.style.top = '-65px';
                     ptrBox.style.opacity = '0';
                     return;
                 }
 
-                if (distY > 15) {
-                    const pullY = Math.min((distY - 15) * 0.45, 80);
+                if (distY > 20) {
+                    const pullY = Math.min((distY - 20) * 0.45, 80);
                     ptrBox.style.top = (pullY - 45) + 'px';
-                    ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
+                    ptrBox.style.opacity = Math.min((distY - 20) / 50, 1);
                     const svg = ptrBox.querySelector('#ptr_svg');
                     if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
                 }
@@ -395,8 +414,8 @@ def inject_client_sort_sync_engine():
                 canPull = false;
                 const distY = e.changedTouches[0].clientY - touchStartY;
 
-                // 85px 이상 당겼을 때 새로고침 실행
-                if (distY >= 85 && getScrollTop() <= 5) {
+                // 최상단(0)에서 110px 이상 당겼을 때만 새로고침 트리거
+                if (distY >= 110 && getRealScrollTop() <= 1) {
                     ptrBox.style.top = '20px';
                     ptrBox.style.opacity = '1';
                     const svg = ptrBox.querySelector('#ptr_svg');
