@@ -67,15 +67,18 @@ def apply_custom_styles():
             font-size: 0.92rem !important;
         }
 
-        /* 4. 그리드 컨테이너 및 테이블 */
+        /* 4. 그리드 컨테이너: 세로 65vh 제한으로 헤더 상단 고정 영역 확보 */
         .custom-grid-wrapper {
             overflow-x: auto !important;
+            overflow-y: auto !important;
+            max-height: 70vh !important;
             margin-bottom: 1.2rem;
             border-radius: 4px;
             border: 1px solid #334155;
             background-color: #0e1117;
             width: 100%;
             -webkit-overflow-scrolling: touch;
+            position: relative;
         }
 
         .custom-grid-table {
@@ -89,15 +92,9 @@ def apply_custom_styles():
             background-color: #0e1117;
         }
 
-        /* ⚡ [핵심] 1. 테이블 헤더 상단 고정 (Sticky Header) */
-        .custom-grid-table thead {
+        /* ⚡ [정상화 1] 헤더 상단 고정 (가로 고정 제외하여 글자 겹침 방지) */
+        .custom-grid-table thead tr th {
             position: sticky !important;
-            top: 0 !important;
-            z-index: 10 !important;
-        }
-
-        /* 헤더 기본 속성 */
-        .custom-grid-table th {
             background-color: #161a22 !important;
             color: #9ca3af !important;
             font-weight: 500 !important;
@@ -108,22 +105,20 @@ def apply_custom_styles():
             text-align: center !important;
             white-space: nowrap !important;
             user-select: none !important;
-            position: sticky !important;
             box-sizing: border-box !important;
         }
 
-        /* 2단 복합 헤더 수직 고정 위치 지정 */
-        /* 상단 1행 헤더 (연도 등) */
+        /* 1단 상단 헤더: top 0 고정 */
         .custom-grid-table thead tr:first-child th {
             top: 0 !important;
-            z-index: 11 !important;
-            height: 35px !important;
+            z-index: 10 !important;
+            height: 34px !important;
         }
 
-        /* 하단 2행 헤더 (지표명: PER, PBR 등) -> 1행 바로 아래에 밀착 고정 */
+        /* 2단 하단 헤더: 1단 바로 밑(top 34px) 밀착 고정 */
         .custom-grid-table thead tr:nth-child(2) th {
-            top: 35px !important;
-            z-index: 11 !important;
+            top: 34px !important;
+            z-index: 10 !important;
         }
 
         .custom-grid-table th.sortable-th {
@@ -147,13 +142,12 @@ def apply_custom_styles():
             position: relative;
         }
 
-        /* ⚡ [핵심] 2. 종목명 열 좌측 고정 (Sticky Left) */
-        /* 좌상단 모서리 '종목명' 헤더: 상단 고정과 좌측 고정이 동시에 걸리는 최상위 요소 */
+        /* ⚡ [정상화 2] 좌상단 모서리 '종목명' 헤더: 가로+세로 동시 고정 (최상위 z-index) */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
             top: 0 !important;
-            z-index: 20 !important; /* 헤더와 본문 모두의 위에 위치 */
+            z-index: 30 !important; /* 모든 요소보다 위에 배치 */
             background-color: #161a22 !important;
             width: 120px !important;
             min-width: 120px !important;
@@ -163,11 +157,11 @@ def apply_custom_styles():
             border-right: none !important;
         }
 
-        /* 본문 데이터의 좌측 고정 종목명 */
+        /* 본문 종목명: 좌측만 고정 */
         .custom-grid-table td.col-name {
             position: sticky !important;
             left: 0 !important;
-            z-index: 5 !important; /* 스크롤되는 다른 td보다 위 */
+            z-index: 5 !important;
             background-color: #0e1117 !important;
             width: 120px !important;
             min-width: 120px !important;
@@ -192,10 +186,10 @@ def apply_custom_styles():
             height: 100% !important;
             background-color: #ffffff !important;
             pointer-events: none !important;
-            z-index: 21 !important;
+            z-index: 31 !important;
         }
 
-        /* ⚡ 연도별 구분을 위한 3px 화이트 세로선 클래스 */
+        /* 연도별 구분을 위한 3px 화이트 세로선 클래스 */
         .custom-grid-table th.year-divider,
         .custom-grid-table td.year-divider {
             border-right: 3px solid #ffffff !important;
@@ -232,7 +226,6 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 종목코드는 행 식별(data-code)용으로 보관하고 화면 출력에서는 분리
     code_series = None
     if "종목코드" in df.columns:
         code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
