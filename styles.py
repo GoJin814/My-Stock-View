@@ -4,6 +4,9 @@ import streamlit.components.v1 as components
 
 def apply_custom_styles():
     st.markdown("""
+        <!-- ⚡ 1. 삼성 브라우저 아이콘 폰트 깨짐 방지: Material Symbols 명시적 임포트 -->
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
         <style>
         /* 1. 기본 레이아웃 및 브라우저 스크롤 개방 */
         html, body {
@@ -27,7 +30,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 깜빡임 및 기본 기호 '>' 완벽 박멸 */
+        /* 2. Expander 순정 아이콘 삼성 브라우저 완벽 정상화 */
         [data-testid="stExpander"] details {
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             border-radius: 6px !important;
@@ -37,7 +40,7 @@ def apply_custom_styles():
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            gap: 6px !important;
+            gap: 8px !important;
             padding: 8px 12px !important;
             font-size: 0.92rem !important;
             font-weight: 500 !important;
@@ -47,37 +50,49 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 브라우저 기본 삼각형 마커 영구 제거 */
+        /* 브라우저 기본 못생긴 삼각형 마커만 제거 */
         [data-testid="stExpander"] summary::-webkit-details-marker,
         [data-testid="stExpander"] summary::marker {
             display: none !important;
             content: "" !important;
         }
 
-        /* Streamlit 내장 기본 아이콘 영역(첫 번째 자식) 완전 삭제 -> '>' 깜빡임 원천 봉쇄 */
-        [data-testid="stExpander"] summary > [data-testid="stExpanderToggleIcon"],
-        [data-testid="stExpander"] summary > div:first-child,
-        [data-testid="stExpander"] summary > span:first-child:not(:last-child) {
+        /* ⚡ 임의로 넣었던 가짜 맨 앞 삼각형(::before) 완전 제거 */
+        [data-testid="stExpander"] summary::before {
             display: none !important;
-            width: 0 !important;
-            height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            font-size: 0 !important;
-            visibility: hidden !important;
+            content: "" !important;
         }
 
-        /* 왼쪽 고정 단일 삼각형 (닫힘: ▶ / 열림: ▼) */
-        [data-testid="stExpander"] summary::before {
-            content: "▶" !important;
-            display: inline-block !important;
-            font-size: 0.72rem !important;
+        /* ⚡ Streamlit 기본 토글 아이콘 영역 정상화 및 폰트 강제 적용 */
+        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 1.25rem !important;
+            min-width: 1.25rem !important;
+            height: 1.25rem !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: 'Material Symbols Rounded', sans-serif !important;
+            font-size: 1.25rem !important;
+            line-height: 1 !important;
             color: #9ca3af !important;
-            margin-right: 4px !important;
+            visibility: visible !important;
+            user-select: none !important;
             transition: transform 0.2s ease !important;
         }
 
-        details[open] > summary::before {
+        /* SVG 아이콘인 경우의 정렬 */
+        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] svg {
+            display: block !important;
+            width: 1.1rem !important;
+            height: 1.1rem !important;
+            fill: #9ca3af !important;
+            color: #9ca3af !important;
+        }
+
+        /* 열렸을 때 기본 아이콘 회전 */
+        details[open] > summary [data-testid="stExpanderToggleIcon"] {
             transform: rotate(90deg) !important;
         }
 
@@ -127,6 +142,7 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
+        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -327,9 +343,8 @@ def inject_client_sort_sync_engine():
         if (!doc || !win) return;
 
         // ==========================================
-        // ⚡ [1] 웨일 스와이프 새로고침 엔진 (리스너 갱신 및 완전 최상단 검증)
+        // ⚡ [1] 웨일 스와이프 새로고침 엔진 (완전 최상단 검증)
         // ==========================================
-        // 기존 인디케이터 잔여물 청소 후 재등록
         let ptrBox = doc.getElementById('native_ptr_box');
         if (!ptrBox) {
             ptrBox = doc.createElement('div');
@@ -383,10 +398,8 @@ def inject_client_sort_sync_engine():
             return Math.max(winY, docEl, bodyEl, s1, s2, s3, s4);
         }
 
-        // 터치 핸들러 교체 등록
         win.ontouchstart = function(e) {
             if (e.touches.length === 1) {
-                // 단 1px이라도 내려가 있으면 당김 모드 진입 불가
                 if (getRealScrollTop() <= 1) {
                     touchStartY = e.touches[0].clientY;
                     touchStartX = e.touches[0].clientX;
@@ -434,7 +447,6 @@ def inject_client_sort_sync_engine():
             canPull = false;
             const distY = e.changedTouches[0].clientY - touchStartY;
 
-            // 최상단에서 100px 이상 당겼을 때 새로고침 발동
             if (distY >= 100 && getRealScrollTop() <= 1) {
                 ptrBox.style.top = '20px';
                 ptrBox.style.opacity = '1';
