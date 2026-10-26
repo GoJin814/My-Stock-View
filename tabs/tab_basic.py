@@ -25,8 +25,10 @@ def render_tab_basic(df_basic):
     if select_all:
         df_display["선택"] = True
 
-    # 3. 네이버 증권 링크 URL 생성
-    df_display["링크"] = "https://finance.naver.com/item/main.naver?code=" + df_display["종목코드"].astype(str).str.strip().str.zfill(6)
+    # ⚡ LinkColumn용 URL 구성 (URL 뒤에 #종목명을 붙여 display_text 정규식으로 안전하게 추출)
+    code_series = df_display["종목코드"].astype(str).str.strip().str.zfill(6)
+    name_series = df_display["종목명"].astype(str).str.strip()
+    df_display["종목명"] = "https://finance.naver.com/item/main.naver?code=" + code_series + "#" + name_series
 
     disabled_cols = [c for c in df_display.columns if c != "선택"]
 
@@ -39,15 +41,13 @@ def render_tab_basic(df_basic):
                 default=False,
                 width=38
             ),
-            # 종목명을 클릭하면 네이버 증권 페이지로 새 창 이동
+            # ⚡ URL 뒤의 #종목명 텍스트만 추출하여 화면에 선명하게 출력
             "종목명": st.column_config.LinkColumn(
                 "종목명",
                 help="클릭 시 네이버 증권 페이지로 이동합니다.",
-                validate=r"^https://finance\.naver\.com/.*",
-                display_text=r".*",  # DataFrame의 종목명 텍스트 그대로 표시
+                display_text=r"#(.+)$",
                 width=110
             ),
-            "링크": None,  # 링크 전용 보조 컬럼 숨김
             "종목코드": st.column_config.TextColumn("종목코드", width=75),
             "현재가": st.column_config.TextColumn("현재가", width=90),
             "시총": st.column_config.TextColumn("시총", width=105),
