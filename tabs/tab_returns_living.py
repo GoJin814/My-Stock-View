@@ -64,7 +64,11 @@ def commit_to_github(filename, content_str, commit_message="Auto-update returns 
         res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
         sha = res.json().get("sha") if res.status_code == 200 else None
         content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
-        payload = {"message": commit_message, "content": content_b64, "branch": branch}
+        payload = {
+            "message": commit_message,
+            "content": content_b64,
+            "branch": branch
+        }
         if sha:
             payload["sha"] = sha
         put_res = requests.put(url, headers=headers, json=payload, timeout=7)
@@ -127,11 +131,7 @@ def render_tab_returns_living():
         tot_out += d_out
 
         e_net_in = c_in - d_out
-        
-        # 연도별 총 수익: =F7-B7-C7+D7
         g_profit = f_end - b_start - c_in + d_out
-
-        # 연도별 총 수익률: =(F7-B7-(C7-D7))/(B7+0.5*C7-0.5*D7)
         denom = b_start + (0.5 * c_in) - (0.5 * d_out)
         h_rate = ((f_end - b_start - (c_in - d_out)) / denom * 100.0) if denom != 0 else 0.0
         yearly_rates.append(h_rate)
@@ -150,18 +150,11 @@ def render_tab_returns_living():
         })
 
     tot_net_in = tot_in - tot_out
-    
-    # 전체 기간 종료(F3): 마지막 연도 종료값 그대로 유지 (예수금은 합산 안 함)
     tot_final_end = latest_end 
-
-    # 전체 기간 총 수익 수식: =F3-B3-C3+D3 (여기에 예수금 B1이 반영되도록 계산)
     tot_profit = tot_final_end - first_start - tot_in + tot_out + float(new_cash)
-
-    # 전체 기간 총 수익률 수식: =(F3+B1-B3-(C3-D3))/(B3+B1+0.5*C3-0.5*D3)
     tot_denom = first_start + float(new_cash) + (0.5 * tot_in) - (0.5 * tot_out)
     tot_rate = ((tot_final_end + float(new_cash) - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
 
-    # 전체 기간 평균 수익률 수식: =POWER(PRODUCT(1+H6:H20),1/COUNT(H6:H20))-1
     n_years = len(yearly_rates)
     if n_years > 0:
         product_val = 1.0
@@ -180,7 +173,10 @@ def render_tab_returns_living():
         "종료": fmt_won(tot_final_end),
         "총 수익": fmt_won(tot_profit),
         "총 수익률*": fmt_pct(tot_rate),
-        "전체 기간\n평균 수익률": fmt_pct(avg_yearly_rate)
+        "전체 기간\n평균 수익률": fmt_pct(avg_yearly_rate),
+        "_sum_profit": tot_profit,
+        "_sum_rate": tot_rate,
+        "_sum_avg_rate": avg_yearly_rate
     }]
 
     df_summary = pd.DataFrame(summary_record)
@@ -188,10 +184,33 @@ def render_tab_returns_living():
 
     st.caption("※ 엑셀 수식과 100% 동일하게 연동됩니다. (전체 총 수익 및 수익률에 잔여 예수금 B1 포함)")
 
-    # 상단 요약 테이블
+    # 1. 상단 요약 테이블 스타일링 함수 (총수익, 총수익률, 평균수익률 색상 적용)
+    def style_summary(row):
+        styles = [''] * len(row)
+        idx_profit = row.index.get_loc("총 수익")
+        idx_rate = row.index.get_loc("총 수익률*")
+        idx_avg = row.index.get_loc("전체 기간\n평균 수익률")
+
+        p_val = row["_sum_profit"]
+        r_val = row["_sum_rate"]
+        avg_val = row["_sum_avg_rate"]
+
+        if pd.notna(p_val) and p_val > 0: styles[idx_profit] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(p_val) and p_val < 0: styles[idx_profit] = 'color: #60a5fa; font-weight: bold;'
+
+        if pd.notna(r_val) and r_val > 0: styles[idx_rate] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(r_val) and r_val < 0: styles[idx_rate] = 'color: #60a5fa; font-weight: bold;'
+
+        if pd.notna(avg_val) and avg_val > 0: styles[idx_avg] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(avg_val) and avg_val < 0: styles[idx_avg] = 'color: #60a5fa; font-weight: bold;'
+
+        return styles
+
+    styled_summary_df = df_summary.style.apply(style_summary, axis=1)
+
     st.markdown("#### 📊 전체 기간 성과 요약")
     st.dataframe(
-        df_summary,
+        styled_summary_df,
         column_config={
             "구분": st.column_config.TextColumn("구분", width=65),
             "시작": st.column_config.TextColumn("시작", width=105),
@@ -202,13 +221,16 @@ def render_tab_returns_living():
             "총 수익": st.column_config.TextColumn("총 수익", width=105),
             "총 수익률*": st.column_config.TextColumn("총 수익률*", width=95),
             "전체 기간\n평균 수익률": st.column_config.TextColumn("전체 기간 평균 수익률", width=140),
+            "_sum_profit": None,
+            "_sum_rate": None,
+            "_sum_avg_rate": None
         },
         hide_index=True,
         use_container_width=True
     )
 
     st.write("")
-    # 하단 연도별 테이블
+    # 2. 하단 연도별 테이블
     st.markdown("#### 📅 연도별 현황")
     
     def style_performance(row):
