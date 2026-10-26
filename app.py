@@ -7,7 +7,7 @@ import base64
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
-from styles import apply_custom_styles
+from styles import apply_custom_styles, parse_val_to_num
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
@@ -268,6 +268,7 @@ with sync_col:
     st.write("")
     if st.button("🔄 실시간 시세 동기화", use_container_width=True):
         fetch_single_stock.clear()
+        st.query_params.clear()
         st.rerun()
 
 current_codes = load_codes()
@@ -308,13 +309,65 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 2. 4개 탭 렌더링
+    # ⚡ 2. 모든 탭 간 종목 순서 일괄 동기화 엔진
+    qp = st.query_params
+    cur_sort_col = qp.get("sort_col", None)
+    cur_sort_order = qp.get("sort_order", "desc")
+    cur_active_tab = qp.get("tab", "basic")
+
+    if cur_sort_col:
+        is_asc = (cur_sort_order == "asc")
+        source_df = None
+        if cur_sort_col in df_share.columns:
+            source_df = df_share
+        elif cur_sort_col in df_perf.columns:
+            source_df = df_perf
+        elif cur_sort_col in df_basic.columns:
+            source_df = df_basic
+
+        if source_df is not None:
+            num_keys = source_df[cur_sort_col].apply(parse_val_to_num)
+            if (num_keys != -999999999999.0).any():
+                sorted_idx = num_keys.sort_values(ascending=is_asc).index
+            else:
+                sorted_idx = source_df[cur_sort_col].sort_values(ascending=is_asc).index
+
+            # ⚡ 3개 탭 전체를 동일한 순서로 정렬
+            df_basic = df_basic.loc[sorted_idx].reset_index(drop=True)
+            df_perf = df_perf.loc[sorted_idx].reset_index(drop=True)
+            df_share = df_share.loc[sorted_idx].reset_index(drop=True)
+
+    # ⚡ 3. 탭 유지 처리 (헤더 클릭 시 첫 번째 탭으로 튕기지 않음)
+    tab_index_map = {"basic": 0, "share": 1, "perf": 2, "market": 3}
+    active_idx = tab_index_map.get(cur_active_tab, 0)
+
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 현재 시세", 
         "💰 주당 가치",
         "📈 실적", 
         "🌐 국내지수"
     ])
+
+    # ⚡ 브라우저 탭 포커스 자동 복원 스크립트
+    st.components.v1.html(f"""
+        <script>
+        window.addEventListener('load', function() {{
+            const targetIdx = {active_idx};
+            const tabs = window.parent.document.querySelectorAll('.stTabs [data-baseweb="tab"]');
+            if (tabs && tabs[targetIdx] && tabs[targetIdx].getAttribute('aria-selected') !== 'true') {{
+                tabs[targetIdx].click();
+            }}
+        }});
+        // 즉각 실행 시도
+        setTimeout(function() {{
+            const targetIdx = {active_idx};
+            const tabs = window.parent.document.querySelectorAll('.stTabs [data-baseweb="tab"]');
+            if (tabs && tabs[targetIdx] && tabs[targetIdx].getAttribute('aria-selected') !== 'true') {{
+                tabs[targetIdx].click();
+            }}
+        }}, 50);
+        </script>
+    """, height=0, width=0)
 
     # 1. 현재 시세 탭
     with tab1:
