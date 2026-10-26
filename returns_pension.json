@@ -2,9 +2,9 @@
   "cash_balance": 0,
   "years": {
     "2024": {
-      "start": 1.0,
+      "start": 100.0,
       "in": 1.0,
-      "out": 0.0,
+      "out": 1.0,
       "end": 1.0
     }
   }
