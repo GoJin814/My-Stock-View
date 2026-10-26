@@ -5,27 +5,43 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 웨일 / 크롬 / 삼성인터넷 모바일 당겨서 새로고침(Pull-to-refresh) 완전 개방 */
-        html, body {
-            overscroll-behavior-y: auto !important;
-            touch-action: auto !important;
+        /* ⚡ 1. 일반 웹사이트처럼 window 전체 스크롤로 전환 (웨일 / 크롬 / 삼성인터넷 스와이프 새로고침 보장) */
+        html {
             height: auto !important;
-            min-height: 100% !important;
+            overflow-y: visible !important;
+            overscroll-behavior-y: auto !important;
         }
 
-        /* Streamlit 내부 스크롤 컨테이너의 가두기 해제 */
-        .stApp, 
-        [data-testid="stAppViewContainer"], 
+        body {
+            height: auto !important;
+            min-height: 100vh !important;
+            overflow-y: visible !important;
+            overscroll-behavior-y: auto !important;
+        }
+
+        /* Streamlit 내부 가상 스크롤 박스를 해제하고 브라우저 윈도우로 스크롤 위임 */
+        .stApp {
+            height: auto !important;
+            min-height: 100vh !important;
+            overflow: visible !important;
+        }
+
+        [data-testid="stAppViewContainer"] {
+            height: auto !important;
+            overflow: visible !important;
+            position: static !important;
+        }
+
         [data-testid="stMain"],
         section.main {
-            overscroll-behavior-y: auto !important;
-            touch-action: auto !important;
-            -webkit-overflow-scrolling: touch !important;
+            height: auto !important;
+            overflow: visible !important;
         }
 
         .block-container {
             padding-top: 1.8rem;
             padding-bottom: 3rem;
+            max-width: 100% !important;
         }
 
         /* 2. Expander 글자 겹침 방지 */
@@ -106,6 +122,7 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
+        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -174,6 +191,7 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
+        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -181,34 +199,6 @@ def apply_custom_styles():
             accent-color: #3b82f6;
         }
         </style>
-    """, unsafe_allow_html=True)
-
-        <!-- ⚡ 6. 모바일 브라우저 최상단 스와이프 새로고침 보장 스크립트 -->
-        <script>
-        (function() {
-            let startY = 0;
-            let isAtTop = false;
-
-            window.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) {
-                    const scrollContainer = document.querySelector('[data-testid="stAppViewContainer"]') || window;
-                    const scrollTop = scrollContainer.scrollTop !== undefined ? scrollContainer.scrollTop : window.scrollY;
-                    isAtTop = (scrollTop <= 2);
-                    startY = e.touches[0].clientY;
-                }
-            }, { passive: true });
-
-            window.addEventListener('touchend', function(e) {
-                if (!isAtTop) return;
-                const endY = e.changedTouches[0].clientY;
-                const distance = endY - startY;
-
-                if (distance > 130) {
-                    window.location.reload();
-                }
-            }, { passive: true });
-        })();
-        </script>
     """, unsafe_allow_html=True)
 
 def render_multi_header_table(df, *args, **kwargs):
