@@ -57,12 +57,12 @@ def apply_custom_styles():
             font-size: 0.92rem !important;
         }
 
-        /* 4. 그리드 컨테이너 */
+        /* 4. 그리드 컨테이너 및 테이블 */
         .custom-grid-wrapper {
             overflow-x: auto !important;
             margin-bottom: 1.2rem;
             border-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid #334155;
             background-color: #0e1117;
             width: 100%;
             -webkit-overflow-scrolling: touch;
@@ -71,8 +71,7 @@ def apply_custom_styles():
         .custom-grid-table {
             width: max-content !important;
             min-width: 100% !important;
-            border-collapse: separate !important;
-            border-spacing: 0 !important;
+            border-collapse: collapse !important; /* ⚡ 셀 사이 틈 없이 테두리 완전 밀착 */
             font-size: 0.82rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             color: #f3f4f6;
@@ -80,52 +79,51 @@ def apply_custom_styles():
         }
 
         .custom-grid-table th {
-            background-color: rgba(255, 255, 255, 0.04) !important;
+            background-color: #161a22 !important;
             color: #9ca3af !important;
             font-weight: 500 !important;
             font-size: 0.81rem !important;
-            padding: 7px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+            padding: 8px 10px !important;
+            border-bottom: 1px solid #334155 !important;
+            border-right: 1px solid #262c36 !important;
             text-align: center !important;
             white-space: nowrap !important;
             user-select: none !important;
         }
 
-        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
         }
         .custom-grid-table th.sortable-th:hover {
-            background-color: rgba(255, 255, 255, 0.09) !important;
+            background-color: #1f242e !important;
             color: #60a5fa !important;
         }
 
         .custom-grid-table td {
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
-            padding: 6px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+            padding: 7px 10px !important;
+            border-bottom: 1px solid #1e242c !important;
+            border-right: 1px solid #1e242c !important;
             white-space: nowrap !important;
             text-align: center !important;
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) 및 우측 굵은 경계선 */
+        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 그라데이션 box-shadow 완전 제거 및 뚜렷한 실선 */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
             z-index: 3 !important;
-            background-color: #171b22 !important;
+            background-color: #161a22 !important;
             width: 120px !important;
             min-width: 120px !important;
             max-width: 120px !important;
             text-align: left !important;
             padding-left: 12px !important;
-            border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;
-            box-shadow: 3px 0 6px rgba(0, 0, 0, 0.5) !important;
+            border-right: 2px solid #64748b !important; /* 선명한 고정 실선 */
+            box-shadow: none !important; /* ⚡ 번짐/그라데이션 원천 삭제 */
         }
 
         .custom-grid-table td.col-name {
@@ -142,8 +140,8 @@ def apply_custom_styles():
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;
-            box-shadow: 3px 0 6px rgba(0, 0, 0, 0.5) !important;
+            border-right: 2px solid #64748b !important; /* 선명한 고정 실선 */
+            box-shadow: none !important; /* ⚡ 번짐/그라데이션 원천 삭제 */
         }
 
         .custom-grid-table tr:hover td {
@@ -151,6 +149,11 @@ def apply_custom_styles():
         }
         .custom-grid-table tr:hover td.col-name {
             background-color: #161a22 !important;
+        }
+
+        /* ⚡ 2. 년도 구분용 굵고 선명한 구분선 클래스 */
+        .thick-border-r {
+            border-right: 2px solid #64748b !important;
         }
 
         .naver-pc-link {
@@ -177,11 +180,10 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 종목코드가 있다면 행 속성용으로 보관하고 화면 출력용 DF에서는 제외
+    # 종목코드가 있다면 행 식별 속성(data-code)용으로 보관하고 화면 출력에서는 제외
     code_series = None
     if "종목코드" in df.columns:
         code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
-        # 종목코드가 컬럼 목록에 포함되어 있다면 화면용에서는 제외 (현재 시세 탭 제외)
         tab_name = kwargs.get("tab_name", "tab")
         if tab_name != "tab_basic":
             df = df.drop(columns=["종목코드"])
@@ -206,11 +208,9 @@ def render_multi_header_table(df, *args, **kwargs):
         num_header_rows = len(header_rows)
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
-            # data-col-idx 계산
             col_seq = 0 if r_idx == 0 else (1 if not has_checkbox else 2)
-            
-            # 현재 행의 누적 열 위치 계산 (구분선 위치 판별용)
             cur_col_pos = 0
+
             for cell in row:
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
@@ -232,16 +232,15 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
-                # ⚡ 굵은 구분선 판별: 해당 블록의 끝 열 인덱스가 div_set에 속하는지 검사
+                # ⚡ 굵은 구분선 판별: 이 헤더 블록이 끝나는 지점이 구분선 위치인지 확인
                 end_col_idx = cur_col_pos + c_span_val - 1
-                border_style = ""
                 if end_col_idx in div_set or cell.get("border_right", False):
-                    border_style = ' style="border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;"'
+                    th_classes.append("thick-border-r")
 
                 cur_col_pos += c_span_val
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}{border_style}>{txt}</th>')
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
@@ -253,13 +252,11 @@ def render_multi_header_table(df, *args, **kwargs):
             if c != "선택":
                 th_classes.append("sortable-th")
                 th_attrs = f' data-col-idx="{idx}"'
-
-            border_style = ""
             if idx in div_set:
-                border_style = ' style="border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;"'
+                th_classes.append("thick-border-r")
 
             class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-            thead_parts.append(f'<th{class_str}{th_attrs}{border_style}>{c}</th>')
+            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
@@ -278,22 +275,25 @@ def render_multi_header_table(df, *args, **kwargs):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             
-            # ⚡ 굵은 구분선 인덱스 컬럼의 우측에 2.5px 흰색 경계선 부여
-            border_r = "border-right: 2.5px solid rgba(255, 255, 255, 0.45) !important;" if col_idx in div_set else ""
+            td_classes = []
+            if col_idx in div_set:
+                td_classes.append("thick-border-r")
 
             if col_name == "선택":
-                tbody_parts.append(f'<td style="{border_r}"><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
+                class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
+                tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
                 continue
 
             if col_name == "종목명":
+                td_classes.append("col-name")
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
                     content = f'<a href="{pc_url}" target="_blank" class="naver-pc-link">{val}</a>'
                 else:
                     content = val
 
-                style_attr = f'style="{border_r}"' if border_r else ""
-                tbody_parts.append(f'<td class="col-name" {style_attr}>{content}</td>')
+                class_str = f' class="{" ".join(td_classes)}"'
+                tbody_parts.append(f'<td{class_str}>{content}</td>')
                 continue
 
             color_css = ""
@@ -303,10 +303,10 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif val.startswith("-"):
                     color_css = "color: #60a5fa !important; font-weight: 500;"
 
-            style_combined = f"{color_css} {border_r}".strip()
-            style_attr = f'style="{style_combined}"' if style_combined else ""
+            style_attr = f' style="{color_css}"' if color_css else ""
+            class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
 
-            tbody_parts.append(f'<td {style_attr}>{val}</td>')
+            tbody_parts.append(f'<td{class_str}{style_attr}>{val}</td>')
 
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
