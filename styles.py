@@ -308,7 +308,7 @@ def inject_client_sort_sync_engine():
         if (!doc || !win) return;
 
         // ==========================================
-        // ⚡ [1] 네이티브 스타일 원형 스피너 새로고침 엔진 (오작동 방지 강화)
+        // ⚡ [1] 최상단 완전 도달 후 추가 130px 당김 시에만 발동하는 스피너 엔진
         // ==========================================
         if (!win.__ptr_active) {
             win.__ptr_active = true;
@@ -342,9 +342,8 @@ def inject_client_sort_sync_engine():
             `;
             doc.body.appendChild(ptrBox);
 
-            let touchStartY = 0;
+            let topReachedY = null;
             let touchStartX = 0;
-            let isPullGesture = false;
 
             function getScrollTop() {
                 const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
@@ -352,70 +351,79 @@ def inject_client_sort_sync_engine():
             }
 
             win.addEventListener('touchstart', function(e) {
-                // 터치를 시작한 바로 그 시점에 이미 최상단(0)이어야만 허용
-                if (e.touches.length === 1 && getScrollTop() === 0) {
-                    touchStartY = e.touches[0].clientY;
+                if (e.touches.length === 1) {
                     touchStartX = e.touches[0].clientX;
-                    isPullGesture = true;
-                } else {
-                    isPullGesture = false;
+                    if (getScrollTop() <= 0) {
+                        topReachedY = e.touches[0].clientY;
+                    } else {
+                        topReachedY = null;
+                    }
                 }
             }, { passive: true });
 
             win.addEventListener('touchmove', function(e) {
-                if (!isPullGesture) return;
-
-                if (getScrollTop() > 0) {
-                    isPullGesture = false;
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
                 const currentY = e.touches[0].clientY;
                 const currentX = e.touches[0].clientX;
-                const distY = currentY - touchStartY;
-                const distX = Math.abs(currentX - touchStartX);
+                const st = getScrollTop();
 
-                // 위로 올리거나 좌우 이동 폭이 크면 취소
-                if (distY <= 0 || distX > distY) {
+                // 표가 올라가거나 내려가며 스크롤되는 중에는 절대 새로고침 발동 불가
+                if (st > 0) {
+                    topReachedY = null;
                     ptrBox.style.top = '-65px';
                     ptrBox.style.opacity = '0';
                     return;
                 }
 
-                if (distY > 20) {
-                    const pullY = Math.min((distY - 20) * 0.4, 75);
+                // 표가 완전히 최상단에 닿아서 멈춘 그 순간의 Y 좌표를 새로운 0점으로 기록
+                if (st <= 0 && topReachedY === null) {
+                    topReachedY = currentY;
+                    return;
+                }
+
+                const overscrollDistance = currentY - topReachedY;
+                const distX = Math.abs(currentX - touchStartX);
+
+                if (overscrollDistance <= 0 || distX > overscrollDistance) {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                if (overscrollDistance > 15) {
+                    const pullY = Math.min((overscrollDistance - 15) * 0.4, 75);
                     ptrBox.style.top = `${pullY - 45}px`;
-                    ptrBox.style.opacity = Math.min((distY - 20) / 60, 1);
+                    ptrBox.style.opacity = Math.min((overscrollDistance - 15) / 60, 1);
                     const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) svg.style.transform = `rotate(${distY * 3}deg)`;
+                    if (svg) svg.style.transform = `rotate(${overscrollDistance * 3}deg)`;
                 }
             }, { passive: true });
 
             win.addEventListener('touchend', function(e) {
-                if (!isPullGesture) return;
-                isPullGesture = false;
-                const distY = e.changedTouches[0].clientY - touchStartY;
+                if (topReachedY !== null) {
+                    const endY = e.changedTouches[0].clientY;
+                    const finalOverscroll = endY - topReachedY;
 
-                // 130px 이상 확실하게 당겼을 때만 새로고침 트리거
-                if (distY > 130 && getScrollTop() === 0) {
-                    ptrBox.style.top = '20px';
-                    ptrBox.style.opacity = '1';
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) {
-                        svg.animate([
-                            { transform: 'rotate(0deg)' },
-                            { transform: 'rotate(360deg)' }
-                        ], { duration: 600, iterations: Infinity });
+                    // 표가 최상단에 완전히 멈춘 상태에서 순수하게 추가로 130px 이상 당겼을 때만 새로고침!
+                    if (finalOverscroll >= 130 && getScrollTop() <= 0) {
+                        ptrBox.style.top = '20px';
+                        ptrBox.style.opacity = '1';
+                        const svg = ptrBox.querySelector('#ptr_svg');
+                        if (svg) {
+                            svg.animate([
+                                { transform: 'rotate(0deg)' },
+                                { transform: 'rotate(360deg)' }
+                            ], { duration: 600, iterations: Infinity });
+                        }
+                        setTimeout(() => {
+                            win.location.reload();
+                        }, 150);
+                    } else {
+                        ptrBox.style.top = '-65px';
+                        ptrBox.style.opacity = '0';
                     }
-                    setTimeout(() => {
-                        win.location.reload();
-                    }, 150);
-                } else {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
                 }
+
+                topReachedY = null;
             }, { passive: true });
         }
 
