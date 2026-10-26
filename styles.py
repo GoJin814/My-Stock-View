@@ -62,7 +62,7 @@ def apply_custom_styles():
             overflow-x: auto !important;
             margin-bottom: 1.2rem;
             border-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             background-color: #0e1117;
             width: 100%;
             -webkit-overflow-scrolling: touch;
@@ -85,8 +85,8 @@ def apply_custom_styles():
             font-weight: 500 !important;
             font-size: 0.81rem !important;
             padding: 7px 10px !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
             text-align: center !important;
             white-space: nowrap !important;
             user-select: none !important;
@@ -107,13 +107,13 @@ def apply_custom_styles():
             color: #f3f4f6 !important;
             padding: 6px 10px !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
             white-space: nowrap !important;
             text-align: center !important;
             font-variant-numeric: tabular-nums !important;
         }
 
-        /* 5. 종목명 120px 좌측 고정 (Sticky) */
+        /* ⚡ 1. 종목명 열 우측 구분선 굵게 고정 (Sticky) */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
@@ -124,7 +124,8 @@ def apply_custom_styles():
             max-width: 120px !important;
             text-align: left !important;
             padding-left: 12px !important;
-            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.4) !important;
+            border-right: 2px solid rgba(255, 255, 255, 0.45) !important;
+            box-shadow: 3px 0 6px rgba(0, 0, 0, 0.5) !important;
         }
 
         .custom-grid-table td.col-name {
@@ -141,7 +142,8 @@ def apply_custom_styles():
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.4) !important;
+            border-right: 2px solid rgba(255, 255, 255, 0.45) !important;
+            box-shadow: 3px 0 6px rgba(0, 0, 0, 0.5) !important;
         }
 
         .custom-grid-table tr:hover td {
@@ -161,7 +163,6 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
-        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -190,12 +191,13 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
+    # 1. 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
             col_seq = 0 if r_idx == 0 else (3 if has_checkbox else 2)
-            for cell in row:
+            for cell_idx, cell in enumerate(row):
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
                 r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
@@ -215,8 +217,13 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
+                # ⚡ 2. 헤더 상단 대분류(연도) 우측에도 굵은 선 부여
+                border_style = ""
+                if cell.get("border_right", False):
+                    border_style = ' style="border-right: 2px solid rgba(255, 255, 255, 0.45) !important;"'
+
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}{border_style}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
@@ -228,11 +235,17 @@ def render_multi_header_table(df, *args, **kwargs):
             if c != "선택":
                 th_classes.append("sortable-th")
                 th_attrs = f' data-col-idx="{idx}"'
+            
+            border_style = ""
+            if idx in div_set:
+                border_style = ' style="border-right: 2px solid rgba(255, 255, 255, 0.45) !important;"'
+
             class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
+            thead_parts.append(f'<th{class_str}{th_attrs}{border_style}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
+    # 2. 본문 조립
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
@@ -241,7 +254,9 @@ def render_multi_header_table(df, *args, **kwargs):
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
-            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
+            
+            # ⚡ 2. 년도 구분선 컬럼 우측에 굵은 선 (2px 흰색 45% 투명도) 적용
+            border_r = "border-right: 2px solid rgba(255, 255, 255, 0.45) !important;" if col_idx in div_set else ""
 
             if col_name == "선택":
                 tbody_parts.append(f'<td style="{border_r}"><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
@@ -292,9 +307,6 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ==========================================
-        // ⚡ [1] 웨일 스와이프 새로고침 엔진 (최상단 검증)
-        // ==========================================
         let ptrBox = doc.getElementById('native_ptr_box');
         if (!ptrBox) {
             ptrBox = doc.createElement('div');
@@ -416,9 +428,6 @@ def inject_client_sort_sync_engine():
             }
         };
 
-        // ==========================================
-        // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
-        // ==========================================
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '');
