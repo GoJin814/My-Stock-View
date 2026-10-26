@@ -131,12 +131,14 @@ def render_tab_returns_pension():
         if pd.notna(avg_val) and avg_val > 0: styles[row.index.get_loc("전체 기간\n평균 수익률")] = 'color: #ff4b4b; font-weight: bold;'
         elif pd.notna(avg_val) and avg_val < 0: styles[row.index.get_loc("전체 기간\n평균 수익률")] = 'color: #60a5fa; font-weight: bold;'
         return styles
-
-    st.markdown("#### 📊 전체 기간 성과 요약 (연금)")
+        
+    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함, 개인연금에서 투자한 항목만 고려한 수익률입니다.")
+    
+    st.markdown("#### 📊 전체 기간 성과 요약")
     st.dataframe(df_summary.style.apply(style_summary, axis=1), column_config={"구분": st.column_config.TextColumn("구분", width=50), "총 수익": st.column_config.TextColumn("총 수익", width=95), "총 수익률*": st.column_config.TextColumn("총 수익률*", width=85), "전체 기간\n평균 수익률": st.column_config.TextColumn("평균 수익률", width=100), "시작": st.column_config.TextColumn("시작", width=90), "입고": st.column_config.TextColumn("입고", width=90), "출고": st.column_config.TextColumn("출고", width=90), "순 입금액": st.column_config.TextColumn("순 입금액", width=90), "종료": st.column_config.TextColumn("종료", width=95), "_sum_profit": None, "_sum_rate": None, "_sum_avg_rate": None}, hide_index=True, use_container_width=True)
 
     st.write("")
-    st.markdown("#### 📅 연도별 현황 (연금)")
+    st.markdown("#### 📅 연도별 현황")
     def style_performance(row):
         styles = [''] * len(row)
         if pd.notna(row["_profit"]) and row["_profit"] > 0: styles[row.index.get_loc("총 수익")] = 'color: #ff4b4b; font-weight: bold;'
