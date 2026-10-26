@@ -9,16 +9,22 @@ def render_tab_perf(df_perf: pd.DataFrame, prev_yr: str, latest_yr: str):
 
     header_rows = [
         [
-            {"text": "종목명", "rowspan": 2},
-            {"text": "종목코드", "rowspan": 2},
+            {"text": "종목명", "rowspan": 2, "col": "종목명"},
+            {"text": "종목코드", "rowspan": 2, "col": "종목코드"},
             {"text": f"{prev_yr}", "colspan": 3},
             {"text": f"{latest_yr}", "colspan": 3},
             {"text": "YoY 성장률", "colspan": 3}
         ],
         [
-            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
-            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
-            {"text": "매출"}, {"text": "영업익"}, {"text": "순익"}
+            {"text": "매출액", "col": "매출_직전"},
+            {"text": "영업이익", "col": "영업익_직전"},
+            {"text": "당기순익", "col": "순익_직전"},
+            {"text": "매출액", "col": "매출_최근"},
+            {"text": "영업이익", "col": "영업익_최근"},
+            {"text": "당기순익", "col": "순익_최근"},
+            {"text": "매출", "col": "매출_YoY"},
+            {"text": "영업익", "col": "영업익_YoY"},
+            {"text": "순익", "col": "순익_YoY"}
         ]
     ]
 
