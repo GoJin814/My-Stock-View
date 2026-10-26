@@ -89,8 +89,8 @@ def render_tab_market():
         st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 수기로 등록하거나 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
-    # ⚡ 주요 지표 범위 하이라이트 UI (PBR: 상한선 / 예탁금·신용잔고: 하한선)
-    show_highlight_box = st.toggle("🚨 주요 지표 범위 하이라이트 (빨간색 강조)", value=False)
+    # ⚡ 1. 토글 텍스트 간소화: "🚨 주요 지표 범위"
+    show_highlight_box = st.toggle("🚨 주요 지표 범위", value=False)
     
     use_pbr_hl = False
     pbr_threshold = 0.90
@@ -99,19 +99,20 @@ def render_tab_market():
     use_crd_hl = False
     crd_threshold = 0.85
 
+    # ⚡ 2. 입력란/체크박스 설명 최대 간소화
     if show_highlight_box:
         with st.container():
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
             c_hl1, c_hl2, c_hl3 = st.columns(3)
             with c_hl1:
-                use_pbr_hl = st.checkbox("PBR 강조 (상한선)", value=True)
-                pbr_threshold = st.number_input("PBR 최대 상한선 (0 ~ 입력값)", value=0.90, step=0.05, format="%.2f", disabled=not use_pbr_hl)
+                use_pbr_hl = st.checkbox("PBR", value=True)
+                pbr_threshold = st.number_input("상한선", value=0.90, step=0.05, format="%.2f", disabled=not use_pbr_hl)
             with c_hl2:
-                use_dep_hl = st.checkbox("예탁금 비율 강조 (하한선)", value=True)
-                dep_threshold = st.number_input("예탁금 비율(%) 최소 하한선 (입력값 이상)", value=2.50, step=0.10, format="%.2f", disabled=not use_dep_hl)
+                use_dep_hl = st.checkbox("예탁금", value=True)
+                dep_threshold = st.number_input("하한선 (%)", value=2.50, step=0.10, format="%.2f", disabled=not use_dep_hl)
             with c_hl3:
-                use_crd_hl = st.checkbox("신용잔고 비율 강조 (하한선)", value=True)
-                crd_threshold = st.number_input("신용잔고 비율(%) 최소 하한선 (입력값 이상)", value=0.85, step=0.05, format="%.2f", disabled=not use_crd_hl)
+                use_crd_hl = st.checkbox("신용잔고", value=True)
+                crd_threshold = st.number_input("하한선 (%)", value=0.85, step=0.05, format="%.2f", disabled=not use_crd_hl)
             st.markdown('</div>', unsafe_allow_html=True)
 
     # 전체 선택 체크박스
@@ -170,7 +171,7 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
-    # ⚡ 조건부 빨간색 스타일링 함수 (PBR: 0~상한선 / 예탁금·신용: 하한선 이상)
+    # 조건부 빨간색 스타일링 함수 (PBR: 0~상한선 / 예탁금·신용: 하한선 이상)
     def highlight_ranges(row):
         styles = [''] * len(row)
         idx_pbr = row.index.get_loc("PBR")
@@ -179,17 +180,14 @@ def render_tab_market():
 
         red_style = 'color: #ff4b4b; font-weight: bold;'
 
-        # PBR: 0 ~ 입력값 이하 (상한선)
         if use_pbr_hl and pd.notna(row["_num_pbr"]):
             if 0.0 <= row["_num_pbr"] <= pbr_threshold:
                 styles[idx_pbr] = red_style
 
-        # 예탁금 비율: 입력값 이상 (하한선)
         if use_dep_hl and pd.notna(row["_num_dep"]):
             if row["_num_dep"] >= dep_threshold:
                 styles[idx_dep] = red_style
 
-        # 신용잔고 비율: 입력값 이상 (하한선)
         if use_crd_hl and pd.notna(row["_num_crd"]):
             if row["_num_crd"] >= crd_threshold:
                 styles[idx_crd] = red_style
