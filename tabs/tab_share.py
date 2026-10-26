@@ -9,22 +9,14 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
 
     header_rows = [
         [
-            {"text": "종목명", "rowspan": 2, "col": "종목명"},
-            {"text": "종목코드", "rowspan": 2, "col": "종목코드"},
+            {"text": "종목명", "rowspan": 2},
+            {"text": "종목코드", "rowspan": 2},
             {"text": f"{prev_yr}", "colspan": 5},
             {"text": f"{latest_yr}", "colspan": 5}
         ],
         [
-            {"text": "PER", "col": "PER_직전"},
-            {"text": "PBR", "col": "PBR_직전"},
-            {"text": "ROE", "col": "ROE_직전"},
-            {"text": "EPS", "col": "EPS_직전"},
-            {"text": "BPS", "col": "BPS_직전"},
-            {"text": "PER", "col": "PER_최근"},
-            {"text": "PBR", "col": "PBR_최근"},
-            {"text": "ROE", "col": "ROE_최근"},
-            {"text": "EPS", "col": "EPS_최근"},
-            {"text": "BPS", "col": "BPS_최근"}
+            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"},
+            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"}, {"text": "BPS"}
         ]
     ]
 
@@ -41,5 +33,5 @@ def render_tab_share(df_share: pd.DataFrame, prev_yr: str, latest_yr: str):
         header_rows=header_rows,
         divider_indices=[1, 6],
         has_naver_link=True,
-        tab_name="share"  # ⚡ 탭 고정 식별자
+        tab_name="share"
     )
