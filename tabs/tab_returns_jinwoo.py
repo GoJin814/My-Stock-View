@@ -129,41 +129,30 @@ def render_tab_returns_jinwoo():
         tot_out += d_out
 
         e_net_in = c_in - d_out
-        
-        # 연도별 총 수익: =F7-B7-C7+D7
         g_profit = f_end - b_start - c_in + d_out
-
-        # 연도별 총 수익률: =(F7-B7-(C7-D7))/(B7+0.5*C7-0.5*D7)
         denom = b_start + (0.5 * c_in) - (0.5 * d_out)
         h_rate = ((f_end - b_start - (c_in - d_out)) / denom * 100.0) if denom != 0 else 0.0
         yearly_rates.append(h_rate)
 
         year_records.append({
             "연도": yr,
+            "총 수익": fmt_won(g_profit),
+            "총 수익률*": fmt_pct(h_rate),
             "시작": fmt_won(b_start),
             "입고": fmt_won(c_in),
             "출고": fmt_won(d_out),
             "순 입금액": fmt_won(e_net_in),
             "종료": fmt_won(f_end),
-            "총 수익": fmt_won(g_profit),
-            "총 수익률*": fmt_pct(h_rate),
             "_num_rate": h_rate,
             "_profit": g_profit
         })
 
     tot_net_in = tot_in - tot_out
-    
-    # 전체 기간 종료(F3): 마지막 연도 종료값 그대로 유지 (예수금은 합산 안 함)
     tot_final_end = latest_end 
-
-    # 전체 기간 총 수익 수식: =F3-B3-C3+D3 (여기에 예수금 B1이 반영되도록 계산)
     tot_profit = tot_final_end - first_start - tot_in + tot_out + float(new_cash)
-
-    # 전체 기간 총 수익률 수식: =(F3+B1-B3-(C3-D3))/(B3+B1+0.5*C3-0.5*D3)
     tot_denom = first_start + float(new_cash) + (0.5 * tot_in) - (0.5 * tot_out)
     tot_rate = ((tot_final_end + float(new_cash) - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
 
-    # 전체 기간 평균 수익률 수식: =POWER(PRODUCT(1+H6:H20),1/COUNT(H6:H20))-1
     n_years = len(yearly_rates)
     if n_years > 0:
         product_val = 1.0
@@ -175,77 +164,76 @@ def render_tab_returns_jinwoo():
 
     summary_record = [{
         "구분": "전체",
+        "총 수익": fmt_won(tot_profit),
+        "총 수익률*": fmt_pct(tot_rate),
+        "전체 기간\n평균 수익률": fmt_pct(avg_yearly_rate),
         "시작": fmt_won(first_start),
         "입고": fmt_won(tot_in),
         "출고": fmt_won(tot_out),
         "순 입금액": fmt_won(tot_net_in),
         "종료": fmt_won(tot_final_end),
-        "총 수익": fmt_won(tot_profit),
-        "총 수익률*": fmt_pct(tot_rate),
-        "전체 기간\n평균 수익률": fmt_pct(avg_yearly_rate)
+        "_sum_profit": tot_profit,
+        "_sum_rate": tot_rate,
+        "_sum_avg_rate": avg_yearly_rate
     }]
 
     df_summary = pd.DataFrame(summary_record)
     df_years = pd.DataFrame(year_records)
 
-    st.caption("※ 엑셀 수식과 100% 동일하게 연동됩니다. (전체 총 수익 및 수익률에 잔여 예수금 B1 포함)")
+    def style_summary(row):
+        styles = [''] * len(row)
+        p_val, r_val, avg_val = row["_sum_profit"], row["_sum_rate"], row["_sum_avg_rate"]
+        if pd.notna(p_val) and p_val > 0: styles[row.index.get_loc("총 수익")] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(p_val) and p_val < 0: styles[row.index.get_loc("총 수익")] = 'color: #60a5fa; font-weight: bold;'
+        if pd.notna(r_val) and r_val > 0: styles[row.index.get_loc("총 수익률*")] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(r_val) and r_val < 0: styles[row.index.get_loc("총 수익률*")] = 'color: #60a5fa; font-weight: bold;'
+        if pd.notna(avg_val) and avg_val > 0: styles[row.index.get_loc("전체 기간\n평균 수익률")] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(avg_val) and avg_val < 0: styles[row.index.get_loc("전체 기간\n평균 수익률")] = 'color: #60a5fa; font-weight: bold;'
+        return styles
 
-    # 상단 요약 테이블
     st.markdown("#### 📊 전체 기간 성과 요약 (진우)")
     st.dataframe(
-        df_summary,
+        df_summary.style.apply(style_summary, axis=1),
         column_config={
-            "구분": st.column_config.TextColumn("구분", width=65),
-            "시작": st.column_config.TextColumn("시작", width=105),
-            "입고": st.column_config.TextColumn("입고", width=105),
-            "출고": st.column_config.TextColumn("출고", width=105),
-            "순 입금액": st.column_config.TextColumn("순 입금액", width=105),
-            "종료": st.column_config.TextColumn("종료", width=115),
-            "총 수익": st.column_config.TextColumn("총 수익", width=105),
-            "총 수익률*": st.column_config.TextColumn("총 수익률*", width=95),
-            "전체 기간\n평균 수익률": st.column_config.TextColumn("전체 기간 평균 수익률", width=140),
+            "구분": st.column_config.TextColumn("구분", width=50),
+            "총 수익": st.column_config.TextColumn("총 수익", width=95),
+            "총 수익률*": st.column_config.TextColumn("총 수익률*", width=85),
+            "전체 기간\n평균 수익률": st.column_config.TextColumn("평균 수익률", width=100),
+            "시작": st.column_config.TextColumn("시작", width=90),
+            "입고": st.column_config.TextColumn("입고", width=90),
+            "출고": st.column_config.TextColumn("출고", width=90),
+            "순 입금액": st.column_config.TextColumn("순 입금액", width=90),
+            "종료": st.column_config.TextColumn("종료", width=95),
+            "_sum_profit": None,
+            "_sum_rate": None,
+            "_sum_avg_rate": None
         },
         hide_index=True,
         use_container_width=True
     )
 
     st.write("")
-    # 하단 연도별 테이블
     st.markdown("#### 📅 연도별 현황 (진우)")
     
     def style_performance(row):
         styles = [''] * len(row)
-        idx_rate = row.index.get_loc("총 수익률*")
-        idx_profit = row.index.get_loc("총 수익")
-        
-        num_rate = row["_num_rate"]
-        num_profit = row["_profit"]
-        
-        if pd.notna(num_rate) and num_rate > 0:
-            styles[idx_rate] = 'color: #ff4b4b; font-weight: bold;'
-        elif pd.notna(num_rate) and num_rate < 0:
-            styles[idx_rate] = 'color: #60a5fa; font-weight: bold;'
-            
-        if pd.notna(num_profit) and num_profit > 0:
-            styles[idx_profit] = 'color: #ff4b4b; font-weight: bold;'
-        elif pd.notna(num_profit) and num_profit < 0:
-            styles[idx_profit] = 'color: #60a5fa; font-weight: bold;'
-            
+        if pd.notna(row["_profit"]) and row["_profit"] > 0: styles[row.index.get_loc("총 수익")] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(row["_profit"]) and row["_profit"] < 0: styles[row.index.get_loc("총 수익")] = 'color: #60a5fa; font-weight: bold;'
+        if pd.notna(row["_num_rate"]) and row["_num_rate"] > 0: styles[row.index.get_loc("총 수익률*")] = 'color: #ff4b4b; font-weight: bold;'
+        elif pd.notna(row["_num_rate"]) and row["_num_rate"] < 0: styles[row.index.get_loc("총 수익률*")] = 'color: #60a5fa; font-weight: bold;'
         return styles
 
-    styled_years_df = df_years.style.apply(style_performance, axis=1)
-
     st.dataframe(
-        styled_years_df,
+        df_years.style.apply(style_performance, axis=1),
         column_config={
-            "연도": st.column_config.TextColumn("연도", width=75),
-            "시작": st.column_config.TextColumn("시작", width=110),
-            "입고": st.column_config.TextColumn("입고", width=110),
-            "출고": st.column_config.TextColumn("출고", width=110),
-            "순 입금액": st.column_config.TextColumn("순 입금액", width=110),
-            "종료": st.column_config.TextColumn("종료", width=120),
-            "총 수익": st.column_config.TextColumn("총 수익", width=110),
-            "총 수익률*": st.column_config.TextColumn("총 수익률*", width=100),
+            "연도": st.column_config.TextColumn("연도", width=50),
+            "총 수익": st.column_config.TextColumn("총 수익", width=95),
+            "총 수익률*": st.column_config.TextColumn("총 수익률*", width=85),
+            "시작": st.column_config.TextColumn("시작", width=90),
+            "입고": st.column_config.TextColumn("입고", width=90),
+            "출고": st.column_config.TextColumn("출고", width=90),
+            "순 입금액": st.column_config.TextColumn("순 입금액", width=90),
+            "종료": st.column_config.TextColumn("종료", width=95),
             "_num_rate": None,
             "_profit": None
         },
