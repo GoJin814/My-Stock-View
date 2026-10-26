@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import json
 import os
-import re
 import base64
 import requests
 
@@ -152,7 +151,12 @@ def render_tab_returns_pension():
         return styles
 
     df_years = pd.DataFrame(year_records)
-    st.dataframe(df_years.style.apply(style_performance, axis=1), hide_index=True, use_container_width=True)
+    st.dataframe(
+        df_years.style.apply(style_performance, axis=1),
+        column_config={"_num_rate": None, "_profit": None},
+        hide_index=True,
+        use_container_width=True
+    )
     st.write("")
     render_input_panel(data, "pension")
 
