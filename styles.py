@@ -12,7 +12,6 @@ def apply_custom_styles():
             color-scheme: dark !important;
         }
 
-        /* 1. 기본 레이아웃 및 브라우저 스크롤 개방 */
         html, body {
             color-scheme: dark !important;
             background-color: #0e1117 !important;
@@ -37,7 +36,6 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. 필터 토글 스위치 및 컨테이너 */
         div[data-testid="stToggle"] {
             margin-bottom: 0.5rem !important;
         }
@@ -56,7 +54,6 @@ def apply_custom_styles():
             margin-bottom: 1.2rem !important;
         }
 
-        /* 3. 탭 바 여백 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -67,7 +64,6 @@ def apply_custom_styles():
             font-size: 0.92rem !important;
         }
 
-        /* 4. 그리드 컨테이너: 상하 70vh 한도 내 고정 스크롤 */
         .custom-grid-wrapper {
             overflow-x: auto !important;
             overflow-y: auto !important;
@@ -92,40 +88,40 @@ def apply_custom_styles():
             background-color: #0e1117;
         }
 
-        /* 헤더 Sticky 속성 */
         .custom-grid-table thead {
             position: sticky !important;
             top: 0 !important;
             z-index: 10 !important;
         }
 
+        /* ⚡ 2줄 표기 강제 허용: white-space: normal, line-height 단축 */
         .custom-grid-table th {
             background-color: #161a22 !important;
             color: #9ca3af !important;
             font-weight: 500 !important;
             font-size: 0.81rem !important;
-            padding: 7px 10px !important;
+            padding: 6px 10px !important;
             border-bottom: 1px solid #334155 !important;
             border-right: 1px solid #262c36 !important;
             text-align: center !important;
-            white-space: nowrap !important;
+            white-space: normal !important;
+            word-break: keep-all !important;
+            line-height: 1.2 !important;
             user-select: none !important;
             box-sizing: border-box !important;
+            vertical-align: middle !important;
         }
 
-        /* 1행 헤더 top 0 */
         .custom-grid-table thead tr:first-child th {
             top: 0 !important;
             z-index: 10 !important;
         }
 
-        /* 2행 헤더 1행 바로 아래 고정 */
         .custom-grid-table thead tr:nth-child(2) th {
             top: 2.15rem !important;
             z-index: 10 !important;
         }
 
-        /* 체크박스 열(선택) 좌측 고정 설정 */
         .custom-grid-table th.col-chk-th,
         .custom-grid-table td.col-chk {
             position: sticky !important;
@@ -146,7 +142,6 @@ def apply_custom_styles():
             background-color: #0e1117 !important;
         }
 
-        /* 종목명 헤더: 체크박스가 있을 때는 left 44px, 없을 때는 left 0 */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             top: 0 !important;
@@ -161,7 +156,6 @@ def apply_custom_styles():
             vertical-align: middle !important;
         }
 
-        /* 본문 종목명 셀 */
         .custom-grid-table td.col-name {
             position: sticky !important;
             z-index: 5 !important;
@@ -178,7 +172,6 @@ def apply_custom_styles():
             border-right: none !important;
         }
 
-        /* 체크박스 유무에 따른 종목명 left 위치 지정 */
         .table-has-chk th.col-name-th,
         .table-has-chk td.col-name {
             left: 44px !important;
@@ -188,7 +181,6 @@ def apply_custom_styles():
             left: 0 !important;
         }
 
-        /* 종목명 오른쪽 붙박이 고정 세로선 (2.5px 흰색 선) */
         .custom-grid-table th.col-name-th::after,
         .custom-grid-table td.col-name::after {
             content: "" !important;
@@ -202,13 +194,11 @@ def apply_custom_styles():
             z-index: 101 !important;
         }
 
-        /* 연도별 구분을 위한 2.5px 화이트 세로선 */
         .custom-grid-table th.year-divider,
         .custom-grid-table td.year-divider {
             border-right: 2.5px solid #ffffff !important;
         }
 
-        /* 본문 일반 셀 */
         .custom-grid-table td {
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
@@ -228,6 +218,14 @@ def apply_custom_styles():
         .custom-grid-table th.sortable-th:hover {
             background-color: #1f242e !important;
             color: #60a5fa !important;
+        }
+
+        .sort-indicator {
+            display: inline-block;
+            margin-left: 2px;
+            font-size: 0.72rem;
+            color: #60a5fa;
+            vertical-align: middle;
         }
 
         .custom-grid-table tr:hover td {
@@ -285,17 +283,18 @@ def render_multi_header_table(df, *args, **kwargs):
 
     table_chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
 
-    # 1. 헤더 HTML 조립
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
-        leaf_col_idx = 1 if not has_checkbox else 2
 
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
             cur_col_pos = 0
 
-            for cell in row:
+            # 2행 헤더 인덱스 계산용 (주당가치, 실적용)
+            multi_leaf_idx = 1 if not has_checkbox else 2
+
+            for c_cell_idx, cell in enumerate(row):
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
                 r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
@@ -311,13 +310,18 @@ def render_multi_header_table(df, *args, **kwargs):
                     th_classes.append("col-name-th")
 
                 is_leaf = (r_idx + r_span_val == num_header_rows)
+                
+                # ⚡ [정확한 정렬 컬럼 인덱스 부여]
                 if txt != "선택" and is_leaf:
                     th_classes.append("sortable-th")
-                    if txt == "종목명":
+                    if num_header_rows == 1:
+                        # 국내지수 등 단일 행 헤더는 배열 인덱스 그대로 매핑
+                        assigned_idx = c_cell_idx
+                    elif txt == "종목명":
                         assigned_idx = 0 if not has_checkbox else 1
                     else:
-                        assigned_idx = leaf_col_idx
-                        leaf_col_idx += 1
+                        assigned_idx = multi_leaf_idx
+                        multi_leaf_idx += 1
                     th_attrs = f' data-col-idx="{assigned_idx}"'
 
                 is_divider = False
@@ -327,7 +331,7 @@ def render_multi_header_table(df, *args, **kwargs):
                         is_divider = True
                     cur_col_pos += c_span_val
                 else:
-                    target_div_idx = leaf_col_idx - 1
+                    target_div_idx = multi_leaf_idx - 1
                     if target_div_idx in div_set or cell.get("border_right", False):
                         is_divider = True
 
@@ -358,7 +362,6 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 데이터 행 HTML 조립
     tbody_parts = ["<tbody>"]
     for row_i, (_, row) in enumerate(df.iterrows()):
         code_val = ""
@@ -421,7 +424,6 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """URL 쿼리 기반 정렬 동기화 + 웨일 스와이프 새로고침 + 무새로고침 정렬 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -523,9 +525,19 @@ def inject_client_sort_sync_engine():
             }
         };
 
+        // ⚡ [날짜 파싱 정밀화] YYYY/MM/DD 날짜를 온전한 숫자(20261026)로 변환
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
-            let clean = str.replace(/[,%원배\\s]/g, '');
+            let clean = str.replace(/[,%원배\\s]/g, '').trim();
+
+            if (/^\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2}$/.test(clean)) {
+                let parts = clean.split(/[\\/\\-]/);
+                let y = parts[0];
+                let m = parts[1].padStart(2, '0');
+                let d = parts[2].padStart(2, '0');
+                return parseInt(y + m + d, 10);
+            }
+
             if (clean.includes('조')) {
                 let parts = clean.split('조');
                 let jo = parseFloat(parts[0]) || 0;
@@ -560,9 +572,7 @@ def inject_client_sort_sync_engine():
         function getActiveCodeOrder() {
             const urlParams = new URLSearchParams(win.location.search);
             const urlCodes = urlParams.get('sort_codes');
-            if (urlCodes) {
-                return urlCodes.split(',');
-            }
+            if (urlCodes) return urlCodes.split(',');
             const saved = win.sessionStorage.getItem('stock_sync_order');
             return saved ? JSON.parse(saved) : null;
         }
@@ -570,7 +580,7 @@ def inject_client_sort_sync_engine():
         function applySavedOrderToAll() {
             const codeOrder = getActiveCodeOrder();
             if (!codeOrder) return;
-            doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+            doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
                 sortTableByCodeList(tbl, codeOrder);
             });
         }
@@ -585,23 +595,34 @@ def inject_client_sort_sync_engine():
             const tbody = table.querySelector('tbody');
             if (!tbody) return;
 
+            // ⚡ data-col-idx 속성 정확히 읽기
             const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
-            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (isNaN(colIdx)) return;
 
+            const rows = Array.from(tbody.querySelectorAll('tr'));
             let isAsc = th.getAttribute('data-sort-asc') === 'true';
             let nextAsc = !isAsc;
 
+            // ⚡ innerHTML/textContent를 파괴하지 않고 sort-indicator만 교체 (<br> 2줄 유지)
             table.querySelectorAll('th.sortable-th').forEach(otherTh => {
                 otherTh.removeAttribute('data-sort-asc');
-                otherTh.textContent = otherTh.textContent.replace(/[ ▲▼]/g, '').trim();
+                const ind = otherTh.querySelector('.sort-indicator');
+                if (ind) ind.remove();
             });
 
             th.setAttribute('data-sort-asc', nextAsc);
-            th.textContent = th.textContent.trim() + (nextAsc ? ' ▲' : ' ▼');
+            const indicator = doc.createElement('span');
+            indicator.className = 'sort-indicator';
+            indicator.textContent = nextAsc ? ' ▲' : ' ▼';
+            th.appendChild(indicator);
 
+            // 정렬 수행
             rows.sort((a, b) => {
-                let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
-                let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
+                let cellA = a.children[colIdx];
+                let cellB = b.children[colIdx];
+                let valA = cellA ? cellA.innerText.trim() : '';
+                let valB = cellB ? cellB.innerText.trim() : '';
+
                 let pA = parseFin(valA);
                 let pB = parseFin(valB);
 
@@ -613,20 +634,23 @@ def inject_client_sort_sync_engine():
 
             rows.forEach(r => tbody.appendChild(r));
 
-            const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
-            win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
+            // 국내지수는 종목코드 공유 대상 제외
+            if (table.id !== 'table_tab_market') {
+                const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+                win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
 
-            try {
-                const url = new URL(win.location.href);
-                url.searchParams.set('sort_codes', sortedCodes.join(','));
-                win.history.replaceState(null, '', url.toString());
-            } catch (err) {}
+                try {
+                    const url = new URL(win.location.href);
+                    url.searchParams.set('sort_codes', sortedCodes.join(','));
+                    win.history.replaceState(null, '', url.toString());
+                } catch (err) {}
 
-            doc.querySelectorAll('table.custom-grid-table').forEach(otherTable => {
-                if (otherTable !== table) {
-                    sortTableByCodeList(otherTable, sortedCodes);
-                }
-            });
+                doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
+                    if (otherTable !== table) {
+                        sortTableByCodeList(otherTable, sortedCodes);
+                    }
+                });
+            }
         });
 
         doc.addEventListener('click', function(e) {
