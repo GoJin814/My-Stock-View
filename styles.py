@@ -5,37 +5,20 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 일반 웹사이트처럼 window 전체 스크롤로 전환 (웨일 / 크롬 / 삼성인터넷 스와이프 새로고침 보장) */
-        html {
-            height: auto !important;
-            overflow-y: visible !important;
+        /* ⚡ 1. 스크롤 및 레이아웃 정리 */
+        html, body {
             overscroll-behavior-y: auto !important;
-        }
-
-        body {
+            touch-action: pan-x pan-y pinch-zoom !important;
             height: auto !important;
-            min-height: 100vh !important;
-            overflow-y: visible !important;
-            overscroll-behavior-y: auto !important;
+            min-height: 100% !important;
         }
 
-        /* Streamlit 내부 가상 스크롤 박스를 해제하고 브라우저 윈도우로 스크롤 위임 */
-        .stApp {
-            height: auto !important;
-            min-height: 100vh !important;
-            overflow: visible !important;
-        }
-
-        [data-testid="stAppViewContainer"] {
-            height: auto !important;
-            overflow: visible !important;
-            position: static !important;
-        }
-
+        .stApp, 
+        [data-testid="stAppViewContainer"], 
         [data-testid="stMain"],
         section.main {
-            height: auto !important;
-            overflow: visible !important;
+            overscroll-behavior-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
         }
 
         .block-container {
@@ -191,7 +174,6 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
-        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -316,13 +298,99 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """모든 탭 간 무새로고침 순서 동기화 엔진 (무한 루프 방지형)"""
+    """1. 무새로고침 클라이언트 정렬/동기화 + 2. 웨일 최상위 스와이프 새로고침 보장 엔진"""
     components.html("""
     <script>
     (function initEngine() {
         const doc = window.parent.document;
-        if (!doc) return;
+        const win = window.parent;
+        if (!doc || !win) return;
 
+        // ==========================================
+        // ⚡ [1] 웨일/크롬/삼성 스와이프 새로고침 엔진 (최상위 부모 창 직접 주입)
+        // ==========================================
+        if (!win.__swipe_refresh_injected) {
+            win.__swipe_refresh_injected = true;
+
+            // 시각적 당김 안내 인디케이터 생성
+            const pullIndicator = doc.createElement('div');
+            pullIndicator.id = 'ptr_indicator';
+            pullIndicator.style.cssText = `
+                position: fixed;
+                top: -60px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 44px;
+                height: 44px;
+                background: #1e293b;
+                border: 2px solid #3b82f6;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #60a5fa;
+                font-size: 20px;
+                z-index: 9999999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                transition: transform 0.1s ease, top 0.1s ease;
+                pointer-events: none;
+            `;
+            pullIndicator.innerHTML = '🔄';
+            doc.body.appendChild(pullIndicator);
+
+            let touchStartY = 0;
+            let isPulling = false;
+
+            function getScrollTop() {
+                const container = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
+                return Math.max(win.scrollY || 0, container.scrollTop || 0, doc.documentElement.scrollTop || 0);
+            }
+
+            win.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1 && getScrollTop() <= 3) {
+                    touchStartY = e.touches[0].clientY;
+                    isPulling = true;
+                } else {
+                    isPulling = false;
+                }
+            }, { passive: true });
+
+            win.addEventListener('touchmove', function(e) {
+                if (!isPulling) return;
+                const currentY = e.touches[0].clientY;
+                const pullDistance = currentY - touchStartY;
+
+                if (pullDistance > 10 && getScrollTop() <= 3) {
+                    const movePx = Math.min(pullDistance * 0.45, 90);
+                    pullIndicator.style.top = `${movePx - 50}px`;
+                    pullIndicator.style.transform = `translateX(-50%) rotate(${pullDistance * 2}deg)`;
+                } else {
+                    pullIndicator.style.top = '-60px';
+                }
+            }, { passive: true });
+
+            win.addEventListener('touchend', function(e) {
+                if (!isPulling) return;
+                isPulling = false;
+                const endY = e.changedTouches[0].clientY;
+                const distance = endY - touchStartY;
+
+                // 90px 이상 당겼을 때 새로고침 발동
+                if (distance > 90 && getScrollTop() <= 3) {
+                    pullIndicator.style.top = '25px';
+                    pullIndicator.innerHTML = '⏳';
+                    setTimeout(() => {
+                        win.location.reload();
+                    }, 100);
+                } else {
+                    pullIndicator.style.top = '-60px';
+                }
+            }, { passive: true });
+        }
+
+        // ==========================================
+        // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
+        // ==========================================
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '');
@@ -358,7 +426,7 @@ def inject_client_sort_sync_engine():
         }
 
         function applySavedOrderToAll() {
-            const saved = window.parent.sessionStorage.getItem('stock_sync_order');
+            const saved = win.sessionStorage.getItem('stock_sync_order');
             if (!saved) return;
             try {
                 const codeOrder = JSON.parse(saved);
@@ -368,7 +436,7 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 헤더 클릭 정렬 이벤트
+        // 표 헤더 클릭 정렬
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -409,7 +477,7 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
 
             const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
-            window.parent.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
+            win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
 
             doc.querySelectorAll('table.custom-grid-table').forEach(otherTable => {
                 if (otherTable !== table) {
@@ -418,7 +486,7 @@ def inject_client_sort_sync_engine():
             });
         });
 
-        // 탭 전환 시 보관된 순서 동기화
+        // 탭 전환 시 보관된 순서 복원
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
