@@ -27,57 +27,52 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 글자 겹침 방지 (삼성 브라우저 텍스트 겹침 완벽 차단) */
+        /* 2. Expander 글자 겹침 방지 (삼성 브라우저 텍스트 노출 원천 차단) */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            justify-content: flex-start !important;
             gap: 8px !important;
             padding: 8px 12px !important;
             font-size: 0.92rem !important;
             font-weight: 500 !important;
             color: #fafafa !important;
-            white-space: nowrap !important;
             cursor: pointer !important;
+            list-style: none !important;
         }
 
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 1.2rem !important;
-            min-width: 1.2rem !important;
-            max-width: 1.2rem !important;
-            height: 1.2rem !important;
-            font-size: 0px !important;
+        [data-testid="stExpander"] summary::-webkit-details-marker {
+            display: none !important;
+        }
+
+        /* ⚡ 텍스트 형태의 Material Icon 태그 강제 소멸 */
+        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
+        [data-testid="stExpander"] summary span:empty,
+        [data-testid="stExpander"] summary > span:first-child {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+            font-size: 0 !important;
             line-height: 0 !important;
             color: transparent !important;
-            text-indent: -9999px !important;
-            overflow: hidden !important;
-            position: relative !important;
+            opacity: 0 !important;
         }
 
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] svg {
-            text-indent: 0 !important;
-            display: block !important;
-            width: 1.1rem !important;
-            height: 1.1rem !important;
-            fill: #9ca3af !important;
-            color: #9ca3af !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-        }
-
-        [data-testid="stExpander"] summary > div:not([data-testid="stExpanderToggleIcon"]),
-        [data-testid="stExpander"] summary > p,
-        [data-testid="stExpander"] summary span {
+        /* ⚡ 순수 CSS 화살표를 앞에 직접 배치 (삼성 브라우저 폰트 오류 우회) */
+        [data-testid="stExpander"] summary::before {
+            content: "▶" !important;
             display: inline-block !important;
-            text-indent: 0 !important;
-            margin: 0 !important;
-            line-height: 1.4 !important;
+            font-size: 0.72rem !important;
+            color: #9ca3af !important;
+            margin-right: 4px !important;
+            transition: transform 0.2s ease !important;
+        }
+
+        /* Expander 열렸을 때 화살표 회전 */
+        [data-testid="stExpander"] details[open] summary::before,
+        details[open] > summary::before {
+            transform: rotate(90deg) !important;
         }
 
         /* 3. 탭 바 여백 */
