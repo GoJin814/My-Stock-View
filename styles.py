@@ -4,9 +4,19 @@ import streamlit.components.v1 as components
 
 def apply_custom_styles():
     st.markdown("""
+        <!-- ⚡ 1. 삼성 인터넷의 자체 다크모드 색상 왜곡/반전 필터 완전 차단 -->
+        <meta name="color-scheme" content="dark">
+        <meta name="supported-color-schemes" content="dark">
+
         <style>
+        :root {
+            color-scheme: dark !important;
+        }
+
         /* 1. 기본 레이아웃 및 브라우저 스크롤 개방 */
         html, body {
+            color-scheme: dark !important;
+            background-color: #0e1117 !important;
             overscroll-behavior-y: auto !important;
             touch-action: pan-x pan-y pinch-zoom !important;
             height: auto !important;
@@ -17,6 +27,7 @@ def apply_custom_styles():
         [data-testid="stAppViewContainer"], 
         [data-testid="stMain"],
         section.main {
+            background-color: #0e1117 !important;
             overscroll-behavior-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
         }
@@ -114,7 +125,7 @@ def apply_custom_styles():
             position: relative;
         }
 
-        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 밝고 선명한 고정 실선 구축 (#f1f5f9) */
+        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 불변의 순수 화이트(#ffffff) 고정 실선 */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
@@ -145,16 +156,16 @@ def apply_custom_styles():
             border-right: none !important;
         }
 
-        /* ⚡ 종목명 오른쪽 붙박이 고정선: 브라우저 왜곡 없는 밝은 화이트 실선 */
+        /* 종목명 오른쪽 붙박이 고정선 (스크롤 시 밀림 원천 차단) */
         .custom-grid-table th.col-name-th::after,
         .custom-grid-table td.col-name::after {
             content: "" !important;
             position: absolute !important;
             top: 0 !important;
             right: 0 !important;
-            width: 2.5px !important;
+            width: 2px !important;
             height: 100% !important;
-            background-color: #f1f5f9 !important; /* 밝고 깨끗한 실버 화이트 */
+            background-color: #ffffff !important; /* 왜곡 없는 순수 화이트 */
             pointer-events: none !important;
             z-index: 6 !important;
         }
@@ -166,9 +177,9 @@ def apply_custom_styles():
             background-color: #161a22 !important;
         }
 
-        /* ⚡ 2. 년도 구분용 굵고 밝은 구분선 (#f1f5f9) */
+        /* ⚡ 2. 년도 구분용 굵고 선명한 화이트 구분선 */
         .thick-border-r {
-            border-right: 2.5px solid #f1f5f9 !important;
+            border-right: 2px solid #ffffff !important;
         }
 
         .naver-pc-link {
@@ -195,7 +206,7 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 종목코드가 있다면 행 식별 속성(data-code)용으로 보관하고 화면 출력에서는 제외
+    # 행 식별용 코드 저장 및 화면 표시 제외
     code_series = None
     if "종목코드" in df.columns:
         code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
@@ -217,7 +228,7 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
-    # 1. 헤더 생성
+    # 1. 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
@@ -247,7 +258,6 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
-                # ⚡ 헤더 우측 구분선 판별
                 end_col_idx = cur_col_pos + c_span_val - 1
                 if end_col_idx in div_set or cell.get("border_right", False):
                     th_classes.append("thick-border-r")
@@ -275,7 +285,7 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 행 생성
+    # 2. 데이터 행 조립
     tbody_parts = ["<tbody>"]
     for row_i, (_, row) in enumerate(df.iterrows()):
         code_val = ""
@@ -291,7 +301,6 @@ def render_multi_header_table(df, *args, **kwargs):
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             
             td_classes = []
-            # 년도 구분선 적용
             if col_idx in div_set:
                 td_classes.append("thick-border-r")
 
