@@ -3,12 +3,11 @@ import pandas as pd
 from styles import render_multi_header_table
 
 def render_tab_basic(df_basic: pd.DataFrame):
-    """현재 시세 탭 렌더링 함수 (커스텀 그리드 적용으로 전 탭 무새로고침 동기화 지원)"""
+    """현재 시세 탭 렌더링 함수"""
     if df_basic is None or df_basic.empty:
         st.info("표시할 시세 데이터가 없습니다.")
         return None
 
-    # 헤더 정의 (단일 행 헤더)
     header_rows = [
         [
             {"text": "선택", "rowspan": 1},
@@ -30,11 +29,11 @@ def render_tab_basic(df_basic: pd.DataFrame):
 
     display_df = df_basic[[c for c in source_cols if c in df_basic.columns]].copy()
 
-    # ⚡ 1: 종목명 우측 굵은 선 (체크박스 0번, 종목명 1번)
+    # ⚡ divider_indices를 비워 종목명 오른쪽에 선이 2중으로 겹치는 현상 제거
     render_multi_header_table(
         display_df,
         header_rows=header_rows,
-        divider_indices=[1],
+        divider_indices=[],
         tab_name="tab_basic",
         has_checkbox=True
     )
