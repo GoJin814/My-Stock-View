@@ -437,7 +437,7 @@ def inject_client_sort_sync_engine():
         if (!doc || !win) return;
 
         // ⚡ 체크박스 상태를 브라우저 URL 파라미터에 실시간 강제 동기화하는 함수
-        function syncCheckedCodesToURL() {
+        function updateDelParam() {
             const checkedCodes = [];
             doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
                 const c = cb.getAttribute('data-code');
@@ -454,7 +454,7 @@ def inject_client_sort_sync_engine():
             } catch(e) {}
         }
 
-        // 전체 선택 체크박스 핸들러
+        // 전체 선택 및 개별 체크박스 변경 시 즉시 URL 갱신
         doc.addEventListener('change', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) {
                 const isChecked = e.target.checked;
@@ -464,17 +464,17 @@ def inject_client_sort_sync_engine():
                         cb.checked = isChecked;
                     });
                 }
-                syncCheckedCodesToURL();
+                updateDelParam();
             } else if (e.target && e.target.classList.contains('stock-checkbox')) {
-                syncCheckedCodesToURL();
+                updateDelParam();
             }
         });
 
-        // 🗑️ 삭제 버튼 누르기 직전 캡처링 단계에서 최신 체크박스 상태 즉시 갱신
+        // 🗑️ 삭제 버튼 클릭 순간에도 최신 체크 상태 다시 한번 확정
         doc.addEventListener('click', function(e) {
             const btn = e.target.closest('button');
             if (btn && btn.innerText.includes('선택 종목 삭제')) {
-                syncCheckedCodesToURL();
+                updateDelParam();
             }
         }, true);
 
