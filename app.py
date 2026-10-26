@@ -344,6 +344,7 @@ if current_codes:
                         st.rerun()
                     else:
                         st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
+
         with b_col2:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
             st.download_button(
