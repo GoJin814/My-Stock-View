@@ -151,9 +151,9 @@ def render_tab_returns_living():
 
     tot_net_in = tot_in - tot_out
     tot_final_end = latest_end 
-    tot_profit = tot_final_end - first_start - tot_in + tot_out + float(new_cash)
-    tot_denom = first_start + float(new_cash) + (0.5 * tot_in) - (0.5 * tot_out)
-    tot_rate = ((tot_final_end + float(new_cash) - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
+    tot_profit = tot_final_end - first_start - tot_in + tot_out
+    tot_denom = first_start + (0.5 * tot_in) - (0.5 * tot_out)
+    tot_rate = ((tot_final_end - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
 
     n_years = len(yearly_rates)
     if n_years > 0:
@@ -183,7 +183,7 @@ def render_tab_returns_living():
     df_summary = pd.DataFrame(summary_record)
     df_years = pd.DataFrame(year_records)
 
-    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함, 생활비에서 투자한 항목만 고려한 수익률입니다.")
+    st.caption("※ 생활비에서 투자한 항목만 고려한 수익률입니다.")
 
     # 1. 상단 요약 테이블 스타일링 함수
     def style_summary(row):
