@@ -92,7 +92,7 @@ def apply_custom_styles():
             background-color: #0e1117;
         }
 
-        /* ⚡ [헤더 기본 Sticky 속성] */
+        /* 헤더 Sticky 속성 */
         .custom-grid-table thead {
             position: sticky !important;
             top: 0 !important;
@@ -113,12 +113,44 @@ def apply_custom_styles():
             box-sizing: border-box !important;
         }
 
-        /* ⚡ [가로 스크롤 시 좌상단 완벽 차폐: 최상위 z-index 100] */
-        .custom-grid-table th.col-name-th {
+        /* 1행 헤더 top 0 */
+        .custom-grid-table thead tr:first-child th {
+            top: 0 !important;
+            z-index: 10 !important;
+        }
+
+        /* 2행 헤더 1행 바로 아래 고정 */
+        .custom-grid-table thead tr:nth-child(2) th {
+            top: 2.15rem !important;
+            z-index: 10 !important;
+        }
+
+        /* ⚡ 체크박스 열(선택) 좌측 고정 설정 */
+        .custom-grid-table th.col-chk-th,
+        .custom-grid-table td.col-chk {
             position: sticky !important;
             left: 0 !important;
+            width: 44px !important;
+            min-width: 44px !important;
+            max-width: 44px !important;
+            text-align: center !important;
+            background-color: #161a22 !important;
+            border-right: 1px solid #262c36 !important;
+        }
+        .custom-grid-table th.col-chk-th {
             top: 0 !important;
-            z-index: 100 !important; /* 지나가는 모든 헤더 텍스트를 완벽히 덮어 가림 */
+            z-index: 100 !important;
+        }
+        .custom-grid-table td.col-chk {
+            z-index: 5 !important;
+            background-color: #0e1117 !important;
+        }
+
+        /* ⚡ 종목명 헤더: 체크박스가 있을 때는 left 44px, 없을 때는 left 0 */
+        .custom-grid-table th.col-name-th {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
             background-color: #161a22 !important;
             width: 120px !important;
             min-width: 120px !important;
@@ -126,27 +158,12 @@ def apply_custom_styles():
             text-align: left !important;
             padding-left: 12px !important;
             border-right: none !important;
-            box-shadow: none !important;
             vertical-align: middle !important;
         }
 
-        /* 본문 데이터 셀 */
-        .custom-grid-table td {
-            background-color: #0e1117 !important;
-            color: #f3f4f6 !important;
-            padding: 7px 10px !important;
-            border-bottom: 1px solid #1e242c !important;
-            border-right: 1px solid #1e242c !important;
-            white-space: nowrap !important;
-            text-align: center !important;
-            font-variant-numeric: tabular-nums !important;
-            position: relative;
-        }
-
-        /* 본문 종목명 좌측 고정 */
+        /* ⚡ 본문 종목명 셀 */
         .custom-grid-table td.col-name {
             position: sticky !important;
-            left: 0 !important;
             z-index: 5 !important;
             background-color: #0e1117 !important;
             width: 120px !important;
@@ -161,24 +178,47 @@ def apply_custom_styles():
             border-right: none !important;
         }
 
-        /* 종목명 오른쪽 붙박이 고정 세로선 (3px 순백색) */
+        /* 체크박스 유무에 따른 종목명 left 위치 지정 */
+        .table-has-chk th.col-name-th,
+        .table-has-chk td.col-name {
+            left: 44px !important;
+        }
+        .table-no-chk th.col-name-th,
+        .table-no-chk td.col-name {
+            left: 0 !important;
+        }
+
+        /* 종목명 오른쪽 붙박이 고정 세로선 (2.5px 흰색 선) */
         .custom-grid-table th.col-name-th::after,
         .custom-grid-table td.col-name::after {
             content: "" !important;
             position: absolute !important;
             top: 0 !important;
             right: 0 !important;
-            width: 3px !important;
+            width: 2.5px !important;
             height: 100% !important;
             background-color: #ffffff !important;
             pointer-events: none !important;
             z-index: 101 !important;
         }
 
-        /* 연도별 구분을 위한 3px 화이트 세로선 클래스 */
+        /* 연도별 구분을 위한 2.5px 화이트 세로선 */
         .custom-grid-table th.year-divider,
         .custom-grid-table td.year-divider {
-            border-right: 3px solid #ffffff !important;
+            border-right: 2.5px solid #ffffff !important;
+        }
+
+        /* 본문 일반 셀 */
+        .custom-grid-table td {
+            background-color: #0e1117 !important;
+            color: #f3f4f6 !important;
+            padding: 7px 10px !important;
+            border-bottom: 1px solid #1e242c !important;
+            border-right: 1px solid #1e242c !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+            font-variant-numeric: tabular-nums !important;
+            position: relative;
         }
 
         .custom-grid-table th.sortable-th {
@@ -193,7 +233,8 @@ def apply_custom_styles():
         .custom-grid-table tr:hover td {
             background-color: rgba(255, 255, 255, 0.03) !important;
         }
-        .custom-grid-table tr:hover td.col-name {
+        .custom-grid-table tr:hover td.col-name,
+        .custom-grid-table tr:hover td.col-chk {
             background-color: #161a22 !important;
         }
 
@@ -242,11 +283,13 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
+    # 체크박스 유무 클래스 부착
+    table_chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
+
     # 1. 헤더 HTML 조립
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
-        # ⚡ 2행 헤더의 실제 컬럼 인덱스 카운터 (체크박스 유무 반영)
         leaf_col_idx = 1 if not has_checkbox else 2
 
         for r_idx, row in enumerate(header_rows):
@@ -263,15 +306,14 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes = []
                 th_attrs = ""
 
-                if txt == "종목명":
+                if txt == "선택":
+                    th_classes.append("col-chk-th")
+                elif txt == "종목명":
                     th_classes.append("col-name-th")
 
                 is_leaf = (r_idx + r_span_val == num_header_rows)
-
-                # ⚡ [정렬 복구 핵심]: 클릭 가능한 최하단 헤더에 정확한 data-col-idx 속성 부여
                 if txt != "선택" and is_leaf:
                     th_classes.append("sortable-th")
-                    # 종목명(단독 2행 차지)은 체크박스 유무에 따라 0번 또는 1번
                     if txt == "종목명":
                         assigned_idx = 0 if not has_checkbox else 1
                     else:
@@ -301,8 +343,11 @@ def render_multi_header_table(df, *args, **kwargs):
         for idx, c in enumerate(df.columns):
             th_classes = []
             th_attrs = ""
-            if c == "종목명":
+            if c == "선택":
+                th_classes.append("col-chk-th")
+            elif c == "종목명":
                 th_classes.append("col-name-th")
+
             if c != "선택":
                 th_classes.append("sortable-th")
                 th_attrs = f' data-col-idx="{idx}"'
@@ -334,7 +379,8 @@ def render_multi_header_table(df, *args, **kwargs):
                 td_classes.append("year-divider")
 
             if col_name == "선택":
-                class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
+                td_classes.append("col-chk")
+                class_str = f' class="{" ".join(td_classes)}"'
                 tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
                 continue
 
@@ -367,7 +413,7 @@ def render_multi_header_table(df, *args, **kwargs):
 
     html_code = f"""
     <div class="custom-grid-wrapper">
-        <table id="{table_id}" class="custom-grid-table">
+        <table id="{table_id}" class="custom-grid-table {table_chk_class}">
             {"".join(thead_parts)}
             {"".join(tbody_parts)}
         </table>
