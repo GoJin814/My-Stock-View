@@ -7,7 +7,7 @@ import base64
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
-from styles import apply_custom_styles, parse_val_to_num
+from styles import apply_custom_styles, inject_client_sort_sync_engine
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
@@ -268,9 +268,6 @@ with sync_col:
     st.write("")
     if st.button("🔄 실시간 시세 동기화", use_container_width=True):
         fetch_single_stock.clear()
-        if "global_sort_col" in st.session_state:
-            del st.session_state["global_sort_col"]
-            del st.session_state["global_sort_order"]
         st.rerun()
 
 current_codes = load_codes()
@@ -311,77 +308,7 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # ⚡ 2. 모든 탭 간 정렬 순서 동기화 (세션 상태 기준 일괄 정렬)
-    cur_sort = st.session_state.get("global_sort_col", None)
-    cur_order = st.session_state.get("global_sort_order", "desc")
-
-    if cur_sort:
-        is_asc = (cur_order == "asc")
-        source_df = None
-        if cur_sort in df_share.columns:
-            source_df = df_share
-        elif cur_sort in df_perf.columns:
-            source_df = df_perf
-        elif cur_sort in df_basic.columns:
-            source_df = df_basic
-
-        if source_df is not None:
-            num_keys = source_df[cur_sort].apply(parse_val_to_num)
-            if (num_keys != -999999999999.0).any():
-                sorted_idx = num_keys.sort_values(ascending=is_asc).index
-            else:
-                sorted_idx = source_df[cur_sort].sort_values(ascending=is_asc).index
-
-            df_basic = df_basic.loc[sorted_idx].reset_index(drop=True)
-            df_perf = df_perf.loc[sorted_idx].reset_index(drop=True)
-            df_share = df_share.loc[sorted_idx].reset_index(drop=True)
-
-    # ⚡ 3. 새로고침 없는 순수 클릭 이벤트 리스너 브리지 (투명 컴포넌트)
-    sort_event = st.components.v1.html("""
-        <script>
-        (function() {
-            const doc = window.parent.document;
-            const currentSort = sessionStorage.getItem('st_sort_col') || '';
-            const currentOrder = sessionStorage.getItem('st_sort_order') || 'desc';
-
-            doc.querySelectorAll('th.sortable-th').forEach(th => {
-                if (th.getAttribute('data-listener-bound') === 'true') return;
-                th.setAttribute('data-listener-bound', 'true');
-
-                th.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const col = this.getAttribute('data-col');
-                    if (!col) return;
-
-                    let newOrder = 'desc';
-                    if (currentSort === col && currentOrder === 'desc') {
-                        newOrder = 'asc';
-                    }
-
-                    sessionStorage.setItem('st_sort_col', col);
-                    sessionStorage.setItem('st_sort_order', newOrder);
-
-                    // 새로고침 없이 Streamlit 백엔드로 데이터 전달
-                    if (window.parent && window.parent.postMessage) {
-                        const input = doc.createElement('input');
-                        input.type = 'hidden';
-                        input.id = 'sort_bridge_trigger';
-                        input.value = JSON.stringify({col: col, order: newOrder});
-                        doc.body.appendChild(input);
-                    }
-                    
-                    // URL 변경 없는 네이티브 버튼 클릭 트리거
-                    const triggerBtn = doc.getElementById('hidden_sort_trigger_btn');
-                    if (triggerBtn) triggerBtn.click();
-                });
-            });
-        })();
-        </script>
-    """, height=0, width=0)
-
-    # 4. 4개 탭 렌더링
+    # 2. 4개 탭 분기 렌더링
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 현재 시세", 
         "💰 주당 가치",
@@ -538,6 +465,9 @@ if current_codes:
 
         st.write("")
         render_market_inputs()
+
+    # ⚡ 무새로고침 클라이언트 정렬 및 탭 간 동기화 엔진 마운트
+    inject_client_sort_sync_engine()
 
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
