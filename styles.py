@@ -436,6 +436,24 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
+        // ⚡ 체크박스 상태를 브라우저 URL 파라미터에 실시간 강제 동기화하는 함수
+        function syncCheckedCodesToURL() {
+            const checkedCodes = [];
+            doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
+                const c = cb.getAttribute('data-code');
+                if (c && c.length === 6) checkedCodes.push(c);
+            });
+            try {
+                const url = new URL(win.location.href);
+                if (checkedCodes.length > 0) {
+                    url.searchParams.set('del_codes', checkedCodes.join(','));
+                } else {
+                    url.searchParams.delete('del_codes');
+                }
+                win.history.replaceState(null, '', url.toString());
+            } catch(e) {}
+        }
+
         // 전체 선택 체크박스 핸들러
         doc.addEventListener('change', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) {
@@ -446,23 +464,17 @@ def inject_client_sort_sync_engine():
                         cb.checked = isChecked;
                     });
                 }
+                syncCheckedCodesToURL();
+            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
+                syncCheckedCodesToURL();
             }
         });
 
-        // 🗑️ 선택 종목 삭제 버튼 클릭 시 체크된 코드들을 URL 파라미터로 동기화
+        // 🗑️ 삭제 버튼 누르기 직전 캡처링 단계에서 최신 체크박스 상태 즉시 갱신
         doc.addEventListener('click', function(e) {
             const btn = e.target.closest('button');
             if (btn && btn.innerText.includes('선택 종목 삭제')) {
-                const checkedCodes = [];
-                doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
-                    const c = cb.getAttribute('data-code');
-                    if (c) checkedCodes.push(c);
-                });
-                try {
-                    const url = new URL(win.location.href);
-                    url.searchParams.set('del_codes', checkedCodes.join(','));
-                    win.history.replaceState(null, '', url.toString());
-                } catch(err) {}
+                syncCheckedCodesToURL();
             }
         }, true);
 
@@ -525,6 +537,7 @@ def inject_client_sort_sync_engine():
             });
         }
 
+        // ⚡ 어느 탭(현재 시세, 주당 가치, 실적)에서 헤더를 클릭하든 모든 탭 동기화
         doc.addEventListener('click', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) return;
 
@@ -583,7 +596,7 @@ def inject_client_sort_sync_engine():
                     win.history.replaceState(null, '', url.toString());
                 } catch (err) {}
 
-                // 다른 탭들의 테이블도 즉시 동일한 행 순서로 정렬 적용
+                // 다른 모든 탭 테이블 순서 즉시 동기화
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
                         sortTableByCodeList(otherTable, sortedCodes);
@@ -592,10 +605,11 @@ def inject_client_sort_sync_engine():
             }
         });
 
+        // 탭 전환 감지 시 정렬 순서 즉시 복원
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
-                setTimeout(applySavedOrderToAll, 50);
+                setTimeout(applySavedOrderToAll, 40);
             }
         });
 
