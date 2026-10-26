@@ -4,7 +4,6 @@ import streamlit.components.v1 as components
 
 def apply_custom_styles():
     st.markdown("""
-        <!-- 삼성 인터넷 자체 다크모드 색상 왜곡 방지 메타태그 -->
         <meta name="color-scheme" content="dark">
         <meta name="supported-color-schemes" content="dark">
 
@@ -156,18 +155,24 @@ def apply_custom_styles():
             border-right: none !important;
         }
 
-        /* 종목명 오른쪽 붙박이 고정선 (스크롤 시 밀림 방지) */
+        /* 종목명 오른쪽 붙박이 고정선 (3px 화이트) */
         .custom-grid-table th.col-name-th::after,
         .custom-grid-table td.col-name::after {
             content: "" !important;
             position: absolute !important;
             top: 0 !important;
             right: 0 !important;
-            width: 2.5px !important;
+            width: 3px !important;
             height: 100% !important;
             background-color: #ffffff !important;
             pointer-events: none !important;
             z-index: 6 !important;
+        }
+
+        /* ⚡ 핵심: 연도별 구분을 위한 3px 슈퍼 화이트 구분선 클래스 */
+        .custom-grid-table th.year-divider,
+        .custom-grid-table td.year-divider {
+            border-right: 3px solid #ffffff !important;
         }
 
         .custom-grid-table tr:hover td {
@@ -201,6 +206,7 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
+    # 종목코드는 행 식별(data-code)용으로 보관하고 화면 출력에서는 분리
     code_series = None
     if "종목코드" in df.columns:
         code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
@@ -222,9 +228,7 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
-    thick_border_style = "border-right: 2.5px solid #ffffff !important;"
-
-    # 1. 헤더 조립
+    # 1. 헤더 HTML 조립
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
@@ -254,14 +258,15 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif txt == "선택":
                     col_seq += 1
 
+                # ⚡ 이 헤더 셀이 끝나는 열 위치가 구분선 컬럼에 포함되는지 검사
                 end_col_idx = cur_col_pos + c_span_val - 1
-                is_divider = (end_col_idx in div_set) or cell.get("border_right", False)
-                border_inline = f' style="{thick_border_style}"' if is_divider else ""
+                if end_col_idx in div_set or cell.get("border_right", False):
+                    th_classes.append("year-divider")
 
                 cur_col_pos += c_span_val
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>' if not border_inline else f'<th{r_span}{c_span}{class_str}{th_attrs}{border_inline}>{txt}</th>')
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
@@ -273,15 +278,15 @@ def render_multi_header_table(df, *args, **kwargs):
             if c != "선택":
                 th_classes.append("sortable-th")
                 th_attrs = f' data-col-idx="{idx}"'
-            
-            border_inline = f' style="{thick_border_style}"' if idx in div_set else ""
+            if idx in div_set:
+                th_classes.append("year-divider")
 
             class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-            thead_parts.append(f'<th{class_str}{th_attrs}{border_inline}>{c}</th>')
+            thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 데이터 행 조립
+    # 2. 본문 데이터 행 HTML 조립
     tbody_parts = ["<tbody>"]
     for row_i, (_, row) in enumerate(df.iterrows()):
         code_val = ""
@@ -296,15 +301,17 @@ def render_multi_header_table(df, *args, **kwargs):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             
-            border_css = thick_border_style if col_idx in div_set else ""
+            td_classes = []
+            if col_idx in div_set:
+                td_classes.append("year-divider")
 
             if col_name == "선택":
-                style_attr = f' style="{border_css}"' if border_css else ""
-                tbody_parts.append(f'<td{style_attr}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
+                class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
+                tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
                 continue
 
             if col_name == "종목명":
-                td_classes = ["col-name"]
+                td_classes.append("col-name")
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
                     content = f'<a href="{pc_url}" target="_blank" class="naver-pc-link">{val}</a>'
@@ -312,8 +319,7 @@ def render_multi_header_table(df, *args, **kwargs):
                     content = val
 
                 class_str = f' class="{" ".join(td_classes)}"'
-                style_attr = f' style="{border_css}"' if border_css else ""
-                tbody_parts.append(f'<td{class_str}{style_attr}>{content}</td>')
+                tbody_parts.append(f'<td{class_str}>{content}</td>')
                 continue
 
             color_css = ""
@@ -323,10 +329,10 @@ def render_multi_header_table(df, *args, **kwargs):
                 elif val.startswith("-"):
                     color_css = "color: #60a5fa !important; font-weight: 500;"
 
-            combined_style = f"{color_css} {border_css}".strip()
-            style_attr = f' style="{combined_style}"' if combined_style else ""
+            style_attr = f' style="{color_css}"' if color_css else ""
+            class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
 
-            tbody_parts.append(f'<td{style_attr}>{val}</td>')
+            tbody_parts.append(f'<td{class_str}{style_attr}>{val}</td>')
 
         tbody_parts.append("</tr>")
     tbody_parts.append("</tbody>")
