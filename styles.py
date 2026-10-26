@@ -27,66 +27,23 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 순정 화살표 정상화 (가짜 기호 원천 제거) */
-        [data-testid="stExpander"] details {
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 6px !important;
+        /* 2. 필터 토글 스위치 및 필터 컨테이너 커스텀 */
+        div[data-testid="stToggle"] {
+            margin-bottom: 0.5rem !important;
         }
 
-        [data-testid="stExpander"] summary {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            gap: 8px !important;
-            padding: 8px 12px !important;
+        div[data-testid="stToggle"] label p {
             font-size: 0.92rem !important;
             font-weight: 500 !important;
             color: #fafafa !important;
-            cursor: pointer !important;
-            list-style: none !important;
-            user-select: none !important;
         }
 
-        /* ⚡ 가짜 화살표 및 브라우저 마커 완전 박멸 */
-        [data-testid="stExpander"] summary::-webkit-details-marker,
-        [data-testid="stExpander"] summary::marker,
-        [data-testid="stExpander"] summary::before,
-        [data-testid="stExpander"] summary::after {
-            display: none !important;
-            content: none !important;
-            width: 0 !important;
-            height: 0 !important;
-        }
-
-        /* ⚡ 텍스트 형태의 Material 폰트 글자 소멸 */
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 1.2rem !important;
-            min-width: 1.2rem !important;
-            height: 1.2rem !important;
-            font-size: 0px !important;
-            line-height: 0 !important;
-            color: transparent !important;
-            overflow: hidden !important;
-            position: relative !important;
-        }
-
-        /* ⚡ 순정 SVG 화살표만 선명하게 출력 */
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] svg {
-            display: block !important;
-            width: 1.1rem !important;
-            height: 1.1rem !important;
-            min-width: 1.1rem !important;
-            min-height: 1.1rem !important;
-            fill: #9ca3af !important;
-            color: #9ca3af !important;
-        }
-
-        details[open] > summary [data-testid="stExpanderToggleIcon"] {
-            transform: rotate(90deg) !important;
-            transition: transform 0.2s ease !important;
+        .filter-container-box {
+            background-color: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 8px !important;
+            padding: 12px 14px !important;
+            margin-bottom: 1.2rem !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -327,37 +284,13 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """Expander 글리치 강제 소멸 + 웨일 스와이프 새로고침 + 무새로고침 정렬 엔진"""
+    """웨일 스와이프 새로고침 + 무새로고침 정렬/동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
         const doc = window.parent.document;
         const win = window.parent;
         if (!doc || !win) return;
-
-        // ⚡ [0] 삼성 브라우저 DOM 하드 픽스: SVG만 남기고 모든 깨진 텍스트 노드 즉각 물리 삭제
-        function purgeGlitchNodes() {
-            doc.querySelectorAll('[data-testid="stExpander"] summary').forEach(summary => {
-                // 1. summary 직계 자식 중 SVG 컨테이너가 아닌 불필요 텍스트 정리
-                summary.childNodes.forEach(child => {
-                    if (child.nodeType === 3 && child.textContent.trim()) {
-                        child.textContent = '';
-                    }
-                });
-
-                // 2. 아이콘 박스 내부 정리
-                const iconBox = summary.querySelector('[data-testid="stExpanderToggleIcon"]');
-                if (iconBox) {
-                    Array.from(iconBox.childNodes).forEach(node => {
-                        if (node.nodeType === 3 || node.nodeName.toLowerCase() !== 'svg') {
-                            node.remove ? node.remove() : (node.textContent = '');
-                        }
-                    });
-                }
-            });
-        }
-        purgeGlitchNodes();
-        setInterval(purgeGlitchNodes, 150);
 
         // ==========================================
         // ⚡ [1] 웨일 스와이프 새로고침 엔진 (최상단 검증)
