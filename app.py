@@ -445,8 +445,6 @@ if current_codes:
                                         st.rerun()
                                 else:
                                     st.info("파일 내 종목코드가 이미 등록되어 있습니다.")
-                            else:
-                                st.warning("파일에서 6자리 종목코드를 추출하지 못했습니다.")
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
@@ -460,7 +458,7 @@ if current_codes:
 
     # 4. 국내지수 탭
     with tab4:
-        render_tab_market()
+        edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
 
