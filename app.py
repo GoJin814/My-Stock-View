@@ -7,7 +7,7 @@ import base64
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
-from styles import apply_custom_styles, parse_val_to_num
+from styles import apply_custom_styles
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
@@ -268,7 +268,6 @@ with sync_col:
     st.write("")
     if st.button("🔄 실시간 시세 동기화", use_container_width=True):
         fetch_single_stock.clear()
-        st.query_params.clear()
         st.rerun()
 
 current_codes = load_codes()
@@ -309,62 +308,13 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # ⚡ 2. 모든 탭 통합 정렬 동기화 엔진
-    qp = st.query_params
-    cur_sort_col = qp.get("sort_col", None)
-    cur_sort_order = qp.get("sort_order", "desc")
-    cur_active_tab = qp.get("tab", "basic")
-
-    if cur_sort_col:
-        is_asc = (cur_sort_order == "asc")
-        # 어떤 탭에 있는 컬럼인지 확인 후 정렬 순서 인덱스 추출
-        source_df = None
-        if cur_sort_col in df_share.columns:
-            source_df = df_share
-        elif cur_sort_col in df_perf.columns:
-            source_df = df_perf
-        elif cur_sort_col in df_basic.columns:
-            source_df = df_basic
-
-        if source_df is not None:
-            num_keys = source_df[cur_sort_col].apply(parse_val_to_num)
-            if (num_keys != -999999999999.0).any():
-                sorted_idx = num_keys.sort_values(ascending=is_asc).index
-            else:
-                sorted_idx = source_df[cur_sort_col].sort_values(ascending=is_asc).index
-
-            # ⚡ 3개 탭 전체를 똑같은 종목 순서로 재배열
-            df_basic = df_basic.loc[sorted_idx].reset_index(drop=True)
-            df_perf = df_perf.loc[sorted_idx].reset_index(drop=True)
-            df_share = df_share.loc[sorted_idx].reset_index(drop=True)
-
-    # ⚡ 3. 정렬 후 현재 보고 있던 탭에 그대로 머물도록 탭 번호 매핑
-    tab_index_map = {"basic": 0, "share": 1, "perf": 2, "market": 3}
-    active_idx = tab_index_map.get(cur_active_tab, 0)
-
-    # 탭 렌더링
+    # 2. 4개 탭 렌더링
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 현재 시세", 
         "💰 주당 가치",
         "📈 실적", 
         "🌐 국내지수"
     ])
-
-    # ⚡ 4. 보고 있던 탭 유지 자바스크립트 주입 (1번 탭으로 튕기지 않음)
-    st.markdown(f"""
-        <script>
-        (function switchTab() {{
-            const targetIdx = {active_idx};
-            const tabButtons = window.parent.document.querySelectorAll('.stTabs [data-baseweb="tab"]');
-            if (tabButtons && tabButtons[targetIdx]) {{
-                // 이미 활성화된 탭이 아니라면 클릭
-                if (tabButtons[targetIdx].getAttribute('aria-selected') !== 'true') {{
-                    tabButtons[targetIdx].click();
-                }}
-            }}
-        }})();
-        </script>
-    """, unsafe_allow_html=True)
 
     # 1. 현재 시세 탭
     with tab1:
