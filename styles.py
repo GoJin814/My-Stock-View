@@ -308,7 +308,7 @@ def inject_client_sort_sync_engine():
         if (!doc || !win) return;
 
         // ==========================================
-        // ⚡ [1] 최상단 완전 도달 후 추가 130px 당김 시에만 발동하는 스피너 엔진
+        // ⚡ [1] 스와이프 새로고침 엔진 (스크롤 중 오작동 방지 + 확실한 발동 보장)
         // ==========================================
         if (!win.__ptr_active) {
             win.__ptr_active = true;
@@ -342,8 +342,9 @@ def inject_client_sort_sync_engine():
             `;
             doc.body.appendChild(ptrBox);
 
-            let topReachedY = null;
+            let touchStartY = 0;
             let touchStartX = 0;
+            let canPull = false;
 
             function getScrollTop() {
                 const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
@@ -352,78 +353,72 @@ def inject_client_sort_sync_engine():
 
             win.addEventListener('touchstart', function(e) {
                 if (e.touches.length === 1) {
+                    touchStartY = e.touches[0].clientY;
                     touchStartX = e.touches[0].clientX;
-                    if (getScrollTop() <= 0) {
-                        topReachedY = e.touches[0].clientY;
-                    } else {
-                        topReachedY = null;
-                    }
+                    // 터치를 시작한 바로 그 시점에 이미 최상단(<= 3px 오차 허용)에 있었을 때만 플래그 승인
+                    // 표를 위로 스크롤하면서 올라오는 연속 동작은 여기서 원천 차단됨
+                    canPull = (getScrollTop() <= 3);
+                } else {
+                    canPull = false;
                 }
             }, { passive: true });
 
             win.addEventListener('touchmove', function(e) {
+                if (!canPull) return;
+
+                // 스크롤이 아래로 내려가면 즉시 무효화
+                if (getScrollTop() > 3) {
+                    canPull = false;
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
                 const currentY = e.touches[0].clientY;
                 const currentX = e.touches[0].clientX;
-                const st = getScrollTop();
-
-                // 표가 올라가거나 내려가며 스크롤되는 중에는 절대 새로고침 발동 불가
-                if (st > 0) {
-                    topReachedY = null;
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                // 표가 완전히 최상단에 닿아서 멈춘 그 순간의 Y 좌표를 새로운 0점으로 기록
-                if (st <= 0 && topReachedY === null) {
-                    topReachedY = currentY;
-                    return;
-                }
-
-                const overscrollDistance = currentY - topReachedY;
+                const distY = currentY - touchStartY;
                 const distX = Math.abs(currentX - touchStartX);
 
-                if (overscrollDistance <= 0 || distX > overscrollDistance) {
+                // 손가락을 위로 올리거나, 좌우 스크롤 폭이 더 크면 무효화
+                if (distY <= 0 || distX > distY) {
                     ptrBox.style.top = '-65px';
                     ptrBox.style.opacity = '0';
                     return;
                 }
 
-                if (overscrollDistance > 15) {
-                    const pullY = Math.min((overscrollDistance - 15) * 0.4, 75);
+                // 최상단에서 아래로 당기는 동작 시각 피드백
+                if (distY > 15) {
+                    const pullY = Math.min((distY - 15) * 0.45, 80);
                     ptrBox.style.top = `${pullY - 45}px`;
-                    ptrBox.style.opacity = Math.min((overscrollDistance - 15) / 60, 1);
+                    ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
                     const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) svg.style.transform = `rotate(${overscrollDistance * 3}deg)`;
+                    if (svg) svg.style.transform = `rotate(${distY * 3.5}deg)`;
                 }
             }, { passive: true });
 
             win.addEventListener('touchend', function(e) {
-                if (topReachedY !== null) {
-                    const endY = e.changedTouches[0].clientY;
-                    const finalOverscroll = endY - topReachedY;
+                if (!canPull) return;
+                canPull = false;
+                const distY = e.changedTouches[0].clientY - touchStartY;
 
-                    // 표가 최상단에 완전히 멈춘 상태에서 순수하게 추가로 130px 이상 당겼을 때만 새로고침!
-                    if (finalOverscroll >= 130 && getScrollTop() <= 0) {
-                        ptrBox.style.top = '20px';
-                        ptrBox.style.opacity = '1';
-                        const svg = ptrBox.querySelector('#ptr_svg');
-                        if (svg) {
-                            svg.animate([
-                                { transform: 'rotate(0deg)' },
-                                { transform: 'rotate(360deg)' }
-                            ], { duration: 600, iterations: Infinity });
-                        }
-                        setTimeout(() => {
-                            win.location.reload();
-                        }, 150);
-                    } else {
-                        ptrBox.style.top = '-65px';
-                        ptrBox.style.opacity = '0';
+                // 최상단 정지 상태에서 시작하여 순수하게 100px 이상 당겼을 때 새로고침 발동
+                if (distY >= 100 && getScrollTop() <= 3) {
+                    ptrBox.style.top = '20px';
+                    ptrBox.style.opacity = '1';
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) {
+                        svg.animate([
+                            { transform: 'rotate(0deg)' },
+                            { transform: 'rotate(360deg)' }
+                        ], { duration: 600, iterations: Infinity });
                     }
+                    setTimeout(() => {
+                        win.location.reload();
+                    }, 120);
+                } else {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
                 }
-
-                topReachedY = null;
             }, { passive: true });
         }
 
