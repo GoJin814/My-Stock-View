@@ -111,8 +111,8 @@ def render_tab_market():
         else:
             crd_ratio_str = "-"
 
-        # ⚡ 2. 일시 형식을 YYYY/MM/DD 형태로 변환
-        clean_date_str = d.replace("-", "/")
+        # 2. 일시 형식 YYYY/MM/DD
+        clean_date_str = str(d).replace("-", "/")
 
         row = {
             "선택": False,
@@ -121,8 +121,8 @@ def render_tab_market():
             "시가총액(억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
             "PBR": item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-"))),
-            "고객예탁금고/지수": dep_ratio_str,
-            "신용잔고지수": crd_ratio_str,
+            "예탁금 비율": dep_ratio_str,
+            "신용잔고\n비율": crd_ratio_str,
             "고객예탁금(억원)": dep_val,
             "신용잔고(억원)": crd_val,
             "환율": item.get("환율", item.get("환율(원)", "-"))
@@ -133,27 +133,27 @@ def render_tab_market():
 
     disabled_cols = [c for c in df_market.columns if c != "선택"]
     
-    # ⚡ 1, 3, 4, 5, 6번 화면 개선 column_config 설정
+    # ⚡ 픽셀(px) 단위로 강제하여 불필요한 공백을 완전히 압축
     edited_df = st.data_editor(
         df_market,
         column_config={
-            # 1. 선택 열 폭 최소화
-            "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
-            # 2. YYYY/MM/DD 일시
-            "일시": st.column_config.TextColumn("일시", width="small"),
-            "KOSPI": st.column_config.TextColumn("KOSPI", width="small"),
-            # 3 & 4. 2줄 표기 및 1의 자리가 안 잘리도록 medium 너비 확보
-            "시가총액(억원)": st.column_config.TextColumn("시가총액\n(억원)", width="medium"),
-            # 5. PER, PBR 컬럼 폭 최소화
-            "PER": st.column_config.TextColumn("PER", width="small"),
-            "PBR": st.column_config.TextColumn("PBR", width="small"),
-            # 6. 헤더명 축약 및 2줄 표기
-            "고객예탁금고/지수": st.column_config.TextColumn("예탁금\n비율", width="small"),
-            "신용잔고지수": st.column_config.TextColumn("신용잔고\n비율", width="small"),
-            # 3. 긴 헤더 2줄 표기
-            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금\n(억원)", width="small"),
-            "신용잔고(억원)": st.column_config.TextColumn("신용잔고\n(억원)", width="small"),
-            "환율": st.column_config.TextColumn("환율", width="small"),
+            # 1. 선택 열 폭 최소화 (체크박스 크기에 맞춤)
+            "선택": st.column_config.CheckboxColumn("선택", default=False, width=38),
+            # 2. 일시 보이도록 충분한 폭 확보
+            "일시": st.column_config.TextColumn("일시", width=95),
+            "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
+            # 3 & 5. 시가총액 숫자(8자리+쉼표)에 맞춰 최소화 & 단위 줄바꿈
+            "시가총액(억원)": st.column_config.TextColumn("시가총액\n(억원)", width=105),
+            # 4. PER, PBR 폭 최소화
+            "PER": st.column_config.TextColumn("PER", width=55),
+            "PBR": st.column_config.TextColumn("PBR", width=55),
+            "예탁금 비율": st.column_config.TextColumn("예탁금\n비율", width=70),
+            # 6. 신용잔고 비율 2줄 표기
+            "신용잔고\n비율": st.column_config.TextColumn("신용잔고\n비율", width=70),
+            # 5. 단위 있는 헤더 줄바꿈
+            "고객예탁금(억원)": st.column_config.TextColumn("고객예탁금\n(억원)", width=95),
+            "신용잔고(억원)": st.column_config.TextColumn("신용잔고\n(억원)", width=95),
+            "환율": st.column_config.TextColumn("환율", width=70),
         },
         disabled=disabled_cols,
         hide_index=True,
