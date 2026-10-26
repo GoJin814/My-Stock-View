@@ -7,18 +7,26 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
         st.info("표시할 실적 데이터가 없습니다.")
         return
 
+    # 1. 실제 app.py에서 넘어오는 정확한 컬럼 매핑
     cols = [
         "종목명",
         "매출_직전", "영업익_직전", "순익_직전",
         "매출_최근", "영업익_최근", "순익_최근",
         "매출_YoY", "영업익_YoY", "순익_YoY"
     ]
-    df_disp = df_perf[[c for c in cols if c in df_perf.columns]].copy()
+    
+    # 존재하는 컬럼만 안전하게 추출
+    exist_cols = [c for c in cols if c in df_perf.columns]
+    df_disp = df_perf[exist_cols].copy()
     
     if "종목코드" in df_perf.columns:
         df_disp["종목코드"] = df_perf["종목코드"]
 
-    # ⚡ 2025년 끝과 2026년 끝에 border_right 플래그 직접 부여
+    # 2. 2단 복합 헤더 정의
+    # 0: 종목명
+    # 1~3: 직전년도 (매출, 영업익, 순익) -> 3번 끝에 선
+    # 4~6: 최근년도 (매출, 영업익, 순익) -> 6번 끝에 선
+    # 7~9: YoY (매출, 영업익, 순익)
     header_rows = [
         [
             {"text": "종목명", "rowspan": 2},
@@ -33,7 +41,6 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
         ]
     ]
 
-    # ⚡ 3번(순익_직전) 우측, 6번(순익_최근) 우측에 세로 구분선 강제 전달
     render_multi_header_table(
         df_disp,
         header_rows=header_rows,
