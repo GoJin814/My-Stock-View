@@ -71,7 +71,7 @@ def apply_custom_styles():
         .custom-grid-table {
             width: max-content !important;
             min-width: 100% !important;
-            border-collapse: separate !important; /* ⚡ sticky 셀 밀림 방지 */
+            border-collapse: separate !important;
             border-spacing: 0 !important;
             font-size: 0.82rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -114,7 +114,7 @@ def apply_custom_styles():
             position: relative;
         }
 
-        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 가상 요소(::after)로 절대 안 움직이는 고정선 구축 */
+        /* ⚡ 1. 종목명 열 좌측 고정 (Sticky) - 밝고 선명한 고정 실선 구축 (#f1f5f9) */
         .custom-grid-table th.col-name-th {
             position: sticky !important;
             left: 0 !important;
@@ -145,7 +145,7 @@ def apply_custom_styles():
             border-right: none !important;
         }
 
-        /* 종목명 오른쪽 고정 벽 실선 (스크롤 시 절대 밀리지 않음) */
+        /* ⚡ 종목명 오른쪽 붙박이 고정선: 브라우저 왜곡 없는 밝은 화이트 실선 */
         .custom-grid-table th.col-name-th::after,
         .custom-grid-table td.col-name::after {
             content: "" !important;
@@ -154,7 +154,7 @@ def apply_custom_styles():
             right: 0 !important;
             width: 2.5px !important;
             height: 100% !important;
-            background-color: #64748b !important;
+            background-color: #f1f5f9 !important; /* 밝고 깨끗한 실버 화이트 */
             pointer-events: none !important;
             z-index: 6 !important;
         }
@@ -166,9 +166,9 @@ def apply_custom_styles():
             background-color: #161a22 !important;
         }
 
-        /* ⚡ 2. 년도 구분용 굵은 실선 */
+        /* ⚡ 2. 년도 구분용 굵고 밝은 구분선 (#f1f5f9) */
         .thick-border-r {
-            border-right: 2.5px solid #64748b !important;
+            border-right: 2.5px solid #f1f5f9 !important;
         }
 
         .naver-pc-link {
