@@ -83,16 +83,6 @@ def save_market_cache(cache_data):
     commit_to_github(MARKET_CACHE_FILE, json_text, "Auto-commit market_indices_cache.json")
 
 def render_tab_market():
-    # ⚡ 3. glide-data-grid 캔버스 헤더의 불필요한 아이콘을 숨기고 글자 표시 여백 확보
-    st.markdown("""
-        <style>
-        /* data_editor 선택 헤더 아이콘 숨김 및 글자 정렬 */
-        div[data-testid="stDataFrame"] svg {
-            display: none !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     m_cache = load_market_cache()
 
     if not m_cache:
@@ -142,11 +132,10 @@ def render_tab_market():
 
     disabled_cols = [c for c in df_market.columns if c != "선택"]
 
-    # ⚡ '선택' 헤더 글자가 완전히 보이도록 너비 52px로 확보
     edited_df = st.data_editor(
         df_market,
         column_config={
-            "선택": st.column_config.CheckboxColumn("선택", default=False, width=52),
+            "선택": st.column_config.CheckboxColumn("선택", default=False, width=65),
             "일시": st.column_config.TextColumn("일시", width=95),
             "KOSPI": st.column_config.TextColumn("KOSPI", width=75),
             "시가총액 (억원)": st.column_config.TextColumn("시가총액 (억원)", width=105),
@@ -164,8 +153,8 @@ def render_tab_market():
         key="market_monitor_editor"
     )
 
-    # ⚡ 2. 버튼 글자가 전혀 잘리지 않도록 컬럼 가로폭을 넉넉하게 확장
-    c_del, c_dl = st.columns([1.6, 2.0])
+    # ⚡ 버튼 글자가 전혀 잘리지 않도록 컬럼 비율 확보
+    c_del, c_dl = st.columns([1, 1.3])
 
     with c_del:
         if st.button("🗑️ 선택 일자 지수 삭제", type="primary", use_container_width=True, key="btn_del_native_market_primary"):
