@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 스크롤 및 레이아웃 정리 */
+        /* 1. 기본 레이아웃 및 스크롤 정리 */
         html, body {
             overscroll-behavior-y: auto !important;
             touch-action: pan-x pan-y pinch-zoom !important;
@@ -105,7 +105,6 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -174,7 +173,6 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
-        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -182,91 +180,6 @@ def apply_custom_styles():
             accent-color: #3b82f6;
         }
         </style>
-
-        <!-- ⚡ 메인 DOM에 직접 주입되는 웨일 스와이프 새로고침 엔진 (iframe 샌드박스 우회) -->
-        <img src="x" style="display:none;" onerror="(function(){
-            if (window.__ptr_installed) return;
-            window.__ptr_installed = true;
-
-            const ptrBox = document.createElement('div');
-            ptrBox.id = 'native_ptr_box';
-            ptrBox.style.cssText = 'position:fixed;top:-65px;left:50%;transform:translateX(-50%);width:42px;height:42px;background:#ffffff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.4);z-index:99999999;transition:top 0.15s ease,opacity 0.15s ease;opacity:0;pointer-events:none;';
-            ptrBox.innerHTML = '<svg id=\\'ptr_svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'9\\' fill=\\'none\\' stroke=\\'#e2e8f0\\' stroke-width=\\'2.5\\'/><path d=\\'M12 3 A9 9 0 0 1 21 12\\' fill=\\'none\\' stroke=\\'#2563eb\\' stroke-width=\\'2.5\\' stroke-linecap=\\'round\\'/></svg>';
-            document.body.appendChild(ptrBox);
-
-            let touchStartY = 0;
-            let touchStartX = 0;
-            let canPull = false;
-
-            function getScrollTop() {
-                const sc = document.querySelector('[data-testid=\\'stAppViewContainer\\']') || document.documentElement || document.body;
-                return Math.max(window.scrollY || 0, sc.scrollTop || 0, document.documentElement.scrollTop || 0);
-            }
-
-            window.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) {
-                    touchStartY = e.touches[0].clientY;
-                    touchStartX = e.touches[0].clientX;
-                    canPull = (getScrollTop() <= 4);
-                } else {
-                    canPull = false;
-                }
-            }, { passive: true });
-
-            window.addEventListener('touchmove', function(e) {
-                if (!canPull) return;
-
-                if (getScrollTop() > 4) {
-                    canPull = false;
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                const currentY = e.touches[0].clientY;
-                const currentX = e.touches[0].clientX;
-                const distY = currentY - touchStartY;
-                const distX = Math.abs(currentX - touchStartX);
-
-                if (distY <= 0 || distX > distY) {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                if (distY > 15) {
-                    const pullY = Math.min((distY - 15) * 0.45, 80);
-                    ptrBox.style.top = (pullY - 45) + 'px';
-                    ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
-                }
-            }, { passive: true });
-
-            window.addEventListener('touchend', function(e) {
-                if (!canPull) return;
-                canPull = false;
-                const distY = e.changedTouches[0].clientY - touchStartY;
-
-                if (distY >= 90 && getScrollTop() <= 4) {
-                    ptrBox.style.top = '20px';
-                    ptrBox.style.opacity = '1';
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) {
-                        svg.animate([
-                            { transform: 'rotate(0deg)' },
-                            { transform: 'rotate(360deg)' }
-                        ], { duration: 600, iterations: Infinity });
-                    }
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 120);
-                } else {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                }
-            }, { passive: true });
-        })();">
     """, unsafe_allow_html=True)
 
 def render_multi_header_table(df, *args, **kwargs):
@@ -288,7 +201,6 @@ def render_multi_header_table(df, *args, **kwargs):
     table_id = f"table_{tab_name}"
     has_checkbox = kwargs.get("has_checkbox", False)
 
-    # 1. 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
@@ -332,7 +244,6 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 조립
     tbody_parts = ["<tbody>"]
     for _, row in df.iterrows():
         code_val = str(row.get("종목코드", "")).strip().zfill(6)
@@ -384,7 +295,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """모든 탭 간 무새로고침 순서 동기화 엔진"""
+    """모던 원형 스피너 새로고침 + 무새로고침 정렬/동기화 통합 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -392,6 +303,122 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
+        // ==========================================
+        // ⚡ [1] 네이티브 스타일 원형 스피너 Pull-to-Refresh
+        // ==========================================
+        if (!win.__ptr_installed) {
+            win.__ptr_installed = true;
+
+            const ptrBox = doc.createElement('div');
+            ptrBox.id = 'native_ptr_box';
+            ptrBox.style.cssText = `
+                position: fixed;
+                top: -65px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 42px;
+                height: 42px;
+                background: #ffffff;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+                z-index: 99999999;
+                transition: top 0.15s ease, opacity 0.15s ease;
+                opacity: 0;
+                pointer-events: none;
+            `;
+
+            ptrBox.innerHTML = `
+                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
+                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+            `;
+            doc.body.appendChild(ptrBox);
+
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let canPull = false;
+
+            function getScrollTop() {
+                const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
+                return Math.max(win.scrollY || 0, sc.scrollTop || 0, doc.documentElement.scrollTop || 0);
+            }
+
+            win.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    touchStartY = e.touches[0].clientY;
+                    touchStartX = e.touches[0].clientX;
+                    // 손가락을 댄 최초 시점에 최상단(<= 5px 오차 허용)에 완전히 멈춰 있었는지 확인
+                    canPull = (getScrollTop() <= 5);
+                } else {
+                    canPull = false;
+                }
+            }, { passive: true });
+
+            win.addEventListener('touchmove', function(e) {
+                if (!canPull) return;
+
+                // 스크롤이 아래로 내려가면 즉시 취소
+                if (getScrollTop() > 5) {
+                    canPull = false;
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                const currentY = e.touches[0].clientY;
+                const currentX = e.touches[0].clientX;
+                const distY = currentY - touchStartY;
+                const distX = Math.abs(currentX - touchStartX);
+
+                // 손가락을 위로 밀거나 좌우 스크롤 폭이 크면 취소
+                if (distY <= 0 || distX > distY) {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                if (distY > 15) {
+                    const pullY = Math.min((distY - 15) * 0.45, 80);
+                    ptrBox.style.top = (pullY - 45) + 'px';
+                    ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
+                }
+            }, { passive: true });
+
+            win.addEventListener('touchend', function(e) {
+                if (!canPull) return;
+                canPull = false;
+                const distY = e.changedTouches[0].clientY - touchStartY;
+
+                // 85px 이상 당겼을 때 새로고침 실행
+                if (distY >= 85 && getScrollTop() <= 5) {
+                    ptrBox.style.top = '20px';
+                    ptrBox.style.opacity = '1';
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) {
+                        svg.animate([
+                            { transform: 'rotate(0deg)' },
+                            { transform: 'rotate(360deg)' }
+                        ], { duration: 600, iterations: Infinity });
+                    }
+                    setTimeout(function() {
+                        win.location.reload();
+                    }, 120);
+                } else {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                }
+            }, { passive: true });
+        }
+
+        // ==========================================
+        // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
+        // ==========================================
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '');
@@ -437,7 +464,6 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 헤더 클릭 정렬 이벤트
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -487,7 +513,6 @@ def inject_client_sort_sync_engine():
             });
         });
 
-        // 탭 전환 시 보관된 순서 동기화
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
