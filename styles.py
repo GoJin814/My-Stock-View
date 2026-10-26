@@ -206,7 +206,6 @@ def render_multi_header_table(df, *args, **kwargs):
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 종목코드는 행 식별(data-code)용으로 보관하고 화면 출력에서는 분리
     code_series = None
     if "종목코드" in df.columns:
         code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
@@ -232,9 +231,13 @@ def render_multi_header_table(df, *args, **kwargs):
     thead_parts = ["<thead>"]
     if header_rows:
         num_header_rows = len(header_rows)
+        # 하단 2행 헤더의 정확한 열 번호 추적용 변수 (종목명 0번 건너뜀)
+        leaf_col_idx = 1 if not has_checkbox else 2
+
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
-            col_seq = 0 if r_idx == 0 else (1 if not has_checkbox else 2)
+            
+            # 상단 1행일 때는 누적 span으로 열 위치 추적
             cur_col_pos = 0
 
             for cell in row:
@@ -251,19 +254,27 @@ def render_multi_header_table(df, *args, **kwargs):
                     th_classes.append("col-name-th")
 
                 is_leaf = (r_idx + r_span_val == num_header_rows)
+                
+                # 정렬 인덱스 부여
                 if txt != "선택" and is_leaf:
                     th_classes.append("sortable-th")
-                    th_attrs = f' data-col-idx="{col_seq}"'
-                    col_seq += 1
-                elif txt == "선택":
-                    col_seq += 1
 
-                # ⚡ 이 헤더 셀이 끝나는 열 위치가 구분선 컬럼에 포함되는지 검사
-                end_col_idx = cur_col_pos + c_span_val - 1
-                if end_col_idx in div_set or cell.get("border_right", False):
+                # ⚡ 굵은 선(year-divider) 판별 로직 정확화
+                is_divider = False
+                if r_idx == 0:
+                    # 상단 헤더: 해당 블록 끝 열이 div_set에 속하거나 border_right가 명시된 경우만
+                    end_col = cur_col_pos + c_span_val - 1
+                    if (end_col in div_set and end_col != len(df.columns) - 1) or cell.get("border_right", False):
+                        is_divider = True
+                    cur_col_pos += c_span_val
+                else:
+                    # 하단 헤더(매출액, 영업익, 당기순익 등): 정확한 leaf_col_idx가 div_set에 있는 경우만 (당기순익, BPS 끝)
+                    if leaf_col_idx in div_set or cell.get("border_right", False):
+                        is_divider = True
+                    leaf_col_idx += 1
+
+                if is_divider:
                     th_classes.append("year-divider")
-
-                cur_col_pos += c_span_val
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
                 thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
@@ -278,7 +289,7 @@ def render_multi_header_table(df, *args, **kwargs):
             if c != "선택":
                 th_classes.append("sortable-th")
                 th_attrs = f' data-col-idx="{idx}"'
-            if idx in div_set:
+            if idx in div_set and idx != len(df.columns) - 1:
                 th_classes.append("year-divider")
 
             class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
@@ -286,7 +297,7 @@ def render_multi_header_table(df, *args, **kwargs):
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
 
-    # 2. 본문 데이터 행 HTML 조립
+    # 2. 본문 데이터 행 조립
     tbody_parts = ["<tbody>"]
     for row_i, (_, row) in enumerate(df.iterrows()):
         code_val = ""
@@ -302,7 +313,8 @@ def render_multi_header_table(df, *args, **kwargs):
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
             
             td_classes = []
-            if col_idx in div_set:
+            # 맨 오른쪽 끝 열이 아닌 지정된 경계선에만 굵은 선 부여
+            if col_idx in div_set and col_idx != len(df.columns) - 1:
                 td_classes.append("year-divider")
 
             if col_name == "선택":
