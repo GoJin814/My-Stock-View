@@ -184,7 +184,8 @@ def render_tab_returns_living():
     df_summary = pd.DataFrame(summary_record)
     df_years = pd.DataFrame(year_records)
 
-    st.caption("※ 엑셀 수식과 100% 동일하게 연동됩니다. (전체 총 수익 및 수익률에 잔여 예수금 B1 포함)")
+    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함")
+    st.caption("생활비에서 투자한 항목만 고려한 수익률입니다.")
 
     # 1. 상단 요약 테이블 스타일링 함수
     def style_summary(row):
