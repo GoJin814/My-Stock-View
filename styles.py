@@ -590,26 +590,31 @@ def inject_client_sort_sync_engine():
             });
         }
 
-        // ⚡ 체크박스 클릭(개별 or 전체) 시 기존 삭제 대상 상태와 브라우저 쿼리 즉시 동기화
+        // ⚡ [핵심 수정] 체크박스 선택 시 모든 파라미터(del_codes, selected_codes)를 동시에 브라우저 URL과 세션에 완벽 동기화
         function syncCheckedState() {
             const checkedBoxes = Array.from(doc.querySelectorAll('table.custom-grid-table tbody input.stock-checkbox:checked'));
             const checkedCodes = Array.from(new Set(checkedBoxes.map(chk => chk.getAttribute('data-code')).filter(Boolean)));
+            const codesStr = checkedCodes.join(',');
 
-            // 기존 Streamlit 삭제 버튼이 읽을 수 있도록 세션스토리지 및 URL에 저장
+            // 세션스토리지 저장
             win.sessionStorage.setItem('selected_stock_codes', JSON.stringify(checkedCodes));
+            win.sessionStorage.setItem('del_codes', codesStr);
 
+            // URL 쿼리 파라미터 양쪽 모두 기록 (app.py가 무엇을 참조하든 반드시 걸리도록 보장)
             try {
                 const url = new URL(win.location.href);
-                if (checkedCodes.length > 0) {
-                    url.searchParams.set('selected_codes', checkedCodes.join(','));
+                if (codesStr) {
+                    url.searchParams.set('selected_codes', codesStr);
+                    url.searchParams.set('del_codes', codesStr);
                 } else {
                     url.searchParams.delete('selected_codes');
+                    url.searchParams.delete('del_codes');
                 }
                 win.history.replaceState(null, '', url.toString());
             } catch (err) {}
         }
 
-        // 헤더 전체 선택 및 개별 체크 이벤트
+        // 헤더 전체 선택 및 개별 체크
         doc.addEventListener('change', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) {
                 const isChecked = e.target.checked;
@@ -625,7 +630,7 @@ def inject_client_sort_sync_engine():
             }
         });
 
-        // 정렬
+        // 컬럼 헤더 정렬
         doc.addEventListener('click', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) {
                 return;
