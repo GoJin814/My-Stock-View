@@ -308,12 +308,11 @@ def inject_client_sort_sync_engine():
         if (!doc || !win) return;
 
         // ==========================================
-        // ⚡ [1] 네이티브 스타일 원형 스피너 새로고침 엔진
+        // ⚡ [1] 네이티브 스타일 원형 스피너 새로고침 엔진 (오작동 방지 강화)
         // ==========================================
         if (!win.__ptr_active) {
             win.__ptr_active = true;
 
-            // 순정 브라우저 스타일의 모던 스피너 컨테이너 주입
             const ptrBox = doc.createElement('div');
             ptrBox.id = 'native_ptr_box';
             ptrBox.style.cssText = `
@@ -335,7 +334,6 @@ def inject_client_sort_sync_engine():
                 pointer-events: none;
             `;
 
-            // 순정 회전 링 SVG
             ptrBox.innerHTML = `
                 <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24" style="transition: transform 0.1s linear;">
                     <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
@@ -345,44 +343,63 @@ def inject_client_sort_sync_engine():
             doc.body.appendChild(ptrBox);
 
             let touchStartY = 0;
-            let canPull = false;
+            let touchStartX = 0;
+            let isPullGesture = false;
 
-            function isTop() {
+            function getScrollTop() {
                 const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
-                return Math.max(win.scrollY || 0, sc.scrollTop || 0, doc.documentElement.scrollTop || 0) <= 2;
+                return Math.max(win.scrollY || 0, sc.scrollTop || 0, doc.documentElement.scrollTop || 0);
             }
 
             win.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1 && isTop()) {
+                // 터치를 시작한 바로 그 시점에 이미 최상단(0)이어야만 허용
+                if (e.touches.length === 1 && getScrollTop() === 0) {
                     touchStartY = e.touches[0].clientY;
-                    canPull = true;
+                    touchStartX = e.touches[0].clientX;
+                    isPullGesture = true;
                 } else {
-                    canPull = false;
+                    isPullGesture = false;
                 }
             }, { passive: true });
 
             win.addEventListener('touchmove', function(e) {
-                if (!canPull) return;
-                const dist = e.touches[0].clientY - touchStartY;
+                if (!isPullGesture) return;
 
-                if (dist > 8 && isTop()) {
-                    const pullY = Math.min(dist * 0.45, 80);
-                    ptrBox.style.top = `${pullY - 45}px`;
-                    ptrBox.style.opacity = Math.min(dist / 50, 1);
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) svg.style.transform = `rotate(${dist * 3.5}deg)`;
-                } else {
+                if (getScrollTop() > 0) {
+                    isPullGesture = false;
                     ptrBox.style.top = '-65px';
                     ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                const currentY = e.touches[0].clientY;
+                const currentX = e.touches[0].clientX;
+                const distY = currentY - touchStartY;
+                const distX = Math.abs(currentX - touchStartX);
+
+                // 위로 올리거나 좌우 이동 폭이 크면 취소
+                if (distY <= 0 || distX > distY) {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                if (distY > 20) {
+                    const pullY = Math.min((distY - 20) * 0.4, 75);
+                    ptrBox.style.top = `${pullY - 45}px`;
+                    ptrBox.style.opacity = Math.min((distY - 20) / 60, 1);
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) svg.style.transform = `rotate(${distY * 3}deg)`;
                 }
             }, { passive: true });
 
             win.addEventListener('touchend', function(e) {
-                if (!canPull) return;
-                canPull = false;
-                const dist = e.changedTouches[0].clientY - touchStartY;
+                if (!isPullGesture) return;
+                isPullGesture = false;
+                const distY = e.changedTouches[0].clientY - touchStartY;
 
-                if (dist > 75 && isTop()) {
+                // 130px 이상 확실하게 당겼을 때만 새로고침 트리거
+                if (distY > 130 && getScrollTop() === 0) {
                     ptrBox.style.top = '20px';
                     ptrBox.style.opacity = '1';
                     const svg = ptrBox.querySelector('#ptr_svg');
@@ -394,7 +411,7 @@ def inject_client_sort_sync_engine():
                     }
                     setTimeout(() => {
                         win.location.reload();
-                    }, 120);
+                    }, 150);
                 } else {
                     ptrBox.style.top = '-65px';
                     ptrBox.style.opacity = '0';
@@ -450,7 +467,6 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 표 헤더 클릭 정렬
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -500,7 +516,6 @@ def inject_client_sort_sync_engine():
             });
         });
 
-        // 탭 전환 시 보관된 순서 복원
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
