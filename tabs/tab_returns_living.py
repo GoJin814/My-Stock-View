@@ -210,19 +210,20 @@ def render_tab_returns_living():
 
     styled_summary_df = df_summary.style.apply(style_summary, axis=1)
 
+    # 상단 요약 테이블 (모바일 가로 스크롤 및 잘림 방지 최적화)
     st.markdown("#### 📊 전체 기간 성과 요약")
     st.dataframe(
         styled_summary_df,
         column_config={
-            "구분": st.column_config.TextColumn("구분", width=65),
-            "총 수익": st.column_config.TextColumn("총 수익", width=105),
-            "총 수익률*": st.column_config.TextColumn("총 수익률*", width=95),
-            "전체 기간\n평균 수익률": st.column_config.TextColumn("전체 기간 평균 수익률", width=140),
-            "시작": st.column_config.TextColumn("시작", width=105),
-            "입고": st.column_config.TextColumn("입고", width=105),
-            "출고": st.column_config.TextColumn("출고", width=105),
-            "순 입금액": st.column_config.TextColumn("순 입금액", width=105),
-            "종료": st.column_config.TextColumn("종료", width=115),
+            "구분": st.column_config.TextColumn("구분", width=50),
+            "총 수익": st.column_config.TextColumn("총 수익", width=95),
+            "총 수익률*": st.column_config.TextColumn("총 수익률*", width=85),
+            "전체 기간\n평균 수익률": st.column_config.TextColumn("평균 수익률", width=100),
+            "시작": st.column_config.TextColumn("시작", width=90),
+            "입고": st.column_config.TextColumn("입고", width=90),
+            "출고": st.column_config.TextColumn("출고", width=90),
+            "순 입금액": st.column_config.TextColumn("순 입금액", width=90),
+            "종료": st.column_config.TextColumn("종료", width=95),
             "_sum_profit": None,
             "_sum_rate": None,
             "_sum_avg_rate": None
