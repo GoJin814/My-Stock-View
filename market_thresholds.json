@@ -1,0 +1,8 @@
+{
+  "use_pbr": true,
+  "pbr": 0.9,
+  "use_dep": true,
+  "dep": 2.5,
+  "use_crd": true,
+  "crd": 1.0
+}
