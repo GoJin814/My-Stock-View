@@ -6,7 +6,7 @@ import os
 import re
 import base64
 import requests
-from tabs.tab_returns_pension import to_num, fmt_won, fmt_pct, render_input_panel
+from tabs.tab_returns_pension import to_num, fmt_won, fmt_pct
 
 CACHE_FILE = "returns_jinwoo.json"
 
@@ -112,6 +112,42 @@ def render_tab_returns_jinwoo():
         return styles
 
     df_years = pd.DataFrame(year_records)
-    st.dataframe(df_years.style.apply(style_performance, axis=1), hide_index=True, use_container_width=True)
+    st.dataframe(
+        df_years.style.apply(style_performance, axis=1),
+        column_config={"_num_rate": None, "_profit": None},
+        hide_index=True,
+        use_container_width=True
+    )
     st.write("")
     render_input_panel(data, "jinwoo")
+
+def render_input_panel(data, prefix="jinwoo"):
+    show_box = st.toggle("✍️ 연도별 현황 등록 / 수정 / 삭제", value=False, key=f"{prefix}_toggle")
+    if show_box:
+        with st.container():
+            t_add, t_del = st.tabs(["➕ 연도별 데이터 입력/수정", "🗑️ 연도 삭제"])
+            with t_add:
+                r1_c1, r1_c2 = st.columns(2)
+                with r1_c1: in_year = st.text_input("연도 (예: 2026)", key=f"{prefix}_yr")
+                with r1_c2: in_start = st.text_input("시작 기초자산(원)", key=f"{prefix}_st")
+                r2_c1, r2_c2, r2_c3 = st.columns(3)
+                with r2_c1: in_in = st.text_input("입고(원)", key=f"{prefix}_in")
+                with r2_c2: in_out = st.text_input("출고(원)", key=f"{prefix}_out")
+                with r2_c3: in_end = st.text_input("종료 기말자산(원)", key=f"{prefix}_end")
+                if st.button("💾 연도 데이터 저장", type="primary", use_container_width=True, key=f"{prefix}_sv"):
+                    if in_year.strip():
+                        y_key = str(in_year).strip()
+                        if "years" not in data: data["years"] = {}
+                        data["years"][y_key] = {"start": to_num(in_start), "in": to_num(in_in), "out": to_num(in_out), "end": to_num(in_end)}
+                        save_data(data)
+                        st.success(f"{y_key}년 데이터 저장 완료")
+                        st.rerun()
+            with t_del:
+                existing_years = sorted(list(data.get("years", {}).keys()), reverse=True)
+                if existing_years:
+                    del_yr = st.selectbox("삭제할 연도 선택", options=existing_years, key=f"{prefix}_del_sel")
+                    if st.button(f"🗑️ {del_yr}년 데이터 삭제", type="primary", key=f"{prefix}_del_btn"):
+                        del data["years"][del_yr]
+                        save_data(data)
+                        st.success(f"{del_yr}년 데이터 삭제 완료")
+                        st.rerun()
