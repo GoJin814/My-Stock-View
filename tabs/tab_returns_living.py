@@ -127,10 +127,10 @@ def render_tab_returns_living():
 
         e_net_in = c_in - d_out
         
-        # 연도별 총 수익 수식: =F7-B7-C7+D7 (즉, F - B - C + D)
+        # 연도별 총 수익: =F7-B7-C7+D7
         g_profit = f_end - b_start - c_in + d_out
 
-        # 연도별 총 수익률 수식: =(F7-B7-(C7-D7))/(B7+0.5*C7-0.5*D7)
+        # 연도별 총 수익률: =(F7-B7-(C7-D7))/(B7+0.5*C7-0.5*D7)
         denom = b_start + (0.5 * c_in) - (0.5 * d_out)
         h_rate = ((f_end - b_start - (c_in - d_out)) / denom * 100.0) if denom != 0 else 0.0
         yearly_rates.append(h_rate)
@@ -150,15 +150,18 @@ def render_tab_returns_living():
 
     tot_net_in = tot_in - tot_out
     
-    # 전체 기간 총 수익 수식: =F3-B3-C3+D3 (최종 종료값에 예수금 포함)
-    tot_final_end = latest_end + float(new_cash)
-    tot_profit = tot_final_end - first_start - tot_in + tot_out
+    # 전체 기간 종료(F3): 마지막 연도 종료값 그대로 유지 (예수금은 합산 안 함)
+    tot_final_end = latest_end 
+
+    # 전체 기간 총 수익 수식: =F3-B3-C3+D3 (여기에 예수금 B1이 반영되도록 계산)
+    # 총 수익 = 종료(최근 기말) - 시작(최초 기초) - 입고 + 출고 + 잔여예수금(B1)
+    tot_profit = tot_final_end - first_start - tot_in + tot_out + float(new_cash)
 
     # 전체 기간 총 수익률 수식: =(F3+B1-B3-(C3-D3))/(B3+B1+0.5*C3-0.5*D3)
     tot_denom = first_start + float(new_cash) + (0.5 * tot_in) - (0.5 * tot_out)
-    tot_rate = ((tot_final_end - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
+    tot_rate = ((tot_final_end + float(new_cash) - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
 
-    # 전체 기간 평균 수익률 수식 (기하 평균): =POWER(PRODUCT(1+H_rates), 1/COUNT) - 1
+    # 전체 기간 평균 수익률 수식: =POWER(PRODUCT(1+H6:H20),1/COUNT(H6:H20))-1
     n_years = len(yearly_rates)
     if n_years > 0:
         product_val = 1.0
@@ -183,7 +186,7 @@ def render_tab_returns_living():
     df_summary = pd.DataFrame(summary_record)
     df_years = pd.DataFrame(year_records)
 
-    st.caption("※ 엑셀 수식과 100% 동일하게 연동됩니다. (전체 총 수익률에 잔여 예수금 B1 포함)")
+    st.caption("※ 엑셀 수식과 100% 동일하게 연동됩니다. (전체 총 수익 및 수익률에 잔여 예수금 B1 포함)")
 
     # 상단 요약 테이블
     st.markdown("#### 📊 전체 기간 성과 요약")
