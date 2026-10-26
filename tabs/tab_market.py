@@ -8,6 +8,7 @@ import base64
 import requests
 
 MARKET_CACHE_FILE = "market_indices_cache.json"
+THRESHOLDS_FILE = "market_thresholds.json"
 
 def to_clean_num(val):
     if val is None or val in ["", "-", "N/A", "nan", "None"]:
@@ -40,6 +41,23 @@ def load_market_cache():
         except Exception:
             pass
     return {}
+
+# ⚡ [신규] 어느 기기에서 열어도 유지되도록 설정값 불러오기
+def load_market_thresholds():
+    defaults = {
+        "use_pbr": True, "pbr": 0.90,
+        "use_dep": True, "dep": 2.50,
+        "use_crd": True, "crd": 0.85
+    }
+    if os.path.exists(THRESHOLDS_FILE):
+        try:
+            with open(THRESHOLDS_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                if isinstance(saved, dict):
+                    defaults.update(saved)
+        except Exception:
+            pass
+    return defaults
 
 def commit_to_github(filename, content_str, commit_message="Auto-update from Streamlit"):
     token = st.secrets.get("GITHUB_TOKEN")
@@ -82,6 +100,13 @@ def save_market_cache(cache_data):
         f.write(json_text)
     commit_to_github(MARKET_CACHE_FILE, json_text, "Auto-commit market_indices_cache.json")
 
+# ⚡ [신규] 변경된 설정값을 GitHub에 영구 저장하는 함수
+def save_market_thresholds(th_dict):
+    json_text = json.dumps(th_dict, ensure_ascii=False, indent=2)
+    with open(THRESHOLDS_FILE, "w", encoding="utf-8") as f:
+        f.write(json_text)
+    commit_to_github(THRESHOLDS_FILE, json_text, "Auto-commit market_thresholds.json")
+
 def render_tab_market():
     m_cache = load_market_cache()
 
@@ -89,31 +114,41 @@ def render_tab_market():
         st.info("기록된 국내지수 데이터가 없습니다. 아래 패널에서 수기로 등록하거나 CSV/Excel 파일을 업로드해 주세요.")
         return None
 
-    # ⚡ 1. 토글 텍스트 간소화: "🚨 주요 지표 범위"
+    # 영구 저장된 마지막 설정값 불러오기
+    saved_th = load_market_thresholds()
+
     show_highlight_box = st.toggle("🚨 주요 지표 범위", value=False)
     
-    use_pbr_hl = False
-    pbr_threshold = 0.90
-    use_dep_hl = False
-    dep_threshold = 2.50
-    use_crd_hl = False
-    crd_threshold = 0.85
+    use_pbr_hl = saved_th["use_pbr"]
+    pbr_threshold = saved_th["pbr"]
+    use_dep_hl = saved_th["use_dep"]
+    dep_threshold = saved_th["dep"]
+    use_crd_hl = saved_th["use_crd"]
+    crd_threshold = saved_th["crd"]
 
-    # ⚡ 2. 입력란/체크박스 설명 최대 간소화
     if show_highlight_box:
         with st.container():
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
             c_hl1, c_hl2, c_hl3 = st.columns(3)
             with c_hl1:
-                use_pbr_hl = st.checkbox("PBR", value=True)
-                pbr_threshold = st.number_input("상한선", value=0.90, step=0.05, format="%.2f", disabled=not use_pbr_hl)
+                use_pbr_hl = st.checkbox("PBR", value=saved_th["use_pbr"], key="cfg_use_pbr")
+                pbr_threshold = st.number_input("상한선", value=float(saved_th["pbr"]), step=0.05, format="%.2f", disabled=not use_pbr_hl, key="cfg_val_pbr")
             with c_hl2:
-                use_dep_hl = st.checkbox("예탁금", value=True)
-                dep_threshold = st.number_input("하한선 (%)", value=2.50, step=0.10, format="%.2f", disabled=not use_dep_hl)
+                use_dep_hl = st.checkbox("예탁금", value=saved_th["use_dep"], key="cfg_use_dep")
+                dep_threshold = st.number_input("하한선 (%)", value=float(saved_th["dep"]), step=0.10, format="%.2f", disabled=not use_dep_hl, key="cfg_val_dep")
             with c_hl3:
-                use_crd_hl = st.checkbox("신용잔고", value=True)
-                crd_threshold = st.number_input("하한선 (%)", value=0.85, step=0.05, format="%.2f", disabled=not use_crd_hl)
+                use_crd_hl = st.checkbox("신용잔고", value=saved_th["use_crd"], key="cfg_use_crd")
+                crd_threshold = st.number_input("하한선 (%)", value=float(saved_th["crd"]), step=0.05, format="%.2f", disabled=not use_crd_hl, key="cfg_val_crd")
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # 사용자가 값을 수정했으면 자동으로 감지하여 GitHub에 즉시 영구 저장
+            current_th = {
+                "use_pbr": bool(use_pbr_hl), "pbr": round(float(pbr_threshold), 2),
+                "use_dep": bool(use_dep_hl), "dep": round(float(dep_threshold), 2),
+                "use_crd": bool(use_crd_hl), "crd": round(float(crd_threshold), 2)
+            }
+            if current_th != saved_th:
+                save_market_thresholds(current_th)
 
     # 전체 선택 체크박스
     c_all, _ = st.columns([1.5, 8.5])
