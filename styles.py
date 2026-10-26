@@ -94,7 +94,6 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -162,6 +161,14 @@ def apply_custom_styles():
             text-decoration: underline !important;
             color: #79b8ff !important;
         }
+
+        /* 체크박스 스타일 */
+        .stock-checkbox {
+            cursor: pointer;
+            width: 15px;
+            height: 15px;
+            accent-color: #3b82f6;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -182,13 +189,15 @@ def render_multi_header_table(df, *args, **kwargs):
     has_naver_link = kwargs.get("has_naver_link", True)
     tab_name = kwargs.get("tab_name", "tab")
     table_id = f"table_{tab_name}"
+    has_checkbox = kwargs.get("has_checkbox", False)
 
-    # 1. 2단 복합 헤더 조립
+    # 1. 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
-            col_seq = 0 if r_idx == 0 else 2
+            # 2층 헤더가 있는 경우 col_seq 보정
+            col_seq = 0 if r_idx == 0 else (3 if has_checkbox else 2)
             for cell in row:
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
@@ -199,12 +208,15 @@ def render_multi_header_table(df, *args, **kwargs):
                 th_classes = []
                 th_attrs = ""
 
-                if r_idx == 0 and txt == "종목명":
+                if txt == "종목명":
                     th_classes.append("col-name-th")
 
-                if r_span_val > 1 or c_span_val == 1:
+                # 선택 열을 제외한 모든 항목 정렬 허용
+                if txt != "선택" and (r_span_val > 1 or c_span_val == 1):
                     th_classes.append("sortable-th")
                     th_attrs = f' data-col-idx="{col_seq}"'
+                    col_seq += 1
+                elif txt == "선택":
                     col_seq += 1
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
@@ -213,11 +225,14 @@ def render_multi_header_table(df, *args, **kwargs):
     else:
         thead_parts.append("<tr>")
         for idx, c in enumerate(df.columns):
-            th_classes = ["sortable-th"]
+            th_classes = []
+            th_attrs = ""
             if c == "종목명":
                 th_classes.append("col-name-th")
-            class_str = f' class="{" ".join(th_classes)}"'
-            th_attrs = f' data-col-idx="{idx}"'
+            if c != "선택":
+                th_classes.append("sortable-th")
+                th_attrs = f' data-col-idx="{idx}"'
+            class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
             thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
@@ -231,10 +246,15 @@ def render_multi_header_table(df, *args, **kwargs):
         for col_idx, col_name in enumerate(df.columns):
             raw_val = str(row[col_name])
             val = "-" if raw_val in ["nan", "None", ""] else raw_val
-
             border_r = "border-right: 2px solid rgba(255, 255, 255, 0.22) !important;" if col_idx in div_set else ""
 
-            if col_idx == 0:
+            # 체크박스 열
+            if col_name == "선택":
+                tbody_parts.append(f'<td style="{border_r}"><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
+                continue
+
+            # 종목명 열: 120px 고정 + 링크
+            if col_name == "종목명":
                 if has_naver_link and code_val:
                     pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
                     content = f'<a href="{pc_url}" target="_blank" class="naver-pc-link">{val}</a>'
@@ -245,6 +265,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 tbody_parts.append(f'<td class="col-name" {style_attr}>{content}</td>')
                 continue
 
+            # 수치 컬러링
             color_css = ""
             if "%" in val and val != "-":
                 if val.startswith("+"):
@@ -271,7 +292,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """무한 루프(MutationObserver)를 배제한 초경량 클라이언트 정렬 및 탭 동기화 엔진"""
+    """모든 탭(현재 시세, 주당 가치, 실적) 간 무새로고침 순서 동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -294,7 +315,6 @@ def inject_client_sort_sync_engine():
             return isNaN(num) ? str.trim() : num;
         }
 
-        // 특정 테이블을 저장된 종목 순서로 단 1회 정렬
         function sortTableByCodeList(table, codeOrder) {
             if (!table || !codeOrder || codeOrder.length === 0) return;
             const tbody = table.querySelector('tbody');
@@ -313,7 +333,6 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
         }
 
-        // 전체 탭에 저장된 순서 일괄 적용
         function applySavedOrderToAll() {
             const saved = window.parent.sessionStorage.getItem('stock_sync_order');
             if (!saved) return;
@@ -325,7 +344,7 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 이벤트 위임(Event Delegation)으로 헤더 클릭을 안정적으로 감지 (중복 리스너 방지)
+        // 1. 헤더 클릭 정렬 이벤트
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -342,7 +361,6 @@ def inject_client_sort_sync_engine():
             let isAsc = th.getAttribute('data-sort-asc') === 'true';
             let nextAsc = !isAsc;
 
-            // 헤더 화살표 표기 업데이트
             table.querySelectorAll('th.sortable-th').forEach(otherTh => {
                 otherTh.removeAttribute('data-sort-asc');
                 otherTh.textContent = otherTh.textContent.replace(/[ ▲▼]/g, '').trim();
@@ -351,7 +369,6 @@ def inject_client_sort_sync_engine():
             th.setAttribute('data-sort-asc', nextAsc);
             th.textContent = th.textContent.trim() + (nextAsc ? ' ▲' : ' ▼');
 
-            // 1. 클릭된 테이블 즉각 정렬
             rows.sort((a, b) => {
                 let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
                 let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
@@ -367,7 +384,7 @@ def inject_client_sort_sync_engine():
 
             rows.forEach(r => tbody.appendChild(r));
 
-            // 2. 정렬된 종목 순서를 세션에 보관하고 다른 테이블에도 1회 반영
+            // 정렬된 종목 순서를 세션에 저장하고 다른 탭 테이블들에도 즉시 동기화
             const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
             window.parent.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
 
@@ -378,7 +395,7 @@ def inject_client_sort_sync_engine():
             });
         });
 
-        // 3. 사용자가 다른 탭 버튼을 눌렀을 때만 보관된 순서 동기화
+        // 2. 탭 전환 시 보관된 순서 동기화
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
@@ -386,8 +403,7 @@ def inject_client_sort_sync_engine():
             }
         });
 
-        // 초기 로드 시 기존 정렬 순서 복원
-        setTimeout(applySavedOrderToAll, 100);
+        setTimeout(applySavedOrderToAll, 80);
     })();
     </script>
     """, height=0, width=0)
