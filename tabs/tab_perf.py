@@ -7,7 +7,6 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
         st.info("표시할 실적 데이터가 없습니다.")
         return
 
-    # 화면에 표시할 순수 컬럼 정의 (종목코드 제외)
     cols = [
         "종목명",
         "매출_직전", "영업익_직전", "순익_직전",
@@ -16,7 +15,6 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
     ]
     df_disp = df_perf[[c for c in cols if c in df_perf.columns]].copy()
     
-    # 행 식별(data-code)용으로만 종목코드 전달
     if "종목코드" in df_perf.columns:
         df_disp["종목코드"] = df_perf["종목코드"]
 
@@ -34,10 +32,10 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
         ]
     ]
 
-    # ⚡ 0: 종목명 우측, 3: 직전년도 우측, 6: 당해년도 우측에 굵은 구분선
+    # ⚡ 3: 직전년도 끝(순익_직전), 6: 최근년도 끝(순익_최근)
     render_multi_header_table(
         df_disp,
         header_rows=header_rows,
-        divider_indices=[0, 3, 6],
+        divider_indices=[3, 6],
         tab_name="tab_perf"
     )
