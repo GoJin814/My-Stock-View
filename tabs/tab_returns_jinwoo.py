@@ -148,9 +148,9 @@ def render_tab_returns_jinwoo():
 
     tot_net_in = tot_in - tot_out
     tot_final_end = latest_end 
-    tot_profit = tot_final_end - first_start - tot_in + tot_out + float(new_cash)
-    tot_denom = first_start + float(new_cash) + (0.5 * tot_in) - (0.5 * tot_out)
-    tot_rate = ((tot_final_end + float(new_cash) - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
+    tot_profit = tot_final_end - first_start - tot_in + tot_out
+    tot_denom = first_start + (0.5 * tot_in) - (0.5 * tot_out)
+    tot_rate = ((tot_final_end - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
 
     n_years = len(yearly_rates)
     if n_years > 0:
@@ -190,7 +190,7 @@ def render_tab_returns_jinwoo():
         elif pd.notna(avg_val) and avg_val < 0: styles[row.index.get_loc("전체 기간\n평균 수익률")] = 'color: #60a5fa; font-weight: bold;'
         return styles
 
-    st.caption("※ 전체 총 수익 및 수익률에 잔여 예수금 포함, 개인 용돈에서 투자한 항목만 고려한 수익률입니다.")
+    st.caption("※ 개인 용돈에서 투자한 항목만 고려한 수익률입니다.")
     
     st.markdown("#### 📊 전체 기간 성과 요약")
     st.dataframe(
