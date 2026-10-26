@@ -5,28 +5,19 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 웨일 / 삼성인터넷 / 크롬 순정 브라우저 새로고침 애니메이션 활성화 */
-        html {
+        /* ⚡ 1. 스크롤 및 레이아웃 정리 */
+        html, body {
             overscroll-behavior-y: auto !important;
-            overscroll-behavior: auto !important;
-            height: 100% !important;
-            overflow-y: auto !important;
-        }
-
-        body {
-            overscroll-behavior-y: auto !important;
-            overscroll-behavior: auto !important;
-            min-height: 100% !important;
+            touch-action: pan-x pan-y pinch-zoom !important;
             height: auto !important;
+            min-height: 100% !important;
         }
 
-        /* Streamlit 내부 스크롤 박스가 제스처를 가로채지 못하도록 관통 처리 */
         .stApp, 
         [data-testid="stAppViewContainer"], 
         [data-testid="stMain"],
         section.main {
             overscroll-behavior-y: auto !important;
-            overscroll-behavior: auto !important;
             -webkit-overflow-scrolling: touch !important;
         }
 
@@ -183,6 +174,7 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
+        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -307,7 +299,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """무새로고침 클라이언트 정렬 및 탭 간 동기화 엔진 (가짜 인디케이터 제거 완료)"""
+    """모던 네이티브 스타일 Pull-to-Refresh + 무새로고침 정렬/동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -315,10 +307,104 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // 이전에 삽입되었던 가짜 이모지 인디케이터 잔여물 자동 제거
-        const oldPtr = doc.getElementById('ptr_indicator');
-        if (oldPtr) oldPtr.remove();
+        // ==========================================
+        // ⚡ [1] 네이티브 스타일 원형 스피너 새로고침 엔진
+        // ==========================================
+        if (!win.__ptr_active) {
+            win.__ptr_active = true;
 
+            // 순정 브라우저 스타일의 모던 스피너 컨테이너 주입
+            const ptrBox = doc.createElement('div');
+            ptrBox.id = 'native_ptr_box';
+            ptrBox.style.cssText = `
+                position: fixed;
+                top: -65px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 42px;
+                height: 42px;
+                background: #ffffff;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+                z-index: 99999999;
+                transition: top 0.15s ease, opacity 0.15s ease;
+                opacity: 0;
+                pointer-events: none;
+            `;
+
+            // 순정 회전 링 SVG
+            ptrBox.innerHTML = `
+                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24" style="transition: transform 0.1s linear;">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
+                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+            `;
+            doc.body.appendChild(ptrBox);
+
+            let touchStartY = 0;
+            let canPull = false;
+
+            function isTop() {
+                const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
+                return Math.max(win.scrollY || 0, sc.scrollTop || 0, doc.documentElement.scrollTop || 0) <= 2;
+            }
+
+            win.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1 && isTop()) {
+                    touchStartY = e.touches[0].clientY;
+                    canPull = true;
+                } else {
+                    canPull = false;
+                }
+            }, { passive: true });
+
+            win.addEventListener('touchmove', function(e) {
+                if (!canPull) return;
+                const dist = e.touches[0].clientY - touchStartY;
+
+                if (dist > 8 && isTop()) {
+                    const pullY = Math.min(dist * 0.45, 80);
+                    ptrBox.style.top = `${pullY - 45}px`;
+                    ptrBox.style.opacity = Math.min(dist / 50, 1);
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) svg.style.transform = `rotate(${dist * 3.5}deg)`;
+                } else {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                }
+            }, { passive: true });
+
+            win.addEventListener('touchend', function(e) {
+                if (!canPull) return;
+                canPull = false;
+                const dist = e.changedTouches[0].clientY - touchStartY;
+
+                if (dist > 75 && isTop()) {
+                    ptrBox.style.top = '20px';
+                    ptrBox.style.opacity = '1';
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) {
+                        svg.animate([
+                            { transform: 'rotate(0deg)' },
+                            { transform: 'rotate(360deg)' }
+                        ], { duration: 600, iterations: Infinity });
+                    }
+                    setTimeout(() => {
+                        win.location.reload();
+                    }, 120);
+                } else {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                }
+            }, { passive: true });
+        }
+
+        // ==========================================
+        // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
+        // ==========================================
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '');
@@ -364,7 +450,7 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
-        // 헤더 클릭 정렬 이벤트
+        // 표 헤더 클릭 정렬
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
