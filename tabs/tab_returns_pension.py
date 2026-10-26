@@ -63,7 +63,6 @@ def render_tab_returns_pension():
     cash_bal = float(data.get("cash_balance", 0))
     years_data = data.get("years", {})
 
-    st.markdown("##### 📌 잔여 예수금 설정 (셀 B1)")
     c_cash, _ = st.columns([2, 5])
     with c_cash:
         new_cash = st.number_input("잔여 예수금 (원)", value=int(cash_bal), step=1000, format="%d", key="pension_cash_input")
