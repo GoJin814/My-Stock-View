@@ -27,7 +27,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 순정 화살표 정상화 (가짜 기호 제거 + 삼성 브라우저 텍스트 겹침 박멸) */
+        /* 2. Expander 순정 화살표 정상화 (가짜 기호 원천 제거) */
         [data-testid="stExpander"] details {
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             border-radius: 6px !important;
@@ -47,16 +47,18 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 기본 마커 및 가짜 화살표 완전 제거 */
+        /* ⚡ 가짜 화살표 및 브라우저 마커 완전 박멸 */
         [data-testid="stExpander"] summary::-webkit-details-marker,
         [data-testid="stExpander"] summary::marker,
         [data-testid="stExpander"] summary::before,
         [data-testid="stExpander"] summary::after {
             display: none !important;
-            content: "" !important;
+            content: none !important;
+            width: 0 !important;
+            height: 0 !important;
         }
 
-        /* ⚡ 텍스트 형태의 Material 심볼 글자(arrow...)를 0px로 완벽 소멸 */
+        /* ⚡ 텍스트 형태의 Material 폰트 글자 소멸 */
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
             display: inline-flex !important;
             align-items: center !important;
@@ -71,7 +73,7 @@ def apply_custom_styles():
             position: relative !important;
         }
 
-        /* ⚡ 순정 SVG 화살표만 정위치에 선명하게 출력 */
+        /* ⚡ 순정 SVG 화살표만 선명하게 출력 */
         [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] svg {
             display: block !important;
             width: 1.1rem !important;
@@ -82,7 +84,6 @@ def apply_custom_styles():
             color: #9ca3af !important;
         }
 
-        /* 열렸을 때 기본 아이콘 회전 */
         details[open] > summary [data-testid="stExpanderToggleIcon"] {
             transform: rotate(90deg) !important;
             transition: transform 0.2s ease !important;
@@ -326,7 +327,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """웨일 스와이프 새로고침 + 텍스트 노드 자동 소멸 + 무새로고침 정렬/동기화 엔진"""
+    """Expander 글리치 강제 소멸 + 웨일 스와이프 새로고침 + 무새로고침 정렬 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -334,22 +335,32 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ⚡ [0] 삼성 브라우저 전용: Expander 아이콘 태그 내부의 텍스트 노드만 깨끗이 제거
-        function cleanExpanderGlitchText() {
-            doc.querySelectorAll('[data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"]').forEach(iconEl => {
-                // SVG를 제외한 텍스트 노드 제거
-                Array.from(iconEl.childNodes).forEach(node => {
-                    if (node.nodeType === 3 || node.nodeName !== 'svg') {
-                        node.remove ? node.remove() : (node.textContent = '');
+        // ⚡ [0] 삼성 브라우저 DOM 하드 픽스: SVG만 남기고 모든 깨진 텍스트 노드 즉각 물리 삭제
+        function purgeGlitchNodes() {
+            doc.querySelectorAll('[data-testid="stExpander"] summary').forEach(summary => {
+                // 1. summary 직계 자식 중 SVG 컨테이너가 아닌 불필요 텍스트 정리
+                summary.childNodes.forEach(child => {
+                    if (child.nodeType === 3 && child.textContent.trim()) {
+                        child.textContent = '';
                     }
                 });
+
+                // 2. 아이콘 박스 내부 정리
+                const iconBox = summary.querySelector('[data-testid="stExpanderToggleIcon"]');
+                if (iconBox) {
+                    Array.from(iconBox.childNodes).forEach(node => {
+                        if (node.nodeType === 3 || node.nodeName.toLowerCase() !== 'svg') {
+                            node.remove ? node.remove() : (node.textContent = '');
+                        }
+                    });
+                }
             });
         }
-        cleanExpanderGlitchText();
-        setInterval(cleanExpanderGlitchText, 250);
+        purgeGlitchNodes();
+        setInterval(purgeGlitchNodes, 150);
 
         // ==========================================
-        // ⚡ [1] 웨일 스와이프 새로고침 엔진 (완전 최상단 검증)
+        // ⚡ [1] 웨일 스와이프 새로고침 엔진 (최상단 검증)
         // ==========================================
         let ptrBox = doc.getElementById('native_ptr_box');
         if (!ptrBox) {
