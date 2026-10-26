@@ -1,41 +1,39 @@
 import streamlit as st
 import pandas as pd
-from styles import render_multi_header_table
 
-def render_tab_basic(df_basic: pd.DataFrame):
-    """현재 시세 탭 렌더링 함수"""
+def render_tab_basic(df_basic):
     if df_basic is None or df_basic.empty:
-        st.info("표시할 시세 데이터가 없습니다.")
+        st.info("표시할 현재 시세 데이터가 없습니다.")
         return None
 
-    header_rows = [
-        [
-            {"text": "선택", "rowspan": 1},
-            {"text": "종목명", "rowspan": 1},
-            {"text": "종목코드", "rowspan": 1},
-            {"text": "현재가", "rowspan": 1},
-            {"text": "시총", "rowspan": 1},
-            {"text": "현재 PER", "rowspan": 1},
-            {"text": "현재 PBR", "rowspan": 1},
-            {"text": "DPS(원)", "rowspan": 1},
-            {"text": "배당수익률", "rowspan": 1}
-        ]
-    ]
+    # 종목명/종목코드 링크 및 기본 표시 컬럼 정리
+    df_display = df_basic.copy()
+    
+    # 선택 열을 제외한 컬럼들은 읽기 전용으로 보호
+    disabled_cols = [c for c in df_display.columns if c != "선택"]
 
-    source_cols = [
-        "선택", "종목명", "종목코드", "현재가", "시총",
-        "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"
-    ]
-
-    display_df = df_basic[[c for c in source_cols if c in df_basic.columns]].copy()
-
-    # ⚡ divider_indices를 비워 종목명 오른쪽에 선이 2중으로 겹치는 현상 제거
-    render_multi_header_table(
-        display_df,
-        header_rows=header_rows,
-        divider_indices=[],
-        tab_name="tab_basic",
-        has_checkbox=True
+    edited_df = st.data_editor(
+        df_display,
+        column_config={
+            "선택": st.column_config.CheckboxColumn(
+                "",
+                help="삭제할 종목 선택",
+                default=False,
+                width=38
+            ),
+            "종목명": st.column_config.TextColumn("종목명", width=110),
+            "종목코드": st.column_config.TextColumn("종목코드", width=75),
+            "현재가": st.column_config.TextColumn("현재가", width=90),
+            "시총": st.column_config.TextColumn("시총", width=105),
+            "현재 PER": st.column_config.TextColumn("현재 PER", width=75),
+            "현재 PBR": st.column_config.TextColumn("현재 PBR", width=75),
+            "DPS(원)": st.column_config.TextColumn("DPS(원)", width=80),
+            "배당수익률": st.column_config.TextColumn("배당수익률", width=85),
+        },
+        disabled=disabled_cols,
+        hide_index=True,
+        use_container_width=True,
+        key="basic_table_editor"
     )
 
-    return display_df
+    return edited_df
