@@ -131,6 +131,7 @@ def render_tab_market():
 
     df_market = pd.DataFrame(records)
 
+    # ⚡ 2줄 표기를 확실히 먹이기 위한 1행 단일 커스텀 헤더
     header_rows = [
         [
             {"text": "선택"},
