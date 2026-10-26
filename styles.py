@@ -5,24 +5,21 @@ import streamlit.components.v1 as components
 def apply_custom_styles():
     st.markdown("""
         <style>
-        /* ⚡ 1. 웨일 / 크롬 / 삼성인터넷 모바일 당겨서 새로고침(Pull-to-refresh) 활성화 */
-        html {
-            overscroll-behavior-y: contain !important;
-            touch-action: pan-x pan-y pinch-zoom !important;
+        /* ⚡ 1. 웨일 / 크롬 / 삼성인터넷 모바일 당겨서 새로고침(Pull-to-refresh) 완전 개방 */
+        html, body {
+            overscroll-behavior-y: auto !important;
+            touch-action: auto !important;
+            height: auto !important;
+            min-height: 100% !important;
         }
 
-        body {
-            overscroll-behavior-y: contain !important;
-            touch-action: pan-x pan-y pinch-zoom !important;
-            min-height: 100vh !important;
-        }
-
-        /* Streamlit 내부 스크롤 컨테이너의 제스처 잠금 해제 */
+        /* Streamlit 내부 스크롤 컨테이너의 가두기 해제 */
         .stApp, 
         [data-testid="stAppViewContainer"], 
         [data-testid="stMain"],
         section.main {
             overscroll-behavior-y: auto !important;
+            touch-action: auto !important;
             -webkit-overflow-scrolling: touch !important;
         }
 
@@ -109,7 +106,6 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -178,7 +174,6 @@ def apply_custom_styles():
             color: #79b8ff !important;
         }
 
-        /* 체크박스 스타일 */
         .stock-checkbox {
             cursor: pointer;
             width: 15px;
@@ -186,6 +181,7 @@ def apply_custom_styles():
             accent-color: #3b82f6;
         }
         </style>
+    """, unsafe_allow_html=True)
 
         <!-- ⚡ 6. 모바일 브라우저 최상단 스와이프 새로고침 보장 스크립트 -->
         <script>
