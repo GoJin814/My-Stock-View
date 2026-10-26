@@ -334,17 +334,21 @@ if current_codes:
         b_col1, b_col2, b_col3 = st.columns([1.5, 2, 2])
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
-                if edited_basic_df is not None and not edited_basic_df.empty:
-                    # 표에서 체크박스가 True인 행들의 종목코드 추출
-                    selected_codes = edited_basic_df[edited_basic_df["선택"] == True]["종목코드"].tolist()
-                    if selected_codes:
-                        remaining_codes = [c for c in current_codes if c not in selected_codes]
-                        save_codes(remaining_codes)
-                        fetch_single_stock.clear()
-                        st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
-                        st.rerun()
-                    else:
-                        st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
+                raw_del = st.query_params.get("del_codes", "")
+                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+
+                if selected_codes:
+                    remaining_codes = [c for c in current_codes if c not in selected_codes]
+                    save_codes(remaining_codes)
+                    fetch_single_stock.clear()
+                    try:
+                        st.query_params.clear()
+                    except Exception:
+                        pass
+                    st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
+                    st.rerun()
+                else:
+                    st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                         
         with b_col2:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
