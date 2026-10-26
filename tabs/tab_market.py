@@ -118,52 +118,54 @@ def render_tab_market():
             "선택": False,
             "일시": clean_date_str,
             "KOSPI": item.get("KOSPI", "-"),
-            "시가총액": mcap_val,
+            "시가총액<br>(억원)": mcap_val,
             "PER": item.get("PER", item.get("per", item.get("KOSPI_PER_최근", "-"))),
             "PBR": item.get("PBR", item.get("pbr", item.get("KOSPI_PBR_최근", "-"))),
-            "예탁금비율": dep_ratio_str,
-            "신용잔고비율": crd_ratio_str,
-            "고객예탁금": dep_val,
-            "신용잔고": crd_val,
+            "예탁금<br>비율": dep_ratio_str,
+            "신용잔고<br>비율": crd_ratio_str,
+            "고객예탁금<br>(억원)": dep_val,
+            "신용잔고<br>(억원)": crd_val,
             "환율": item.get("환율", item.get("환율(원)", "-"))
         }
         records.append(row)
 
     df_market = pd.DataFrame(records)
 
-    # ⚡ 2줄 표기를 확실히 먹이기 위한 1행 단일 커스텀 헤더
-    header_rows = [
-        [
-            {"text": "선택"},
-            {"text": "일시"},
-            {"text": "KOSPI"},
-            {"text": "시가총액<br>(억원)"},
-            {"text": "PER"},
-            {"text": "PBR"},
-            {"text": "예탁금<br>비율"},
-            {"text": "신용잔고<br>비율"},
-            {"text": "고객예탁금<br>(억원)"},
-            {"text": "신용잔고<br>(억원)"},
-            {"text": "환율"}
-        ]
-    ]
-
     render_multi_header_table(
         df_market,
-        header_rows=header_rows,
         tab_name="tab_market",
         has_checkbox=True,
         has_naver_link=False
     )
 
-    json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
-    st.download_button(
-        "💾 국내지수 전체 백업(JSON 다운로드)",
-        data=json_bytes,
-        file_name="market_indices_backup.json",
-        mime="application/json",
-        help="지수 데이터를 로컬 백업용 파일로 다운로드합니다."
-    )
+    c_dl, c_del = st.columns([1, 1.2])
+    with c_dl:
+        json_bytes = json.dumps(m_cache, ensure_ascii=False, indent=2).encode('utf-8')
+        st.download_button(
+            "💾 국내지수 전체 백업(JSON 다운로드)",
+            data=json_bytes,
+            file_name="market_indices_backup.json",
+            mime="application/json",
+            help="지수 데이터를 로컬 백업용 파일로 다운로드합니다."
+        )
+
+    # ⚡ [완벽한 삭제 기능 복구]: 날짜 선택 삭제 UI
+    with st.expander("🗑️ 데이터 삭제 관리", expanded=True):
+        del_target_dates = st.multiselect(
+            "삭제할 일자를 선택하세요",
+            options=sorted_dates,
+            placeholder="삭제할 일자 선택 (예: 2026-10-26)"
+        )
+        if st.button("선택 일자 영구 삭제", type="primary", key="btn_del_market_data"):
+            if not del_target_dates:
+                st.warning("삭제할 일자를 먼저 선택해 주세요.")
+            else:
+                for target_d in del_target_dates:
+                    if target_d in m_cache:
+                        del m_cache[target_d]
+                save_market_cache(m_cache)
+                st.success(f"{len(del_target_dates)}개 일자의 데이터가 삭제되었습니다.")
+                st.rerun()
 
     return df_market
 
