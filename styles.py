@@ -182,6 +182,91 @@ def apply_custom_styles():
             accent-color: #3b82f6;
         }
         </style>
+
+        <!-- ⚡ 메인 DOM에 직접 주입되는 웨일 스와이프 새로고침 엔진 (iframe 샌드박스 우회) -->
+        <img src="x" style="display:none;" onerror="(function(){
+            if (window.__ptr_installed) return;
+            window.__ptr_installed = true;
+
+            const ptrBox = document.createElement('div');
+            ptrBox.id = 'native_ptr_box';
+            ptrBox.style.cssText = 'position:fixed;top:-65px;left:50%;transform:translateX(-50%);width:42px;height:42px;background:#ffffff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.4);z-index:99999999;transition:top 0.15s ease,opacity 0.15s ease;opacity:0;pointer-events:none;';
+            ptrBox.innerHTML = '<svg id=\\'ptr_svg\\' width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'9\\' fill=\\'none\\' stroke=\\'#e2e8f0\\' stroke-width=\\'2.5\\'/><path d=\\'M12 3 A9 9 0 0 1 21 12\\' fill=\\'none\\' stroke=\\'#2563eb\\' stroke-width=\\'2.5\\' stroke-linecap=\\'round\\'/></svg>';
+            document.body.appendChild(ptrBox);
+
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let canPull = false;
+
+            function getScrollTop() {
+                const sc = document.querySelector('[data-testid=\\'stAppViewContainer\\']') || document.documentElement || document.body;
+                return Math.max(window.scrollY || 0, sc.scrollTop || 0, document.documentElement.scrollTop || 0);
+            }
+
+            window.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    touchStartY = e.touches[0].clientY;
+                    touchStartX = e.touches[0].clientX;
+                    canPull = (getScrollTop() <= 4);
+                } else {
+                    canPull = false;
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchmove', function(e) {
+                if (!canPull) return;
+
+                if (getScrollTop() > 4) {
+                    canPull = false;
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                const currentY = e.touches[0].clientY;
+                const currentX = e.touches[0].clientX;
+                const distY = currentY - touchStartY;
+                const distX = Math.abs(currentX - touchStartX);
+
+                if (distY <= 0 || distX > distY) {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                    return;
+                }
+
+                if (distY > 15) {
+                    const pullY = Math.min((distY - 15) * 0.45, 80);
+                    ptrBox.style.top = (pullY - 45) + 'px';
+                    ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchend', function(e) {
+                if (!canPull) return;
+                canPull = false;
+                const distY = e.changedTouches[0].clientY - touchStartY;
+
+                if (distY >= 90 && getScrollTop() <= 4) {
+                    ptrBox.style.top = '20px';
+                    ptrBox.style.opacity = '1';
+                    const svg = ptrBox.querySelector('#ptr_svg');
+                    if (svg) {
+                        svg.animate([
+                            { transform: 'rotate(0deg)' },
+                            { transform: 'rotate(360deg)' }
+                        ], { duration: 600, iterations: Infinity });
+                    }
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 120);
+                } else {
+                    ptrBox.style.top = '-65px';
+                    ptrBox.style.opacity = '0';
+                }
+            }, { passive: true });
+        })();">
     """, unsafe_allow_html=True)
 
 def render_multi_header_table(df, *args, **kwargs):
@@ -299,7 +384,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(html_code, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """모던 네이티브 스타일 Pull-to-Refresh + 무새로고침 정렬/동기화 엔진"""
+    """모든 탭 간 무새로고침 순서 동기화 엔진"""
     components.html("""
     <script>
     (function initEngine() {
@@ -307,124 +392,6 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ==========================================
-        // ⚡ [1] 스와이프 새로고침 엔진 (스크롤 중 오작동 방지 + 확실한 발동 보장)
-        // ==========================================
-        if (!win.__ptr_active) {
-            win.__ptr_active = true;
-
-            const ptrBox = doc.createElement('div');
-            ptrBox.id = 'native_ptr_box';
-            ptrBox.style.cssText = `
-                position: fixed;
-                top: -65px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 42px;
-                height: 42px;
-                background: #ffffff;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-                z-index: 99999999;
-                transition: top 0.15s ease, opacity 0.15s ease;
-                opacity: 0;
-                pointer-events: none;
-            `;
-
-            ptrBox.innerHTML = `
-                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24" style="transition: transform 0.1s linear;">
-                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
-                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
-                </svg>
-            `;
-            doc.body.appendChild(ptrBox);
-
-            let touchStartY = 0;
-            let touchStartX = 0;
-            let canPull = false;
-
-            function getScrollTop() {
-                const sc = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement || doc.body;
-                return Math.max(win.scrollY || 0, sc.scrollTop || 0, doc.documentElement.scrollTop || 0);
-            }
-
-            win.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) {
-                    touchStartY = e.touches[0].clientY;
-                    touchStartX = e.touches[0].clientX;
-                    // 터치를 시작한 바로 그 시점에 이미 최상단(<= 3px 오차 허용)에 있었을 때만 플래그 승인
-                    // 표를 위로 스크롤하면서 올라오는 연속 동작은 여기서 원천 차단됨
-                    canPull = (getScrollTop() <= 3);
-                } else {
-                    canPull = false;
-                }
-            }, { passive: true });
-
-            win.addEventListener('touchmove', function(e) {
-                if (!canPull) return;
-
-                // 스크롤이 아래로 내려가면 즉시 무효화
-                if (getScrollTop() > 3) {
-                    canPull = false;
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                const currentY = e.touches[0].clientY;
-                const currentX = e.touches[0].clientX;
-                const distY = currentY - touchStartY;
-                const distX = Math.abs(currentX - touchStartX);
-
-                // 손가락을 위로 올리거나, 좌우 스크롤 폭이 더 크면 무효화
-                if (distY <= 0 || distX > distY) {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                    return;
-                }
-
-                // 최상단에서 아래로 당기는 동작 시각 피드백
-                if (distY > 15) {
-                    const pullY = Math.min((distY - 15) * 0.45, 80);
-                    ptrBox.style.top = `${pullY - 45}px`;
-                    ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) svg.style.transform = `rotate(${distY * 3.5}deg)`;
-                }
-            }, { passive: true });
-
-            win.addEventListener('touchend', function(e) {
-                if (!canPull) return;
-                canPull = false;
-                const distY = e.changedTouches[0].clientY - touchStartY;
-
-                // 최상단 정지 상태에서 시작하여 순수하게 100px 이상 당겼을 때 새로고침 발동
-                if (distY >= 100 && getScrollTop() <= 3) {
-                    ptrBox.style.top = '20px';
-                    ptrBox.style.opacity = '1';
-                    const svg = ptrBox.querySelector('#ptr_svg');
-                    if (svg) {
-                        svg.animate([
-                            { transform: 'rotate(0deg)' },
-                            { transform: 'rotate(360deg)' }
-                        ], { duration: 600, iterations: Infinity });
-                    }
-                    setTimeout(() => {
-                        win.location.reload();
-                    }, 120);
-                } else {
-                    ptrBox.style.top = '-65px';
-                    ptrBox.style.opacity = '0';
-                }
-            }, { passive: true });
-        }
-
-        // ==========================================
-        // ⚡ [2] 무새로고침 클라이언트 정렬 & 탭 간 동기화 엔진
-        // ==========================================
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '');
@@ -470,6 +437,7 @@ def inject_client_sort_sync_engine():
             } catch (e) {}
         }
 
+        // 헤더 클릭 정렬 이벤트
         doc.addEventListener('click', function(e) {
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
@@ -519,6 +487,7 @@ def inject_client_sort_sync_engine():
             });
         });
 
+        // 탭 전환 시 보관된 순서 동기화
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
