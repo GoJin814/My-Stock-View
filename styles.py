@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
-import re
 
 def apply_custom_styles():
     st.markdown("""
@@ -95,7 +94,7 @@ def apply_custom_styles():
             user-select: none !important;
         }
 
-        /* ⚡ 클릭 가능한 정렬 헤더 (링크 태그 제거, 순수 커서 및 호버 효과) */
+        /* 클릭 가능한 정렬 헤더 */
         .custom-grid-table th.sortable-th {
             cursor: pointer !important;
             transition: background-color 0.15s ease, color 0.15s ease;
@@ -103,10 +102,6 @@ def apply_custom_styles():
         .custom-grid-table th.sortable-th:hover {
             background-color: rgba(255, 255, 255, 0.09) !important;
             color: #60a5fa !important;
-        }
-        .custom-grid-table th.sortable-th.th-sort-active {
-            color: #60a5fa !important;
-            font-weight: 700 !important;
         }
 
         .custom-grid-table td {
@@ -170,26 +165,6 @@ def apply_custom_styles():
         </style>
     """, unsafe_allow_html=True)
 
-def parse_val_to_num(v):
-    if pd.isna(v) or v in ["", "-", "N/A", "nan", "None"]:
-        return -999999999999.0
-    val_str = str(v).strip()
-    clean = re.sub(r'[,%원배\s]', '', val_str)
-    
-    if '조' in clean:
-        parts = clean.split('조')
-        jo = float(re.sub(r'[^0-9.-]', '', parts[0])) if parts[0] else 0.0
-        rest = float(re.sub(r'[^0-9.-]', '', parts[1].replace('억', ''))) if len(parts) > 1 and parts[1] else 0.0
-        return (jo * 10000.0) + rest
-    elif '억' in clean:
-        clean = clean.replace('억', '')
-        return float(re.sub(r'[^0-9.-]', '', clean)) if clean else 0.0
-        
-    try:
-        return float(re.sub(r'[^0-9.-]', '', clean))
-    except Exception:
-        return -999999999999.0
-
 def render_multi_header_table(df, *args, **kwargs):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         st.info("표시할 데이터가 없습니다.")
@@ -208,22 +183,18 @@ def render_multi_header_table(df, *args, **kwargs):
     tab_name = kwargs.get("tab_name", "tab")
     table_id = f"table_{tab_name}"
 
-    # 현재 정렬 상태 확인
-    cur_sort = st.session_state.get("global_sort_col", "")
-    cur_order = st.session_state.get("global_sort_order", "desc")
-
-    # 1. 2단 복합 헤더 조립 (링크 <a> 태그 제거, 순수 data 속성 부여)
+    # 1. 2단 복합 헤더 조립
     thead_parts = ["<thead>"]
     if header_rows:
         for r_idx, row in enumerate(header_rows):
             thead_parts.append("<tr>")
+            col_seq = 0 if r_idx == 0 else 2
             for cell in row:
                 r_span_val = cell.get("rowspan", 1)
                 c_span_val = cell.get("colspan", 1)
                 r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
                 c_span = f' colspan="{c_span_val}"' if c_span_val > 1 else ""
                 txt = cell.get("text", "")
-                target_col = cell.get("col", None)
 
                 th_classes = []
                 th_attrs = ""
@@ -231,24 +202,22 @@ def render_multi_header_table(df, *args, **kwargs):
                 if r_idx == 0 and txt == "종목명":
                     th_classes.append("col-name-th")
 
-                if target_col:
+                if r_span_val > 1 or c_span_val == 1:
                     th_classes.append("sortable-th")
-                    th_attrs = f' data-col="{target_col}"'
-                    if cur_sort == target_col:
-                        th_classes.append("th-sort-active")
-                        txt += (" ▲" if cur_order == "asc" else " ▼")
+                    th_attrs = f' data-col-idx="{col_seq}"'
+                    col_seq += 1
 
                 class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
                 thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{txt}</th>')
             thead_parts.append("</tr>")
     else:
         thead_parts.append("<tr>")
-        for c in df.columns:
+        for idx, c in enumerate(df.columns):
             th_classes = ["sortable-th"]
             if c == "종목명":
                 th_classes.append("col-name-th")
             class_str = f' class="{" ".join(th_classes)}"'
-            th_attrs = f' data-col="{c}"'
+            th_attrs = f' data-col-idx="{idx}"'
             thead_parts.append(f'<th{class_str}{th_attrs}>{c}</th>')
         thead_parts.append("</tr>")
     thead_parts.append("</thead>")
@@ -300,3 +269,162 @@ def render_multi_header_table(df, *args, **kwargs):
     </div>
     """
     st.markdown(html_code, unsafe_allow_html=True)
+
+def inject_client_sort_sync_engine():
+    """새로고침 없는 순수 클라이언트 정렬 및 sessionStorage 동기화 엔진"""
+    components.html("""
+    <script>
+    (function initEngine() {
+        const doc = window.parent.document;
+        if (!doc) return;
+
+        function parseFin(str) {
+            if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
+            let clean = str.replace(/[,%원배\\s]/g, '');
+            if (clean.includes('조')) {
+                let parts = clean.split('조');
+                let jo = parseFloat(parts[0]) || 0;
+                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
+                return (jo * 10000) + rest;
+            } else if (clean.includes('억')) {
+                clean = clean.replace(/억/g, '');
+                return parseFloat(clean) || 0;
+            }
+            let num = parseFloat(clean);
+            return isNaN(num) ? str.trim() : num;
+        }
+
+        // 저장된 순서대로 특정 테이블 정렬
+        function applyOrderToTable(table, codeOrder) {
+            if (!table || !codeOrder || codeOrder.length === 0) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                let cA = a.getAttribute('data-code');
+                let cB = b.getAttribute('data-code');
+                let iA = codeOrder.indexOf(cA);
+                let iB = codeOrder.indexOf(cB);
+                if (iA === -1) iA = 9999;
+                if (iB === -1) iB = 9999;
+                return iA - iB;
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        // 모든 테이블에 순서 동기화
+        function syncAllTables(codeOrder) {
+            window.parent.sessionStorage.setItem('stock_sync_order', JSON.stringify(codeOrder));
+            doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+                applyOrderToTable(tbl, codeOrder);
+            });
+        }
+
+        // 정렬 클릭 이벤트 등록
+        function attachHeaderListeners() {
+            doc.querySelectorAll('table.custom-grid-table').forEach(table => {
+                const thList = table.querySelectorAll('th.sortable-th');
+                thList.forEach(th => {
+                    if (th.getAttribute('data-sync-attached') === 'true') return;
+                    th.setAttribute('data-sync-attached', 'true');
+
+                    th.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        const tbody = table.querySelector('tbody');
+                        if (!tbody) return;
+
+                        const colIdx = parseInt(this.getAttribute('data-col-idx'), 10);
+                        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                        let isAsc = this.getAttribute('data-sort-asc') === 'true';
+                        let nextAsc = !isAsc;
+
+                        thList.forEach(otherTh => {
+                            otherTh.removeAttribute('data-sort-asc');
+                            otherTh.textContent = otherTh.textContent.replace(/[ ▲▼]/g, '').trim();
+                        });
+
+                        this.setAttribute('data-sort-asc', nextAsc);
+                        this.textContent = this.textContent.trim() + (nextAsc ? ' ▲' : ' ▼');
+
+                        // 1. 해당 테이블 정렬
+                        rows.sort((a, b) => {
+                            let valA = a.children[colIdx] ? a.children[colIdx].innerText : '';
+                            let valB = b.children[colIdx] ? b.children[colIdx].innerText : '';
+
+                            let pA = parseFin(valA);
+                            let pB = parseFin(valB);
+
+                            if (typeof pA === 'number' && typeof pB === 'number') {
+                                return nextAsc ? (pA - pB) : (pB - pA);
+                            }
+                            return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
+                        });
+
+                        rows.forEach(r => tbody.appendChild(r));
+
+                        // 2. 종목 순서 추출 후 전체 탭 테이블에 실시간 동기화
+                        const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+                        syncAllTables(sortedCodes);
+                    });
+                });
+            });
+        }
+
+        // 탭 전환 감지 및 저장된 순서 복원
+        function attachTabSwitchListeners() {
+            doc.querySelectorAll('.stTabs [data-baseweb="tab"]').forEach(tabBtn => {
+                if (tabBtn.getAttribute('data-sync-tab-bound') === 'true') return;
+                tabBtn.setAttribute('data-sync-tab-bound', 'true');
+
+                tabBtn.addEventListener('click', function() {
+                    setTimeout(() => {
+                        const saved = window.parent.sessionStorage.getItem('stock_sync_order');
+                        if (saved) {
+                            try {
+                                const codeOrder = JSON.parse(saved);
+                                doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+                                    applyOrderToTable(tbl, codeOrder);
+                                });
+                            } catch (err) {}
+                        }
+                    }, 50);
+                });
+            });
+        }
+
+        // 초기 동기화 실행
+        const savedOrder = window.parent.sessionStorage.getItem('stock_sync_order');
+        if (savedOrder) {
+            try {
+                const codeOrder = JSON.parse(savedOrder);
+                doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+                    applyOrderToTable(tbl, codeOrder);
+                });
+            } catch (err) {}
+        }
+
+        attachHeaderListeners();
+        attachTabSwitchListeners();
+
+        // DOM 동적 생성 감지 (탭 전환 시 DOM 재렌더링 대응)
+        const obs = new MutationObserver(() => {
+            attachHeaderListeners();
+            attachTabSwitchListeners();
+            const currentSaved = window.parent.sessionStorage.getItem('stock_sync_order');
+            if (currentSaved) {
+                try {
+                    const codeOrder = JSON.parse(currentSaved);
+                    doc.querySelectorAll('table.custom-grid-table').forEach(tbl => {
+                        applyOrderToTable(tbl, codeOrder);
+                    });
+                } catch (err) {}
+            }
+        });
+        obs.observe(doc.body, { childList: true, subtree: true });
+    })();
+    </script>
+    """, height=0, width=0)
