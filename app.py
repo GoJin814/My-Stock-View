@@ -13,6 +13,7 @@ from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
 from tabs.tab_perf import render_tab_perf
 from tabs.tab_market import render_tab_market, render_market_inputs, load_market_cache, save_market_cache
+from tabs.tab_returns_living import render_tab_returns_living
 
 st.set_page_config(page_title="Scanning_주식", layout="wide")
 apply_custom_styles()
@@ -319,13 +320,14 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 2. 4개 탭 분기 렌더링
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 현재 시세", 
-        "💰 주당 가치",
-        "📈 실적", 
-        "🌐 국내지수"
-    ])
+    # 2. 5개 탭 분기 렌더링
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 현재 시세", 
+    "💰 주당 가치",
+    "📈 실적", 
+    "🌐 국내지수",
+    "📈 수익률-생활비"
+])
 
     # 1. 현재 시세 탭
     with tab1:
@@ -486,5 +488,7 @@ else:
                     save_codes([formatted])
                     st.success(f"{formatted} 등록 완료")
                     st.rerun()
+with tab5:
+    render_tab_returns_living()
 
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
