@@ -29,11 +29,14 @@ def render_market_inputs(df_market: pd.DataFrame = None):
     """국내지수 신규 데이터 입력 폼 (필요 시 app.py에서 호출)"""
     return None
 
-def render_tab_market(df_market: pd.DataFrame):
-    """국내지수 테이블 렌더링 함수"""
+def render_tab_market(df_market: pd.DataFrame = None):
+    """국내지수 테이블 렌더링 함수 (인자 없이 호출 가능하도록 기본값 지원)"""
+    if df_market is None or df_market.empty:
+        df_market = load_market_cache()
+
     if df_market is None or df_market.empty:
         st.info("표시할 국내지수 데이터가 없습니다.")
-        return
+        return df_market
 
     df = df_market.copy()
 
@@ -113,10 +116,14 @@ def render_tab_market(df_market: pd.DataFrame):
             width="small"
         )
 
-    # 테이블 렌더링
-    st.dataframe(
+    # app.py 539번째 줄에서 edited_market_df = render_tab_market()로 받으므로
+    # 편집 가능한 st.data_editor를 렌더링하고 그 결과를 반환합니다.
+    edited_df = st.data_editor(
         df,
         column_config=column_config,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        key="market_data_editor"
     )
+
+    return edited_df
