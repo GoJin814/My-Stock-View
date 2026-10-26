@@ -27,12 +27,12 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 글자 겹침 완전 방지 및 화살표 복원 */
+        /* 2. Expander 스타일 (유령 빈 공간 완전 제거 + 단일 삼각형 화살표) */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            gap: 8px !important;
+            gap: 6px !important;
             padding: 8px 12px !important;
             font-size: 0.92rem !important;
             font-weight: 500 !important;
@@ -46,7 +46,19 @@ def apply_custom_styles():
             display: none !important;
         }
 
-        /* 닫힘/열림 회전 화살표 */
+        /* 기본 기호 컨테이너를 완벽히 제거하여 빨간 원 공간 소멸 */
+        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
+        [data-testid="stExpander"] summary svg,
+        [data-testid="stExpander"] summary > span[aria-hidden="true"] {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            visibility: hidden !important;
+        }
+
+        /* 오직 왼쪽의 단 하나의 회전 화살표만 유지 */
         [data-testid="stExpander"] summary::before {
             content: "▶" !important;
             display: inline-block !important;
@@ -56,13 +68,16 @@ def apply_custom_styles():
             transition: transform 0.2s ease !important;
         }
 
-        [data-testid="stExpander"] details[open] > summary::before {
+        details[open] > summary::before {
             transform: rotate(90deg) !important;
         }
 
-        /* Streamlit 내장 아이콘 박스 충돌 차단 */
-        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
-            display: none !important;
+        [data-testid="stExpander"] summary > div,
+        [data-testid="stExpander"] summary > span {
+            display: inline-flex !important;
+            align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -311,7 +326,7 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ⚡ [0] 삼성 브라우저 대응: 닫힘/열림 시 튀어나오는 모든 arrow 텍스트 노드 자동 소멸
+        // ⚡ 삼성 브라우저 대응: 닫힘/열림 시 튀어나오는 모든 arrow 텍스트 노드 자동 소멸
         function cleanExpanderGlitchText() {
             doc.querySelectorAll('[data-testid="stExpander"] summary *').forEach(el => {
                 if (el.children.length === 0 && /(keyboard_)?arrow_(right|down)/i.test(el.textContent)) {
