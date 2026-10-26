@@ -436,7 +436,102 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ⚡ 체크박스 상태를 브라우저 URL 파라미터에 실시간 강제 동기화하는 함수
+        // 🔄 1. 웨일 및 모바일 스와이프 당겨서 새로고침(Pull-to-Refresh) UI 및 리스너 복원
+        let ptrBox = doc.getElementById('native_ptr_box');
+        if (!ptrBox) {
+            ptrBox = doc.createElement('div');
+            ptrBox.id = 'native_ptr_box';
+            ptrBox.style.cssText = `
+                position: fixed;
+                top: -65px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 42px;
+                height: 42px;
+                background: #ffffff;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+                z-index: 99999999;
+                transition: top 0.15s ease, opacity 0.15s ease;
+                opacity: 0;
+                pointer-events: none;
+            `;
+            ptrBox.innerHTML = `
+                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
+                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+            `;
+            doc.body.appendChild(ptrBox);
+        }
+
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let canPull = false;
+
+        function getRealScrollTop() {
+            const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
+            const bodyEl = doc.body ? doc.body.scrollTop : 0;
+            const winY = win.scrollY || win.pageYOffset || 0;
+            const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
+            const c2 = doc.querySelector('[data-testid="stMain"]');
+            const c3 = doc.querySelector('section.main');
+            const c4 = doc.querySelector('.main');
+            return Math.max(winY, docEl, bodyEl, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0, c3 ? c3.scrollTop : 0, c4 ? c4.scrollTop : 0);
+        }
+
+        win.ontouchstart = function(e) {
+            if (e.touches.length === 1 && getRealScrollTop() <= 1) {
+                touchStartY = e.touches[0].clientY;
+                touchStartX = e.touches[0].clientX;
+                canPull = true;
+            } else {
+                canPull = false;
+            }
+        };
+
+        win.ontouchmove = function(e) {
+            if (!canPull) return;
+            if (getRealScrollTop() > 1) {
+                canPull = false;
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+                return;
+            }
+            const distY = e.touches[0].clientY - touchStartY;
+            const distX = Math.abs(e.touches[0].clientX - touchStartX);
+            if (distY <= 0 || distX > distY) {
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+                return;
+            }
+            if (distY > 15) {
+                const pullY = Math.min((distY - 15) * 0.45, 80);
+                ptrBox.style.top = (pullY - 45) + 'px';
+                ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
+                const svg = ptrBox.querySelector('#ptr_svg');
+                if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
+            }
+        };
+
+        win.ontouchend = function(e) {
+            if (!canPull) return;
+            canPull = false;
+            const distY = e.changedTouches[0].clientY - touchStartY;
+            if (distY >= 100 && getRealScrollTop() <= 1) {
+                ptrBox.style.top = '20px';
+                ptrBox.style.opacity = '1';
+                setTimeout(function() { win.location.reload(); }, 120);
+            } else {
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+            }
+        };
+
+        // ⚡ 2. 체크박스 상태를 브라우저 URL 파라미터(del_codes)에 실시간 강제 동기화
         function updateDelParam() {
             const checkedCodes = [];
             doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
@@ -454,7 +549,6 @@ def inject_client_sort_sync_engine():
             } catch(e) {}
         }
 
-        // 전체 선택 및 개별 체크박스 변경 시 즉시 URL 갱신
         doc.addEventListener('change', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) {
                 const isChecked = e.target.checked;
@@ -470,7 +564,6 @@ def inject_client_sort_sync_engine():
             }
         });
 
-        // 🗑️ 삭제 버튼 클릭 순간에도 최신 체크 상태 다시 한번 확정
         doc.addEventListener('click', function(e) {
             const btn = e.target.closest('button');
             if (btn && btn.innerText.includes('선택 종목 삭제')) {
@@ -478,6 +571,7 @@ def inject_client_sort_sync_engine():
             }
         }, true);
 
+        // ⚡ 3. 테이블 정렬 및 탭 간 실시간 정렬 순서 동기화
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
             let clean = str.replace(/[,%원배\\s]/g, '').trim();
@@ -537,7 +631,6 @@ def inject_client_sort_sync_engine():
             });
         }
 
-        // ⚡ 어느 탭(현재 시세, 주당 가치, 실적)에서 헤더를 클릭하든 모든 탭 동기화
         doc.addEventListener('click', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) return;
 
@@ -596,7 +689,6 @@ def inject_client_sort_sync_engine():
                     win.history.replaceState(null, '', url.toString());
                 } catch (err) {}
 
-                // 다른 모든 탭 테이블 순서 즉시 동기화
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
                         sortTableByCodeList(otherTable, sortedCodes);
@@ -605,7 +697,6 @@ def inject_client_sort_sync_engine():
             }
         });
 
-        // 탭 전환 감지 시 정렬 순서 즉시 복원
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
