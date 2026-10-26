@@ -82,7 +82,7 @@ def render_tab_returns_living():
     cash_bal = float(data.get("cash_balance", 0))
     years_data = data.get("years", {})
 
-    st.markdown("##### 📌 잔여 예수금 설정")
+    st.markdown("##### 📌 잔여 예수금 설정 (셀 B1)")
     c_cash, _ = st.columns([2, 5])
     with c_cash:
         new_cash = st.number_input(
@@ -90,7 +90,7 @@ def render_tab_returns_living():
             value=int(cash_bal), 
             step=1000, 
             format="%d",
-            help="총 수익률 산출 시 최종 평가금액에 합산됩니다."
+            help="엑셀의 B1 잔여 예수금 값입니다."
         )
         if new_cash != cash_bal:
             data["cash_balance"] = new_cash
@@ -126,11 +126,13 @@ def render_tab_returns_living():
         tot_out += d_out
 
         e_net_in = c_in - d_out
-        g_profit = f_end - b_start - e_net_in
+        
+        # 연도별 총 수익 수식: =F7-B7-C7+D7 (즉, F - B - C + D)
+        g_profit = f_end - b_start - c_in + d_out
 
-        # 금액가중 수익률 수식
+        # 연도별 총 수익률 수식: =(F7-B7-(C7-D7))/(B7+0.5*C7-0.5*D7)
         denom = b_start + (0.5 * c_in) - (0.5 * d_out)
-        h_rate = (g_profit / denom * 100.0) if denom != 0 else 0.0
+        h_rate = ((f_end - b_start - (c_in - d_out)) / denom * 100.0) if denom != 0 else 0.0
         yearly_rates.append(h_rate)
 
         year_records.append({
@@ -147,19 +149,22 @@ def render_tab_returns_living():
         })
 
     tot_net_in = tot_in - tot_out
+    
+    # 전체 기간 총 수익 수식: =F3-B3-C3+D3 (최종 종료값에 예수금 포함)
     tot_final_end = latest_end + float(new_cash)
-    tot_profit = tot_final_end - first_start - tot_net_in
+    tot_profit = tot_final_end - first_start - tot_in + tot_out
 
-    tot_denom = first_start + (0.5 * tot_in) - (0.5 * tot_out)
-    tot_rate = (tot_profit / tot_denom * 100.0) if tot_denom != 0 else 0.0
+    # 전체 기간 총 수익률 수식: =(F3+B1-B3-(C3-D3))/(B3+B1+0.5*C3-0.5*D3)
+    tot_denom = first_start + float(new_cash) + (0.5 * tot_in) - (0.5 * tot_out)
+    tot_rate = ((tot_final_end - first_start - (tot_in - tot_out)) / tot_denom * 100.0) if tot_denom != 0 else 0.0
 
-    n_years = len(sorted_years)
+    # 전체 기간 평균 수익률 수식 (기하 평균): =POWER(PRODUCT(1+H_rates), 1/COUNT) - 1
+    n_years = len(yearly_rates)
     if n_years > 0:
-        cagr_growth = 1.0 + (tot_rate / 100.0)
-        if cagr_growth > 0:
-            avg_yearly_rate = (pow(cagr_growth, 1.0 / n_years) - 1.0) * 100.0
-        else:
-            avg_yearly_rate = np.mean(yearly_rates)
+        product_val = 1.0
+        for r in yearly_rates:
+            product_val *= (1.0 + (r / 100.0))
+        avg_yearly_rate = (pow(product_val, 1.0 / n_years) - 1.0) * 100.0
     else:
         avg_yearly_rate = 0.0
 
@@ -178,7 +183,7 @@ def render_tab_returns_living():
     df_summary = pd.DataFrame(summary_record)
     df_years = pd.DataFrame(year_records)
 
-    st.caption("※ *금액가중 수익률이며, 가중치는 0.5로 가정. 전체 총 수익률에는 잔여 예수금이 포함됩니다.")
+    st.caption("※ 엑셀 수식과 100% 동일하게 연동됩니다. (전체 총 수익률에 잔여 예수금 B1 포함)")
 
     # 상단 요약 테이블
     st.markdown("#### 📊 전체 기간 성과 요약")
