@@ -27,7 +27,7 @@ def apply_custom_styles():
             max-width: 100% !important;
         }
 
-        /* 2. Expander 글자 겹침 방지 및 제목 보존 */
+        /* 2. Expander 글자 겹침 완전 방지 및 화살표 복원 */
         [data-testid="stExpander"] summary {
             display: flex !important;
             flex-direction: row !important;
@@ -39,18 +39,30 @@ def apply_custom_styles():
             color: #fafafa !important;
             cursor: pointer !important;
             list-style: none !important;
+            user-select: none !important;
         }
 
         [data-testid="stExpander"] summary::-webkit-details-marker {
             display: none !important;
         }
 
-        [data-testid="stExpander"] summary svg {
-            width: 1.1rem !important;
-            height: 1.1rem !important;
-            min-width: 1.1rem !important;
-            fill: #9ca3af !important;
+        /* 닫힘/열림 회전 화살표 */
+        [data-testid="stExpander"] summary::before {
+            content: "▶" !important;
+            display: inline-block !important;
+            font-size: 0.72rem !important;
             color: #9ca3af !important;
+            margin-right: 4px !important;
+            transition: transform 0.2s ease !important;
+        }
+
+        [data-testid="stExpander"] details[open] > summary::before {
+            transform: rotate(90deg) !important;
+        }
+
+        /* Streamlit 내장 아이콘 박스 충돌 차단 */
+        [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] {
+            display: none !important;
         }
 
         /* 3. 탭 바 여백 */
@@ -299,16 +311,16 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // ⚡ [0] 삼성 브라우저 버그: Expander 헤더 안의 'keyboard_arrow_right' 텍스트 노드만 직접 삭제
+        // ⚡ [0] 삼성 브라우저 대응: 닫힘/열림 시 튀어나오는 모든 arrow 텍스트 노드 자동 소멸
         function cleanExpanderGlitchText() {
             doc.querySelectorAll('[data-testid="stExpander"] summary *').forEach(el => {
-                if (el.children.length === 0 && el.textContent.includes('keyboard_arrow_right')) {
+                if (el.children.length === 0 && /(keyboard_)?arrow_(right|down)/i.test(el.textContent)) {
                     el.textContent = '';
                 }
             });
         }
         cleanExpanderGlitchText();
-        setInterval(cleanExpanderGlitchText, 500);
+        setInterval(cleanExpanderGlitchText, 250);
 
         // ==========================================
         // ⚡ [1] 전수 스크롤 검사 기반 스와이프 새로고침 엔진
