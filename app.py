@@ -325,7 +325,7 @@ if current_codes:
     df_share = df_share[valid_mask].reset_index(drop=True)
 
     # 2. 8개 탭 분기 렌더링
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📊 현재 시세", 
     "💰 주당 가치",
     "📈 실적", 
