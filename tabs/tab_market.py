@@ -162,11 +162,31 @@ def render_tab_market():
     return edited_df
 
 def render_market_inputs():
-    with st.expander("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", expanded=False):
-        t_manual, t_upload, t_restore = st.tabs(["✍️ 개별 수기 입력", "📊 CSV / Excel 파일 일괄 업로드", "📂 백업 파일(JSON) 복원"])
+    # ⚡ expander -> st.toggle 스위치로 교체 (삼성 브라우저 글자 겹침 원천 방지)
+    show_market_input = st.toggle("🌐 국내지수 데이터 수기 등록 / 파일 업로드(CSV / Excel) / 복원", value=False)
 
-        with t_manual:
-            c_date, _ = st.columns([2, 4])
+    if show_market_input:
+        with st.container():
+            t_manual, t_upload, t_restore = st.tabs(["✍️ 개별 수기 입력", "📊 CSV / Excel 파일 일괄 업로드", "📂 백업 파일(JSON) 복원"])
+
+            with t_manual:
+                c_date, _ = st.columns([2, 4])
+                with c_date:
+                    input_date = st.date_input("기준 일자", key="market_input_date")
+                date_str = str(input_date)
+
+                st.write("**KOSPI 및 시장 매크로 데이터 입력**")
+                r1_c1, r1_c2, r1_c3 = st.columns(3)
+                with r1_c1:
+                    in_kospi = st.text_input("KOSPI 지수", placeholder="예: 2528.92", key="man_kospi")
+                with r1_c2:
+                    in_mcap = st.text_input("시가총액(억원)", placeholder="예: 20,712,779", key="man_mcap")
+                with r1_c3:
+                    in_fx = st.text_input("환율", placeholder="예: 1455.5", key="man_fx")
+
+                r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+                with r2_c1:
+                    in_per = st.text_input("PER", placeholder
             with c_date:
                 input_date = st.date_input("기준 일자", key="market_input_date")
             date_str = str(input_date)
