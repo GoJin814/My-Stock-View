@@ -19,15 +19,27 @@ def fetch_watchlist_item(code: str):
     integration = fetch_integration(code)
     fin_json = fetch_finance(code)
     
+    # 종목명 처리 (- 일 경우 빈 문자열로 처리)
     stock_name = basic.get("stockName", "")
-    raw_close = basic.get("closePrice", "")
-    curr_price_str = f"{raw_close}원" if (raw_close and raw_close != "-" and "원" not in str(raw_close)) else (str(raw_close) if raw_close else "")
+    if not stock_name or stock_name == "-":
+        stock_name = ""
 
+    # 현재가 처리 (- 일 경우 빈 문자열로 처리)
+    raw_close = basic.get("closePrice", "")
+    if not raw_close or raw_close == "-":
+        curr_price_str = ""
+    else:
+        curr_price_str = f"{raw_close}원" if "원" not in str(raw_close) else str(raw_close)
+
+    # 시가총액 처리 (- 일 경우 빈 문자열로 처리)
     total_infos = integration.get("totalInfos", [])
     market_cap = ""
     for item in total_infos:
         if str(item.get("code", "")).strip() == "marketValue" or str(item.get("key", "")).strip() in ["시총", "시가총액"]:
-            market_cap = str(item.get("value", "")).strip()
+            val = str(item.get("value", "")).strip()
+            if val and val != "-":
+                market_cap = val
+            break
 
     fin_info = {
         "prev_yr": "", "latest_yr": "",
@@ -90,7 +102,6 @@ def fetch_watchlist_item(code: str):
                 fin_info["cur_pbr"] = c_val
                 fin_info["prev_pbr"] = p_val
 
-    # 수치 데이터는 값이 없을 때 "-"를 반환하도록 설정
     def fmt_val(v, suffix=""):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return "-"
@@ -112,7 +123,6 @@ def fetch_watchlist_item(code: str):
 
     items = []
     
-    # 1. 직전 연도(예: 2025년) 데이터가 있는 경우 첫 번째 행으로 추가
     if fin_info["prev_yr"]:
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
@@ -125,7 +135,6 @@ def fetch_watchlist_item(code: str):
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
         })
 
-    # 2. 최근 연도(예: 2026년) 데이터가 있는 경우 행으로 추가 (직전 연도가 있었다면 두 번째 행이 되므로 종목명/현재가/시총은 빈칸)
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
