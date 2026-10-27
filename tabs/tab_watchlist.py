@@ -21,10 +21,10 @@ def fetch_watchlist_item(code: str):
     
     stock_name = basic.get("stockName", "")
     raw_close = basic.get("closePrice", "")
-    curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
+    curr_price_str = f"{raw_close}원" if (raw_close and raw_close != "-" and "원" not in str(raw_close)) else (str(raw_close) if raw_close else "")
 
     total_infos = integration.get("totalInfos", [])
-    market_cap = "-"
+    market_cap = ""
     for item in total_infos:
         if str(item.get("code", "")).strip() == "marketValue" or str(item.get("key", "")).strip() in ["시총", "시가총액"]:
             market_cap = str(item.get("value", "")).strip()
@@ -61,8 +61,8 @@ def fetch_watchlist_item(code: str):
             latest_k = sorted_keys[-1]
             prev_k = sorted_keys[-2] if len(sorted_keys) >= 2 else None
             
-            fin_info["latest_yr"] = f"{re.search(r'(20\d{2})', str(latest_k)).group(1)}년" if re.search(r'(20\d{2})', str(latest_k)) else "-"
-            fin_info["prev_yr"] = f"{re.search(r'(20\d{2})', str(prev_k)).group(1)}년" if prev_k and re.search(r'(20\d{2})', str(prev_k)) else "-"
+            fin_info["latest_yr"] = f"{re.search(r'(20\d{2})', str(latest_k)).group(1)}년" if re.search(r'(20\d{2})', str(latest_k)) else ""
+            fin_info["prev_yr"] = f"{re.search(r'(20\d{2})', str(prev_k)).group(1)}년" if prev_k and re.search(r'(20\d{2})', str(prev_k)) else ""
 
             c_item = columns.get(latest_k, {})
             c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
@@ -90,27 +90,30 @@ def fetch_watchlist_item(code: str):
                 fin_info["cur_pbr"] = c_val
                 fin_info["prev_pbr"] = p_val
 
+    # 수치 데이터는 값이 없을 때 "-"를 반환하도록 설정
     def fmt_val(v, suffix=""):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-            return ""
+            return "-"
         if isinstance(v, (int, float)):
             return f"{v:,.0f}{suffix}"
         return f"{str(v).strip()}{suffix}"
 
     def fmt_rate(v):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-            return ""
+            return "-"
         if isinstance(v, (int, float)):
             return f"{v:.2f}%"
         return f"{str(v).strip()}%"
 
     def fmt_multi(v):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-            return ""
+            return "-"
         return f"{str(v).strip()}배"
 
     items = []
-    if fin_info["prev_yr"] != "-":
+    
+    # 1. 직전 연도(예: 2025년) 데이터가 있는 경우 첫 번째 행으로 추가
+    if fin_info["prev_yr"]:
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
             "적용연도": fin_info["prev_yr"],
@@ -122,9 +125,14 @@ def fetch_watchlist_item(code: str):
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
         })
 
-    if fin_info["latest_yr"] != "-":
+    # 2. 최근 연도(예: 2026년) 데이터가 있는 경우 행으로 추가 (직전 연도가 있었다면 두 번째 행이 되므로 종목명/현재가/시총은 빈칸)
+    if fin_info["latest_yr"]:
+        is_second_row = (len(items) > 0)
         items.append({
-            "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+            "종목코드": code, 
+            "종목명": "" if is_second_row else stock_name, 
+            "현재가": "" if is_second_row else curr_price_str, 
+            "시총": "" if is_second_row else market_cap,
             "적용연도": fin_info["latest_yr"],
             "PER": fmt_multi(fin_info["cur_per"]),
             "PBR": fmt_multi(fin_info["cur_pbr"]),
@@ -202,23 +210,13 @@ def render_tab_watchlist(full_csv_records_map=None):
             continue
         code = info_list[0]["종목코드"]
 
-        for i, info in enumerate(info_list):
-            # 첫 번째 행에만 종목명, 현재가, 시총을 넣고, 두 번째 행부터는 빈 문자열("")로 완전히 비움
-            if i > 0:
-                display_name = ""
-                display_price = ""
-                display_mcap = ""
-            else:
-                display_name = info["종목명"]
-                display_price = info["현재가"]
-                display_mcap = info["시총"]
-
+        for info in info_list:
             rows.append({
                 "선택": "",
                 "종목코드": code,
-                "종목명": display_name,
-                "현재가": display_price,
-                "시총": display_mcap,
+                "종목명": info["종목명"],
+                "현재가": info["현재가"],
+                "시총": info["시총"],
                 "적용연도": info["적용연도"],
                 "PER": info["PER"],
                 "PBR": info["PBR"],
