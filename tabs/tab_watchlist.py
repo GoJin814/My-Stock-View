@@ -161,7 +161,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     watchlist_codes = load_watchlist_codes()
 
-    # 1. URL 파라미터(del_codes)를 통한 체크박스 동기화 처리
     query_params = st.query_params
     del_codes_param = query_params.get("del_codes", "")
     checked_codes_from_url = [c.strip() for c in del_codes_param.split(",") if c.strip()]
@@ -176,7 +175,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                # URL 파라미터 또는 세션 상태 기반 삭제 대상 확인
                 codes_to_delete = list(set(
                     [code for code, checked in st.session_state.watchlist_checks.items() if checked] +
                     checked_codes_from_url
@@ -195,7 +193,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         st.write("")
 
-    # 병렬로 관심종목 데이터 실시간 로드
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(fetch_watchlist_item, watchlist_codes))
 
@@ -204,9 +201,9 @@ def render_tab_watchlist(full_csv_records_map=None):
         if not info_list:
             continue
         code = info_list[0]["종목코드"]
-        is_checked = code in checked_codes_from_url or st.session_state.watchlist_checks.get(code, False)
 
         for i, info in enumerate(info_list):
+            # 첫 번째 행에만 종목명, 현재가, 시총을 넣고, 두 번째 행부터는 빈 문자열("")로 완전히 비움
             if i > 0:
                 display_name = ""
                 display_price = ""
@@ -234,7 +231,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # styles.py의 공통 그리드 렌더링 함수 활용 (체크박스 및 PC 네이버 링크 완벽 지원)
         render_multi_header_table(
             df_watch,
             tab_name="tab_watchlist",
@@ -246,7 +242,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("---")
 
-    # 하단 토글을 켜면 종목코드 추가 입력창이 나타나도록 구성
     show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
     if show_manage_box:
         with st.container(border=True):
