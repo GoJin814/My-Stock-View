@@ -10,7 +10,8 @@ from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list,
 from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
-WATCHLIST_CACHE_FILE = "watchlist_data.json"
+# 관심종목 전용 텍스트 파일명 지정
+WATCHLIST_FILE = "watchlist_codes.txt"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_watchlist_item(code: str):
@@ -155,23 +156,34 @@ def fetch_watchlist_item(code: str):
     return items
 
 def load_watchlist_codes():
+    """watchlist_codes.txt 파일에서 관심종목 코드를 불러옵니다."""
     codes = []
-    if os.path.exists(WATCHLIST_CACHE_FILE):
+    if os.path.exists(WATCHLIST_FILE):
         try:
-            with open(WATCHLIST_CACHE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    codes = [str(c).zfill(6) for c in data]
-                elif isinstance(data, dict):
-                    codes = [str(c).zfill(6) for c in data.keys()]
+            with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    cleaned = line.strip().zfill(6)
+                    if cleaned and cleaned.isdigit() and len(cleaned) == 6:
+                        codes.append(cleaned)
         except Exception:
             pass
     return list(dict.fromkeys(codes))
 
 def save_watchlist_codes(codes):
-    json_text = json.dumps(codes, ensure_ascii=False, indent=2)
-    with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
-        f.write(json_text)
+    """추가/삭제된 관심종목 코드를 watchlist_codes.txt 파일에 반영합니다."""
+    cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
+    content = "\n".join(cleaned_codes) + ("\n" if cleaned_codes else "")
+    
+    # 1. 로컬 텍스트 파일 저장
+    with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
+        
+    # 2. 현재시세 탭처럼 GitHub 자동 커밋 연동이 필요하다면 아래에 추가하세요.
+    try:
+        # 예시: commit_to_github(WATCHLIST_FILE, content, f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)")
+        pass
+    except Exception as e:
+        st.error(f"GitHub 동기화 실패: {e}")
 
 def render_tab_watchlist(full_csv_records_map=None):
     
