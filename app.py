@@ -367,13 +367,14 @@ if current_codes:
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # HTML 커스텀 테이블(render_multi_header_table)이 쿼리 파라미터에 담아준 체크된 종목 코드 가져오기
+                # 1. 쿼리 파라미터에서 체크된 종목 코드 가져오기
                 raw_codes = st.query_params.get("del_codes", "")
                 selected_codes = [c.strip().zfill(6) for c in str(raw_codes).split(",") if c.strip() and c.strip().isdigit()]
 
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
                 else:
+                    # 2. 기존 watchlist_data.json 불러오기
                     watchlist_file = os.path.abspath("watchlist_data.json")
                     watchlist = {}
                     if os.path.exists(watchlist_file):
@@ -386,6 +387,7 @@ if current_codes:
                     full_csv_map = {item["종목코드"]: item for item in full_csv_records}
                     added_count = 0
 
+                    # 3. 선택된 각 종목별로 tab_watchlist.py가 요구하는 데이터 구조 생성 후 추가
                     for code in selected_codes:
                         rec = full_csv_map.get(code)
                         if not rec:
@@ -464,10 +466,14 @@ if current_codes:
                         watchlist[code] = row_list_data
                         added_count += 1
 
+                    # 4. JSON 파일 저장 및 GitHub 동기화 반영
                     with open(watchlist_file, "w", encoding="utf-8") as wf:
                         json.dump(watchlist, wf, ensure_ascii=False, indent=2)
                     
-                    # 처리 후 쿼리 파라미터 초기화
+                    # 세션 및 쿼리 파라미터 정리
+                    if "persistent_watchlist" in st.session_state:
+                        st.session_state.persistent_watchlist = watchlist
+
                     try:
                         st.query_params.clear()
                     except Exception:
