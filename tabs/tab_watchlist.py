@@ -268,26 +268,28 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                # 1. 세션 상태 및 쿼리 파라미터에서 체크된 종목 코드 수집
-                checked_codes_from_state = []
-                if "watchlist_checks" in st.session_state:
-                    # 체크박스가 True로 설정된 종목코드 추출
-                    checked_codes_from_state = [
-                        code for code, checked in st.session_state.watchlist_checks.items() if checked
-                    ]
+                codes_to_delete = []
                 
-                codes_to_delete = list(set(
-                    checked_codes_from_state +
-                    checked_codes_from_url
-                ))
+                # 1. st.session_state 전체를 순회하며 체크된 종목코드(또는 관련 키) 색출
+                for key, val in st.session_state.items():
+                    if val is True and any(code in str(key) for code in watchlist_codes):
+                        for code in watchlist_codes:
+                            if code in str(key) and code not in codes_to_delete:
+                                codes_to_delete.append(code)
+                
+                # 2. 지정된 체크 상태 딕셔너리 검사
+                if "watchlist_checks" in st.session_state and isinstance(st.session_state.watchlist_checks, dict):
+                    for code, checked in st.session_state.watchlist_checks.items():
+                        if checked and code in watchlist_codes and code not in codes_to_delete:
+                            codes_to_delete.append(code)
+
+                # 3. URL 파라미터에 전달된 삭제 대상 코드 합산
+                codes_to_delete = list(set(codes_to_delete + checked_codes_from_url))
                 
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
-                    # 기존 관심종목 리스트에서 체크된 항목들을 제외
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
-                    
-                    # 파일 저장 및 GitHub 커밋 실행
                     save_watchlist_codes(new_codes)
                     
                     # 체크 상태 초기화
