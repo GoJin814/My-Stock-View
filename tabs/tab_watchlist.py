@@ -7,6 +7,7 @@ import base64
 import requests
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_FILE = "watchlist_codes.txt"
@@ -54,11 +55,7 @@ def fetch_watchlist_item(code: str):
     
     stock_name = basic.get("stockName", "")
     if not stock_name or stock_name == "-":
-        stock_name = code
-
-    # 네이버 증권 링크 마크다운 생성
-    pc_url = f"https://finance.naver.com/item/main.naver?code={code}"
-    linked_stock_name = f"[{stock_name}]({pc_url})"
+        stock_name = ""
 
     raw_close = basic.get("closePrice", "")
     if not raw_close or raw_close == "-":
@@ -160,11 +157,11 @@ def fetch_watchlist_item(code: str):
     
     if fin_info["prev_yr"]:
         items.append({
-            "선택": False,
+            "선택": "",
             "종목코드": code, 
-            "종목명": linked_stock_name, 
-            "현재가": curr_price_str, 
-            "시총": market_cap,
+            "종목명": stock_name if stock_name else empty_space, 
+            "현재가": curr_price_str if curr_price_str else empty_space, 
+            "시총": market_cap if market_cap else empty_space,
             "적용연도": fin_info["prev_yr"],
             "PER": fmt_multi(fin_info["prev_per"]),
             "PBR": fmt_multi(fin_info["prev_pbr"]),
@@ -177,11 +174,11 @@ def fetch_watchlist_item(code: str):
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
-            "선택": False,
+            "선택": "",
             "종목코드": "" if is_second_row else code, 
-            "종목명": empty_space if is_second_row else linked_stock_name, 
-            "현재가": empty_space if is_second_row else curr_price_str, 
-            "시총": empty_space if is_second_row else market_cap,
+            "종목명": empty_space if is_second_row else (stock_name if stock_name else empty_space), 
+            "현재가": empty_space if is_second_row else (curr_price_str if curr_price_str else empty_space), 
+            "시총": empty_space if is_second_row else (market_cap if market_cap else empty_space),
             "적용연도": fin_info["latest_yr"],
             "PER": fmt_multi(fin_info["cur_per"]),
             "PBR": fmt_multi(fin_info["cur_pbr"]),
@@ -234,24 +231,12 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        select_all = st.checkbox("☑️ 전체 종목 선택 / 해제", key="watchlist_select_all_toggle")
-        if select_all:
-            df_watch["선택"] = True
-
-        edited_df = st.data_editor(
+        # styles.py의 네이버 링크 및 스타일 엔진이 적용되는 테이블 렌더러 호출
+        render_multi_header_table(
             df_watch,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False),
-                "종목코드": st.column_config.TextColumn("종목코드", disabled=True),
-                "종목명": st.column_config.LinkColumn("종목명", disabled=True, display_text=r"\[(.*?)\]\(.*?\)"),
-                "현재가": st.column_config.TextColumn("현재가", disabled=True),
-                "시총": st.column_config.TextColumn("시총", disabled=True),
-                "적용연도": st.column_config.TextColumn("적용연도", disabled=True),
-            },
-            disabled=["종목코드", "종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
-            hide_index=True,
-            use_container_width=True,
-            key="watchlist_editor"
+            tab_name="tab_basic",
+            has_checkbox=True,
+            has_naver_link=True
         )
 
         st.write("")
@@ -259,24 +244,15 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                checked_rows = edited_df[edited_df["선택"] == True]
-                codes_to_delete = checked_rows["종목코드"].astype(str).str.zfill(6).unique().tolist()
+                raw_del = st.query_params.get("del_codes", "")
+                codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
                 
                 if not codes_to_delete:
-                    # 종목코드가 빈 행(두 번째 연도 행)이 선택된 경우를 대비해 종목명이나 다른 행에서 역추적
-                    pass
-
-                # 좀 더 확실하게 체크된 행의 위쪽 행들을 탐색하여 종목코드 매칭
-                for idx, row in edited_df[edited_df["선택"] == True].iterrows():
-                    # 현재 행에 종목코드가 없으면 위로 올라가며 찾기
-                    curr_idx = idx
-                    while curr_idx >= 0:
-                        c_val = str(edited_df.loc[curr_idx, "종목코드"]).strip().zfill(6)
-                        if c_val and c_val != "000000" and c_val in watchlist_codes:
-                            if c_val not in codes_to_delete:
-                                codes_to_delete.append(c_val)
-                            break
-                        curr_idx -= 1
+                    for key, val in st.session_state.items():
+                        if val is True:
+                            for code in watchlist_codes:
+                                if code in str(key) and code not in codes_to_delete:
+                                    codes_to_delete.append(code)
 
                 codes_to_delete = list(dict.fromkeys(codes_to_delete))
 
@@ -285,6 +261,10 @@ def render_tab_watchlist(full_csv_records_map=None):
                 else:
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
                     save_watchlist_codes(new_codes)
+                    
+                    if "del_codes" in st.query_params:
+                        del st.query_params["del_codes"]
+                        
                     st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
     else:
@@ -331,7 +311,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                     cleaned_code = input_code.strip().zfill(6)
                     if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
                         current_codes = load_watchlist_codes()
-                        if cleaned_code not in current_codes:
+                        if cleaned_code not in cleaned_codes:
                             current_codes.append(cleaned_code)
                             save_watchlist_codes(current_codes)
                             st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
