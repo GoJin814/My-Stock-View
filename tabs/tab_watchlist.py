@@ -173,6 +173,51 @@ def save_watchlist_codes(codes):
     with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
         f.write(json_text)
 
+import streamlit as st
+import pandas as pd
+import json
+import os
+import base64
+import requests
+import re
+import numpy as np
+from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from styles import render_multi_header_table
+from concurrent.futures import ThreadPoolExecutor
+
+# 기존 JSON 파일 대신 관심종목 전용 txt 파일명 지정
+WATCHLIST_FILE = "watchlist_codes.txt"
+
+def load_watchlist_codes():
+    """관심종목 전용 텍스트 파일에서 종목코드를 불러옵니다."""
+    codes = []
+    if os.path.exists(WATCHLIST_FILE):
+        try:
+            with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    cleaned = line.strip().zfill(6)
+                    if cleaned and cleaned.isdigit() and len(cleaned) == 6:
+                        codes.append(cleaned)
+        except Exception:
+            pass
+    return list(dict.fromkeys(codes))
+
+def save_watchlist_codes(codes):
+    """관심종목 코드를 텍스트 파일로 저장하고, 필요시 GitHub 연동 등을 처리합니다."""
+    cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
+    content = "\n".join(cleaned_codes) + "\n"
+    
+    # 1. 관심종목 전용 txt 파일에 로컬 저장
+    with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
+        
+    # 2. 현재시세 탭처럼 GitHub 자동 커밋 기능이 필요하다면 여기에 연동 코드를 추가할 수 있습니다.
+    try:
+        # 예시: commit_to_github(WATCHLIST_FILE, content, f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)")
+        pass
+    except Exception as e:
+        st.error(f"GitHub 동기화 실패: {e}")
+
 def render_tab_watchlist(full_csv_records_map=None):
     
     watchlist_codes = load_watchlist_codes()
