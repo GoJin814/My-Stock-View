@@ -125,15 +125,26 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
-    # 데이터프레임 구성: 모든 행에 종목명, 현재가, 시총 값을 온전히 채워 넣어 정렬 오류 방지
+    # 데이터프레임 구성: 종목코드 기준으로 중복을 제거하고 고유한 항목만 정돈하여 출력
     rows = []
+    seen_codes = set()
+    
     for code, info_list in watchlist.items():
-        if not isinstance(info_list, list) or len(info_list) == 0:
+        if code in seen_codes or not isinstance(info_list, list) or len(info_list) == 0:
             continue
+        seen_codes.add(code)
         
         is_checked = st.session_state.watchlist_checks.get(code, False)
 
-        for i, info in enumerate(info_list):
+        # 직전/최근 연도별 데이터 최대 2개만 깔끔하게 추출
+        valid_items = []
+        for info in info_list:
+            if isinstance(info, dict) and info.get("적용연도", "-") != "-":
+                # 연도가 중복되는 항목 제거
+                if not any(v.get("적용연도") == info.get("적용연도") for v in valid_items):
+                    valid_items.append(info)
+
+        for i, info in enumerate(valid_items[:2]):
             def clean_cell(val):
                 if val is None or pd.isna(val) or str(val).strip().lower() in ["none", ""]:
                     return "-"
@@ -178,16 +189,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     # 개별 체크박스 조작 상태 동기화
     if edited_df is not None and "선택" in edited_df.columns:
-        for _, row in edited_df.iterrows():
-            code = row.get("종목코드")
-            val = row.get("선택")
-            if code and pd.notna(val) and val:
-                st.session_state.watchlist_checks[code] = True
-            elif code and pd.notna(val) and not val:
-                # 해당 종목코드의 행들 중 하나라도 체크되어 있지 않다면 해제 처리
-                pass
-
-        # 전체 행 상태 반영 검사
         for code in watchlist.keys():
             sub_df = edited_df[edited_df["종목코드"] == code]
             if not sub_df.empty:
