@@ -57,6 +57,10 @@ def fetch_watchlist_item(code: str):
     if not stock_name or stock_name == "-":
         stock_name = code
 
+    # 네이버 금융 링크 HTML 직접 생성
+    pc_url = f"https://finance.naver.com/item/main.naver?code={code}"
+    linked_stock_name = f'<a href="{pc_url}" target="_blank" class="naver-pc-link" style="color: #58a6ff; text-decoration: none; font-weight: 500;">{stock_name}</a>'
+
     raw_close = basic.get("closePrice", "")
     if not raw_close or raw_close == "-":
         curr_price_str = ""
@@ -160,7 +164,7 @@ def fetch_watchlist_item(code: str):
         items.append({
             "선택": "",
             "종목코드": code, 
-            "종목명": stock_name, 
+            "종목명": linked_stock_name, 
             "현재가": curr_price_str, 
             "시총": market_cap,
             "적용연도": fin_info["prev_yr"],
@@ -178,7 +182,7 @@ def fetch_watchlist_item(code: str):
         items.append({
             "선택": "",
             "종목코드": code, 
-            "종목명": empty_space if is_second_row else stock_name, 
+            "종목명": empty_space if is_second_row else linked_stock_name, 
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
             "적용연도": fin_info["latest_yr"],
@@ -234,12 +238,12 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # styles.py의 렌더러를 호출하여 네이버 링크 및 스타일 적용 (tab_name="tab_basic"으로 JS 연동)
+        # styles.py의 렌더러를 쓰되, has_naver_link를 False로 주어 자체 주입된 HTML 링크가 깨지지 않고 그대로 출력되도록 함
         render_multi_header_table(
             df_watch,
             tab_name="tab_basic",
             has_checkbox=True,
-            has_naver_link=True
+            has_naver_link=False
         )
 
         st.write("")
@@ -316,5 +320,10 @@ def render_tab_watchlist(full_csv_records_map=None):
                         current_codes = load_watchlist_codes()
                         if cleaned_code not in current_codes:
                             current_codes.append(cleaned_code)
-                            save_watchlist_codes(cleaned_code) # wait, save_watchlist_codes(current_codes)
-                            # Let's fix save_watchlist_codes argument call below
+                            save_watchlist_codes(current_codes)
+                            st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+                    else:
+                        st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
