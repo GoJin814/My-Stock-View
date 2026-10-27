@@ -19,8 +19,8 @@ def fetch_watchlist_item(code: str):
     integration = fetch_integration(code)
     fin_json = fetch_finance(code)
     
-    stock_name = basic.get("stockName", "-")
-    raw_close = basic.get("closePrice", "-")
+    stock_name = basic.get("stockName", "")
+    raw_close = basic.get("closePrice", "")
     curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
 
     total_infos = integration.get("totalInfos", [])
@@ -91,21 +91,21 @@ def fetch_watchlist_item(code: str):
                 fin_info["prev_pbr"] = p_val
 
     def fmt_val(v, suffix=""):
-        if v is None or pd.isna(v) or v == "" or str(v).lower() == "none":
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return ""
         if isinstance(v, (int, float)):
             return f"{v:,.0f}{suffix}"
         return f"{str(v).strip()}{suffix}"
 
     def fmt_rate(v):
-        if v is None or pd.isna(v) or v == "" or str(v).lower() == "none":
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return ""
         if isinstance(v, (int, float)):
             return f"{v:.2f}%"
         return f"{str(v).strip()}%"
 
     def fmt_multi(v):
-        if v is None or pd.isna(v) or v == "" or str(v).lower() == "none":
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return ""
         return f"{str(v).strip()}배"
 
