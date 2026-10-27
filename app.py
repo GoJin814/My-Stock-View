@@ -131,7 +131,8 @@ def fetch_single_stock(code: str):
             columns = row.get("columns", {})
             if not columns:
                 continue
-            sorted_years = sorted(list(columns.keys()))
+            # 연도 문자열에서 숫자(연도)만 추출하여 정확한 오름차순 정렬 수행
+            sorted_years = sorted(list(columns.keys()), key=lambda x: re.sub(r'[^0-9]', '', str(x)))
             if not sorted_years:
                 continue
                 
