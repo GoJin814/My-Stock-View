@@ -477,21 +477,28 @@ if current_codes:
                         }
 
                         row_list_data = []
-                        if prev_yr != "-":
-                            row_list_data.append({
-                                "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-                                "적용연도": prev_yr, "PER": prev_metrics["PER"], "PBR": prev_metrics["PBR"],
-                                "ROE": prev_metrics["ROE"], "매출액": prev_metrics["매출액"],
-                                "영업익": prev_metrics["영업익"], "당기순이익": prev_metrics["당기순이익"]
-                            })
+                        # 연도별 데이터 맵핑 및 누락된 연도 빈칸 처리
+                        year_data_map = {}
+                        for yr_label, metrics_dict in [(prev_yr, prev_metrics), (latest_yr, latest_metrics)]:
+                            if yr_label != "-" and yr_label:
+                                has_val = any(v != "-" for v in metrics_dict.values())
+                                if has_val:
+                                    year_data_map[yr_label] = {
+                                        "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+                                        "적용연도": yr_label, "PER": metrics_dict["PER"], "PBR": metrics_dict["PBR"],
+                                        "ROE": metrics_dict["ROE"], "매출액": metrics_dict["매출액"],
+                                        "영업익": metrics_dict["영업익"], "당기순이익": metrics_dict["당기순이익"]
+                                    }
 
-                        if latest_yr != "-":
-                            row_list_data.append({
-                                "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-                                "적용연도": latest_yr, "PER": latest_metrics["PER"], "PBR": latest_metrics["PBR"],
-                                "ROE": latest_metrics["ROE"], "매출액": latest_metrics["매출액"],
-                                "영업익": latest_metrics["영업익"], "당기순이익": latest_metrics["당기순이익"]
-                            })
+                        for target_yr in ["2025년", "2026년"]:
+                            if target_yr in year_data_map:
+                                row_list_data.append(year_data_map[target_yr])
+                            else:
+                                row_list_data.append({
+                                    "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+                                    "적용연도": target_yr, "PER": "-", "PBR": "-", "ROE": "-", 
+                                    "매출액": "-", "영업익": "-", "당기순이익": "-"
+                                })
 
                         watchlist[code] = row_list_data
                         added_count += 1
