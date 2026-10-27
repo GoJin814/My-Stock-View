@@ -156,35 +156,37 @@ def fetch_watchlist_item(code: str):
     return items
 
 def load_watchlist_codes():
-    """watchlist_codes.txt 파일에서 관심종목 코드를 안전하게 줄바꿈 단위로 읽어옵니다."""
+    """watchlist_codes.txt 파일에서 관심종목 코드를 안전하게 불러옵니다."""
     codes = []
     if os.path.exists(WATCHLIST_FILE):
         try:
             with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
-                for line in f:
-                    cleaned = line.strip().zfill(6)
-                    if cleaned and cleaned.isdigit() and len(cleaned) == 6:
-                        codes.append(cleaned)
+                codes = [line.strip().zfill(6) for line in f.readlines() if line.strip() and line.strip().isdigit()]
+                if codes:
+                    return list(dict.fromkeys(codes))
         except Exception:
             pass
-    return list(dict.fromkeys(codes))
+    
+    # 파일이 없거나 비어있을 경우 기본 관심종목 설정 (필요시 수정 가능)
+    default_watchlist = ["005930", "000660"]
+    save_watchlist_codes(default_watchlist)
+    return default_watchlist
 
 def save_watchlist_codes(codes):
     """관심종목 코드를 txt에 저장하고 GitHub에 자동 커밋하여 리부트 시에도 유지되도록 합니다."""
     cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
     content = "\n".join(cleaned_codes) + ("\n" if cleaned_codes else "")
     
-    # 1. 로컬 파일 저장
+    # 1. 로컬 텍스트 파일 저장
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         f.write(content)
         
-    # 2. GitHub 저장소 동기화 (현재시세 탭에서 사용 중인 커밋 함수명과 동일하게 맞추어 주세요)
-    try:
-        commit_to_github(
-            WATCHLIST_FILE, 
-            content, 
-            f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
-        )
+    # 2. 현재시세 탭과 동일한 방식으로 GitHub에 자동 커밋 수행
+    commit_to_github(
+        WATCHLIST_FILE, 
+        content, 
+        f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
+    )
     except Exception as e:
         st.error(f"GitHub 동기화 실패: {e}")
 
