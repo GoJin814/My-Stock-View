@@ -368,36 +368,15 @@ if current_codes:
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # 1. 다양한 경로로 체크된 종목 코드 탐색
+                # 현재 시세 탭에서 체크된 종목 코드 수집
                 selected_codes = []
-                
-                # 경로 A: 세션 상태 및 에디터 기록 탐색
-                for k, v in st.session_state.items():
-                    if isinstance(v, dict) and "edited_rows" in v:
-                        edited_rows_dict = v.get("edited_rows", {})
-                        temp_df = df_basic.copy()
-                        for idx_str, row_changes in edited_rows_dict.items():
-                            try:
-                                idx = int(idx_str)
-                                if "선택" in row_changes:
-                                    temp_df.loc[idx, "선택"] = row_changes["선택"]
-                            except Exception:
-                                pass
-                        checked_sub = temp_df[temp_df["선택"] == True]
-                        if not checked_sub.empty:
-                            selected_codes = checked_sub["종목코드"].dropna().astype(str).tolist()
-                            break
+                for param_key, param_val in st.query_params.items():
+                    if param_val:
+                        codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
+                        if codes:
+                            selected_codes.extend(codes)
+                selected_codes = list(dict.fromkeys(selected_codes))
 
-                # 경로 B: 쿼리 파라미터 탐색 (del_codes 또는 이외 키들)
-                if not selected_codes:
-                    for param_key, param_val in st.query_params.items():
-                        if param_val:
-                            codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
-                            if codes:
-                                selected_codes.extend(codes)
-                    selected_codes = list(dict.fromkeys(selected_codes))
-
-                # 경로 C: df_basic 기본값에서 '선택 == True' 확인
                 if not selected_codes and "선택" in df_basic.columns:
                     checked_sub = df_basic[df_basic["선택"] == True]
                     if not checked_sub.empty:
@@ -407,119 +386,39 @@ if current_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
                 else:
                     watchlist_file = os.path.abspath("watchlist_data.json")
-                    watchlist = {}
+                    watchlist_codes = []
+                    
+                    # 기존에 저장된 코드 목록 불러오기 (리스트 형태로 관리)
                     if os.path.exists(watchlist_file):
                         try:
                             with open(watchlist_file, "r", encoding="utf-8") as wf:
-                                watchlist = json.load(wf)
+                                existing = json.load(wf)
+                                if isinstance(existing, list):
+                                    watchlist_codes = existing
+                                elif isinstance(existing, dict):
+                                    watchlist_codes = list(existing.keys())
                         except Exception:
                             pass
 
-                    full_csv_map = {item["종목코드"]: item for item in full_csv_records}
-                    added_count = 0
-
+                    # 새로운 코드 추가 (중복 방지)
                     for code in selected_codes:
-                        rec = full_csv_map.get(code)
-                        if not rec:
-                            continue
-                        
-                        stock_name = rec.get("종목명", f"종목_{code}")
-                        curr_price_str = rec.get("현재가", "-")
-                        market_cap = rec.get("시총", "-")
-                        
-                        prev_yr = rec.get("직전연도", "-")
-                        latest_yr = rec.get("최근연도", "-")
+                        if code not in watchlist_codes:
+                            watchlist_codes.append(code)
 
-                        def fmt_val(v, suffix=""):
-                            if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-                                return "-"
-                            if isinstance(v, (int, float)):
-                                return f"{v:,.0f}{suffix}"
-                            val_str = str(v).strip()
-                            if not val_str or val_str.lower() == "none":
-                                return "-"
-                            return f"{val_str}{suffix}"
-
-                        def fmt_rate(v):
-                            if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-                                return "-"
-                            if isinstance(v, (int, float)):
-                                return f"{v:.2f}%"
-                            val_str = str(v).strip()
-                            if not val_str or val_str.lower() == "none":
-                                return "-"
-                            return f"{val_str}%" if not val_str.endswith("%") else val_str
-
-                        def fmt_multi(v):
-                            if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-                                return "-"
-                            val_str = str(v).strip()
-                            if not val_str or val_str.lower() == "none":
-                                return "-"
-                            return f"{val_str}배" if not val_str.endswith("배") else val_str
-
-                        prev_metrics = {
-                            "PER": fmt_multi(rec.get("PER_직전")),
-                            "PBR": fmt_multi(rec.get("PBR_직전")),
-                            "ROE": fmt_rate(rec.get("ROE_직전")),
-                            "매출액": fmt_val(rec.get("매출액_직전"), "억"),
-                            "영업익": fmt_val(rec.get("영업익_직전"), "억"),
-                            "당기순이익": fmt_val(rec.get("순이익_직전"), "억")
-                        }
-
-                        latest_metrics = {
-                            "PER": fmt_multi(rec.get("PER_최근")),
-                            "PBR": fmt_multi(rec.get("PBR_최근")),
-                            "ROE": fmt_rate(rec.get("ROE_최근")),
-                            "매출액": fmt_val(rec.get("매출액_직전"), "억") if rec.get('매출액_최근') in [None, "-", 0, np.nan] else fmt_val(rec.get('매출액_최근'), "억"),
-                            "영업익": fmt_val(rec.get("영업익_최근"), "억"),
-                            "당기순이익": fmt_val(rec.get("순이익_최근"), "억") if "순이익_최근" in rec else fmt_val(rec.get("순이익_직전"), "억")
-                        }
-
-                        row_list_data = []
-                        # API에서 수집된 실제 연도들을 기준으로 동적으로 정렬 및 맵핑
-                        year_data_map = {}
-                        for yr_label, metrics_dict in [(prev_yr, prev_metrics), (latest_yr, latest_metrics)]:
-                            if yr_label != "-" and yr_label:
-                                has_val = any(v != "-" for v in metrics_dict.values())
-                                if has_val:
-                                    year_data_map[yr_label] = {
-                                        "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-                                        "적용연도": yr_label, "PER": metrics_dict["PER"], "PBR": metrics_dict["PBR"],
-                                        "ROE": metrics_dict["ROE"], "매출액": metrics_dict["매출액"],
-                                        "영업익": metrics_dict["영업익"], "당기순이익": metrics_dict["당기순이익"]
-                                    }
-
-                        # 수집된 연도들을 오름차순으로 정렬 (예: 2025년, 2026년, 이후 연도 확장 가능)
-                        sorted_years = sorted(list(year_data_map.keys()), key=lambda x: re.sub(r'[^0-9]', '', x))
-                        
-                        if sorted_years:
-                            for yr in sorted_years:
-                                row_list_data.append(year_data_map[yr])
-                        else:
-                            # 데이터가 전혀 없을 경우 기본 처리
-                            row_list_data.append({
-                                "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-                                "적용연도": latest_yr if latest_yr != "-" else "최근", "PER": "-", "PBR": "-", "ROE": "-", 
-                                "매출액": "-", "영업익": "-", "당기순이익": "-"
-                            })
-
-                        watchlist[code] = row_list_data
-                        added_count += 1
-
-                    # JSON 파일 및 세션 업데이트
+                    # 단순 코드 리스트만 JSON으로 저장
+                    json_text = json.dumps(watchlist_codes, ensure_ascii=False, indent=2)
                     with open(watchlist_file, "w", encoding="utf-8") as wf:
-                        json.dump(watchlist, wf, ensure_ascii=False, indent=2)
+                        wf.write(json_text)
                     
-                    if "persistent_watchlist" in st.session_state:
-                        st.session_state.persistent_watchlist = watchlist
+                    # GitHub 동기화 반영 필요 시 기존 commit_to_github 함수 활용 가능
+                    commit_to_github("watchlist_data.json", json_text, f"Update watchlist codes ({len(watchlist_codes)} stocks)")
 
                     try:
                         st.query_params.clear()
                     except Exception:
                         pass
 
-                    st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                    st.success(f"🎉 총 {len(selected_codes)}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
                     st.rerun()
 
         with b_col1:
