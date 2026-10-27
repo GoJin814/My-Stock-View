@@ -2,15 +2,12 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-import base64
-import requests
 import re
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
-# 관심종목 전용 텍스트 파일명으로 설정 (기존 json 파일 대체)
 WATCHLIST_FILE = "watchlist_codes.txt"
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -120,7 +117,7 @@ def fetch_watchlist_item(code: str):
         return f"{str(v).strip()}배"
 
     items = []
-    empty_space = "\u3164"  # 렌더링 함수가 강제로 '-'로 바꾸는 것을 우회하기 위한 유니코드 공백
+    empty_space = "\u3164"  # 렌더링 함수 우회용 유니코드 공백
     
     if fin_info["prev_yr"]:
         items.append({
@@ -156,7 +153,6 @@ def fetch_watchlist_item(code: str):
     return items
 
 def load_watchlist_codes():
-    """watchlist_codes.txt 파일에서 관심종목 코드를 안전하게 불러옵니다."""
     codes = []
     if os.path.exists(WATCHLIST_FILE):
         try:
@@ -167,31 +163,29 @@ def load_watchlist_codes():
         except Exception:
             pass
     
-    # 파일이 없거나 비어있을 경우 기본 관심종목 설정 (필요시 수정 가능)
     default_watchlist = ["005930", "000660"]
     save_watchlist_codes(default_watchlist)
     return default_watchlist
 
 def save_watchlist_codes(codes):
-    """관심종목 코드를 txt에 저장하고 GitHub에 자동 커밋하여 리부트 시에도 유지되도록 합니다."""
     cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
     content = "\n".join(cleaned_codes) + ("\n" if cleaned_codes else "")
     
-    # 1. 로컬 텍스트 파일 저장
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         f.write(content)
         
-    # 2. 현재시세 탭과 동일한 방식으로 GitHub에 자동 커밋 수행
-    commit_to_github(
-        WATCHLIST_FILE, 
-        content, 
-        f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
-    )
+    # app.py에 정의된 commit_to_github 함수와 연동
+    from app import commit_to_github
+    try:
+        commit_to_github(
+            WATCHLIST_FILE, 
+            content, 
+            f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
+        )
     except Exception as e:
         st.error(f"GitHub 동기화 실패: {e}")
 
 def render_tab_watchlist(full_csv_records_map=None):
-    
     watchlist_codes = load_watchlist_codes()
 
     query_params = st.query_params
@@ -238,7 +232,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         st.write("")
         
-        # 테이블 하단에 선택 항목 삭제 버튼 배치
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
