@@ -199,7 +199,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         for i, info in enumerate(info_list):
             stock_name = info["종목명"]
-            naver_url =[span_0](start_span)[span_0](end_span) f"https://m.stock.naver.com/domestic/stock/{code}/total"
+            naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
             if i > 0:
