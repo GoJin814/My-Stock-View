@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import pandas as pd
 import json
 import os
@@ -184,29 +184,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
-    if watchlist_codes:
-        col_l, col_r = st.columns([3, 1.8])
-
-        with col_r:
-            if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                codes_to_delete = list(set(
-                    [code for code, checked in st.session_state.watchlist_checks.items() if checked] +
-                    checked_codes_from_url
-                ))
-                
-                if not codes_to_delete:
-                    st.warning("⚠️ 삭제할 종목을 체크해 주세요.")
-                else:
-                    new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
-                    save_watchlist_codes(new_codes)
-                    st.session_state.watchlist_checks = {}
-                    if "del_codes" in st.query_params:
-                        del st.query_params["del_codes"]
-                    st.success("🗑️ 선택한 종목 삭제 완료")
-                    st.rerun()
-
-        st.write("")
-
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(fetch_watchlist_item, watchlist_codes))
 
@@ -241,6 +218,28 @@ def render_tab_watchlist(full_csv_records_map=None):
             has_checkbox=True,
             has_naver_link=True
         )
+
+        st.write("")
+        
+        # 테이블 하단에 선택 항목 삭제 버튼 배치
+        col_l, col_r = st.columns([3, 1.8])
+        with col_r:
+            if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+                codes_to_delete = list(set(
+                    [code for code, checked in st.session_state.watchlist_checks.items() if checked] +
+                    checked_codes_from_url
+                ))
+                
+                if not codes_to_delete:
+                    st.warning("⚠️ 삭제할 종목을 체크해 주세요.")
+                else:
+                    new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
+                    save_watchlist_codes(new_codes)
+                    st.session_state.watchlist_checks = {}
+                    if "del_codes" in st.query_params:
+                        del st.query_params["del_codes"]
+                    st.success("🗑️ 선택한 종목 삭제 완료")
+                    st.rerun()
     else:
         st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
