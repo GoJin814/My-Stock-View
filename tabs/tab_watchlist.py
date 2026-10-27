@@ -156,7 +156,6 @@ def fetch_watchlist_item(code: str):
     
     if fin_info["prev_yr"]:
         items.append({
-            "선택": False,
             "종목코드": code, 
             "종목명": stock_name, 
             "링크": pc_url,
@@ -174,7 +173,6 @@ def fetch_watchlist_item(code: str):
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
-            "선택": False,
             "종목코드": code, 
             "종목명": empty_space if is_second_row else stock_name, 
             "링크": pc_url,
@@ -219,52 +217,42 @@ def save_watchlist_codes(codes):
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
 
-    rows = []
-    if watchlist_codes:
+    if not watchlist_codes:
+        st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
+    else:
+        st.markdown("##### 📌 관심종목 리스트")
+        select_all = st.checkbox("☑️ 전체 종목 선택 / 해제", key="watchlist_all_chk")
+
+        codes_to_delete = []
+        
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(fetch_watchlist_item, watchlist_codes))
 
         for info_list in results:
             if not info_list:
                 continue
-            for info in info_list:
-                rows.append(info)
+            code = info_list[0]["종목코드"]
+            stock_name = info_list[0]["종목명"]
+            pc_url = info_list[0]["링크"]
 
-    if rows:
-        df_watch = pd.DataFrame(rows)
-        
-        select_all = st.checkbox("☑️ 전체 종목 선택 / 해제", key="watchlist_select_all_toggle")
-        if select_all:
-            df_watch["선택"] = True
+            # 종목별 개별 체크박스 생성
+            col_chk, col_title = st.columns([0.5, 9.5])
+            with col_chk:
+                is_checked = st.checkbox("", value=select_all, key=f"watch_chk_{code}")
+                if is_checked:
+                    codes_to_delete.append(code)
+            with col_title:
+                st.markdown(f"**[{code}] [{stock_name}]({pc_url})** (네이버 증권 이동)")
 
-        # st.data_editor를 사용하여 체크박스와 링크를 안정적으로 제어
-        edited_df = st.data_editor(
-            df_watch,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False),
-                "종목코드": st.column_config.TextColumn("종목코드", disabled=True),
-                "종목명": st.column_config.TextColumn("종목명", disabled=True),
-                "링크": st.column_config.LinkColumn("네이버증권", display_text="🔗 이동"),
-                "현재가": st.column_config.TextColumn("현재가", disabled=True),
-                "시총": st.column_config.TextColumn("시총", disabled=True),
-                "적용연도": st.column_config.TextColumn("적용연도", disabled=True),
-            },
-            disabled=["종목코드", "종목명", "링크", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
-            hide_index=True,
-            use_container_width=True,
-            key="watchlist_editor"
-        )
+            # 해당 종목의 연도별 실적 테이블 표시
+            sub_df = pd.DataFrame(info_list).drop(columns=["종목코드", "종목명", "링크"])
+            st.dataframe(sub_df, hide_index=True, use_container_width=True)
+            st.write("---")
 
-        st.write("")
-        
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                checked_rows = edited_df[edited_df["선택"] == True]
-                codes_to_delete = checked_rows["종목코드"].astype(str).str.zfill(6).unique().tolist()
-                
                 codes_to_delete = list(dict.fromkeys(codes_to_delete))
-
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
@@ -272,8 +260,6 @@ def render_tab_watchlist(full_csv_records_map=None):
                     save_watchlist_codes(new_codes)
                     st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
-    else:
-        st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
     st.write("---")
 
