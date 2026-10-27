@@ -71,7 +71,10 @@ def load_codes():
             codes = [line.strip().zfill(6) for line in f.readlines() if line.strip() and line.strip().isdigit()]
             if codes:
                 return list(dict.fromkeys(codes))
-    return ["178320", "001130", "086450", "007690", "095660", "161890"]
+    
+    default_codes = ["178320", "001130", "086450", "007690", "095660", "161890"]
+    save_codes(default_codes)
+    return default_codes
 
 def save_codes(codes):
     content = "\n".join([f"{c.strip().zfill(6)}" for c in codes]) + "\n"
@@ -334,13 +337,14 @@ if current_codes:
         "🌐 국내지수",
         "📈 수익률-생활비",
         "📈 수익률-연금",
-        "📈 수익률-로운",
+        "📈 수익률-roun",
         "📈 수익률-진우"
     ])
 
-    # 1. 관심종목 탭
+    # 1. 관심종목 탭 (메모리 맵 전달 반영)
     with tab1:
-        render_tab_watchlist()
+        full_csv_map = {item["종목코드"]: item for item in full_csv_records}
+        render_tab_watchlist(full_csv_map)
 
     # 2. 현재 시세 탭
     with tab2:
@@ -409,7 +413,7 @@ if current_codes:
                                     st.success(f"{formatted} 추가 및 GitHub 커밋 완료")
                                     st.rerun()
 
-                                with tab_bulk_text:
+                with tab_bulk_text:
                     bulk_text = st.text_area(
                         "종목코드 목록 붙여넣기 (줄바꿈, 쉼표, 공백 구분)",
                         placeholder="예시:\n005930\n000660, 035420 035720",
@@ -418,7 +422,6 @@ if current_codes:
                     )
                     if st.button("📥 텍스트 목록 일괄 추가", type="primary", key="btn_bulk_text_add"):
                         if bulk_text.strip():
-                            # 정확히 6자리 숫자만 정규식으로 추출
                             found_codes = [c.zfill(6) for c in re.findall(r'\b\d{1,6}\b', bulk_text) if len(c.zfill(6)) == 6]
                             if found_codes:
                                 new_unique = [c for c in dict.fromkeys(found_codes) if c not in current_codes]
