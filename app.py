@@ -365,7 +365,7 @@ if current_codes:
         # 관심종목 추가 및 선택 종목 삭제 버튼을 우측 상단으로 배치
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
-               with b_col0:
+        with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
                 # 1. 쿼리 파라미터 대신 렌더링된 edited_basic_df 또는 df_basic에서 체크된 행 직접 추출
                 checked_rows = pd.DataFrame()
