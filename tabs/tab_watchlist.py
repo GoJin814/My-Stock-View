@@ -96,7 +96,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
-    # 상단 컨트롤: 전체 선택 체크박스 + 우측 삭제 버튼 배치
     col_l, col_r = st.columns([3, 1.8])
     with col_l:
         select_all = st.checkbox("전체 선택 / 해제", key="watchlist_master_select")
@@ -125,7 +124,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
-    # 데이터프레임 구성: 종목코드 기준으로 중복을 제거하고 고유한 항목만 정돈하여 출력
     rows = []
     seen_codes = set()
     
@@ -136,11 +134,9 @@ def render_tab_watchlist(full_csv_records_map=None):
         
         is_checked = st.session_state.watchlist_checks.get(code, False)
 
-        # 직전/최근 연도별 데이터 최대 2개만 깔끔하게 추출
         valid_items = []
         for info in info_list:
             if isinstance(info, dict) and info.get("적용연도", "-") != "-":
-                # 연도가 중복되는 항목 제거
                 if not any(v.get("적용연도") == info.get("적용연도") for v in valid_items):
                     valid_items.append(info)
 
@@ -187,7 +183,6 @@ def render_tab_watchlist(full_csv_records_map=None):
         key="watchlist_editor"
     )
 
-    # 개별 체크박스 조작 상태 동기화
     if edited_df is not None and "선택" in edited_df.columns:
         for code in watchlist.keys():
             sub_df = edited_df[edited_df["종목코드"] == code]
