@@ -157,6 +157,7 @@ def fetch_watchlist_item(code: str):
     
     if fin_info["prev_yr"]:
         items.append({
+            "선택": "",
             "종목코드": code, 
             "종목명": stock_name if stock_name else empty_space, 
             "현재가": curr_price_str if curr_price_str else empty_space, 
@@ -173,6 +174,7 @@ def fetch_watchlist_item(code: str):
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
+            "선택": "",
             "종목코드": code, 
             "종목명": empty_space if is_second_row else (stock_name if stock_name else empty_space), 
             "현재가": empty_space if is_second_row else (curr_price_str if curr_price_str else empty_space), 
@@ -226,42 +228,18 @@ def render_tab_watchlist(full_csv_records_map=None):
     for info_list in results:
         if not info_list:
             continue
-        code = info_list[0]["종목코드"]
-
         for info in info_list:
-            rows.append({
-                "선택": False,  # 체크박스 상태를 명시적인 불리언(Boolean)으로 관리
-                "종목코드": code,
-                "종목명": info["종목명"],
-                "현재가": info["현재가"],
-                "시총": info["시총"],
-                "적용연도": info["적용연도"],
-                "PER": info["PER"],
-                "PBR": info["PBR"],
-                "ROE": info["ROE"],
-                "매출액": info["매출액"],
-                "영업익": info["영업익"],
-                "당기순이익": info["당기순이익"]
-            })
+            rows.append(info)
 
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # st.data_editor를 사용하여 체크박스 상태를 명확히 세션으로 받음 (styles.py 수정 불필요)
-        edited_df = st.data_editor(
+        # 기존 스타일의 다중 헤더 테이블 렌더링 (전체 선택 체크박스 포함)
+        render_multi_header_table(
             df_watch,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False),
-                "종목코드": st.column_config.TextColumn("종목코드", disabled=True),
-                "종목명": st.column_config.TextColumn("종목명", disabled=True),
-                "현재가": st.column_config.TextColumn("현재가", disabled=True),
-                "시총": st.column_config.TextColumn("시총", disabled=True),
-                "적용연도": st.column_config.TextColumn("적용연도", disabled=True),
-            },
-            disabled=["종목코드", "종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
-            hide_index=True,
-            use_container_width=True,
-            key="watchlist_editor"
+            tab_name="tab_watchlist",
+            has_checkbox=True,
+            has_naver_link=True
         )
 
         st.write("")
@@ -269,15 +247,29 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                # 에디터에서 체크된 행들의 종목코드를 직접 추출
-                checked_rows = edited_df[edited_df["선택"] == True]
-                codes_to_delete = checked_rows["종목코드"].astype(str).str.zfill(6).unique().tolist()
+                # URL 쿼리 파라미터(del_codes)에서 체크된 종목 코드 수집
+                raw_del = st.query_params.get("del_codes", "")
+                codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
                 
+                # 만약 자바스크립트 동기화 전이라 파라미터가 비어있다면 세션 상태나 전체 코드 대상 체크 탐색
+                if not codes_to_delete:
+                    for key, val in st.session_state.items():
+                        if val is True:
+                            for code in watchlist_codes:
+                                if code in str(key) and code not in codes_to_delete:
+                                    codes_to_delete.append(code)
+
+                codes_to_delete = list(dict.fromkeys(codes_to_delete))
+
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
                     save_watchlist_codes(new_codes)
+                    
+                    if "del_codes" in st.query_params:
+                        del st.query_params["del_codes"]
+                        
                     st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
     else:
