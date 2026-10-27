@@ -96,7 +96,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
-    # 상단 우측 버튼 영역 설정 (전체 선택 체크박스 + 우측 삭제 버튼 배치)
+    # 상단 컨트롤: 전체 선택 체크박스 + 우측 삭제 버튼 배치
     col_l, col_r = st.columns([3, 1.8])
     with col_l:
         select_all = st.checkbox("전체 선택 / 해제", key="watchlist_master_select")
@@ -125,7 +125,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
-    # 데이터프레임 구성 (종목명 링크 포함, 2단 행 구조 유지)
+    # 데이터프레임 구성: 모든 행에 종목명, 현재가, 시총 값을 온전히 채워 넣어 정렬 오류 방지
     rows = []
     for code, info_list in watchlist.items():
         if not isinstance(info_list, list) or len(info_list) == 0:
@@ -143,36 +143,23 @@ def render_tab_watchlist(full_csv_records_map=None):
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
-            if i == 0:
-                rows.append({
-                    "선택": is_checked,
-                    "종목코드": code,
-                    "종목명": linked_name,
-                    "현재가": clean_cell(info.get("현재가", "-")),
-                    "시총": clean_cell(info.get("시총", "-")),
-                    "적용연도": clean_cell(info.get("적용연도", "")),
-                    "PER": clean_cell(info.get("PER", "-")),
-                    "PBR": clean_cell(info.get("PBR", "-")),
-                    "ROE": clean_cell(info.get("ROE", "-")),
-                    "매출액": clean_cell(info.get("매출액", "-")),
-                    "영업익": clean_cell(info.get("영업익", "-")),
-                    "당기순이익": clean_cell(info.get("당기순이익", "-"))
-                })
-            else:
-                rows.append({
-                    "선택": None,  # 하단 행은 빈 값으로 처리하여 시각적 혼선 방지
-                    "종목코드": code,
-                    "종목명": "",
-                    "현재가": "",
-                    "시총": "",
-                    "적용연도": clean_cell(info.get("적용연도", "")),
-                    "PER": clean_cell(info.get("PER", "-")),
-                    "PBR": clean_cell(info.get("PBR", "-")),
-                    "ROE": clean_cell(info.get("ROE", "-")),
-                    "매출액": clean_cell(info.get("매출액", "-")),
-                    "영업익": clean_cell(info.get("영업익", "-")),
-                    "당기순이익": clean_cell(info.get("당기순이익", "-"))
-                })
+            curr_price = clean_cell(info.get("현재가", "-"))
+            market_cap = clean_cell(info.get("시총", "-"))
+
+            rows.append({
+                "선택": is_checked if i == 0 else False,
+                "종목코드": code,
+                "종목명": linked_name,
+                "현재가": curr_price,
+                "시총": market_cap,
+                "적용연도": clean_cell(info.get("적용연도", "")),
+                "PER": clean_cell(info.get("PER", "-")),
+                "PBR": clean_cell(info.get("PBR", "-")),
+                "ROE": clean_cell(info.get("ROE", "-")),
+                "매출액": clean_cell(info.get("매출액", "-")),
+                "영업익": clean_cell(info.get("영업익", "-")),
+                "당기순이익": clean_cell(info.get("당기순이익", "-"))
+            })
 
     df_watch = pd.DataFrame(rows)
 
@@ -194,5 +181,15 @@ def render_tab_watchlist(full_csv_records_map=None):
         for _, row in edited_df.iterrows():
             code = row.get("종목코드")
             val = row.get("선택")
-            if code and pd.notna(val):
-                st.session_state.watchlist_checks[code] = bool(val)
+            if code and pd.notna(val) and val:
+                st.session_state.watchlist_checks[code] = True
+            elif code and pd.notna(val) and not val:
+                # 해당 종목코드의 행들 중 하나라도 체크되어 있지 않다면 해제 처리
+                pass
+
+        # 전체 행 상태 반영 검사
+        for code in watchlist.keys():
+            sub_df = edited_df[edited_df["종목코드"] == code]
+            if not sub_df.empty:
+                any_checked = sub_df["선택"].any()
+                st.session_state.watchlist_checks[code] = bool(any_checked)
