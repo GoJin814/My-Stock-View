@@ -4,6 +4,7 @@ import numpy as np
 import os
 import re
 import base64
+import json
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
@@ -347,7 +348,6 @@ if current_codes:
 
     # 2. 현재 시세 탭
     with tab2:
-        # 관심종목 추가 및 삭제 버튼을 어둡고 통일감 있는 색상으로 맞추기 위한 CSS 주입
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
@@ -362,7 +362,6 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
-        # 상단 우측에 간결해진 명칭의 관심종목 추가 버튼 및 삭제 버튼 배치
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
         with b_col0:
@@ -486,11 +485,9 @@ if current_codes:
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
-        # 테이블 렌더링
         edited_basic_df = render_tab_basic(df_basic)
 
         st.write("")
-        # 다운로드 및 백업 버튼은 기존처럼 표 아래 배치
         _, d_col1, d_col2 = st.columns([2.5, 2, 2])
         with d_col1:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
