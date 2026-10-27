@@ -347,8 +347,7 @@ if current_codes:
 
     # 2. 현재 시세 탭
     with tab2:
-        edited_basic_df = render_tab_basic(df_basic)
-
+        # 버튼들을 표 상단으로 이동하여 배치
         b_col0, b_col1, b_col2, b_col3 = st.columns([2, 1.5, 2, 2])
         
         with b_col0:
@@ -424,7 +423,7 @@ if current_codes:
                             "PER": fmt_multi(rec.get("PER_최근")),
                             "PBR": fmt_multi(rec.get("PBR_최근")),
                             "ROE": fmt_rate(rec.get("ROE_최근")),
-                            "매출액": fmt_val(rec.get("매출액_최근"), "억"),
+                            "매출액": fmt_val(rec.get("매출액_직전"), "억") if rec.get('매출액_최근') in [None, "-", 0, np.nan] else fmt_val(rec.get('매출액_최근'), "억"),
                             "영업익": fmt_val(rec.get("영업익_최근"), "억"),
                             "당기순이익": fmt_val(rec.get("순이익_최근"), "억")
                         }
@@ -453,6 +452,17 @@ if current_codes:
                         json.dump(watchlist, wf, ensure_ascii=False, indent=2)
                     
                     st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+
+        # 우측 버튼과 동일한 붉은색 스타일을 적용하기 위한 CSS 주입
+        st.markdown("""
+            <style>
+            div.stButton > button[kind="primary"] {
+                background-color: #ff4b4b !important;
+                border-color: #ff4b4b !important;
+                color: white !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
@@ -493,6 +503,10 @@ if current_codes:
                 use_container_width=True,
                 key="btn_down_txt_basic"
             )
+
+        st.write("")
+        # 표 상단으로 버튼들이 이동한 뒤에 테이블 렌더링
+        edited_basic_df = render_tab_basic(df_basic)
 
         st.write("")
         show_add_box = st.toggle("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", value=False)
