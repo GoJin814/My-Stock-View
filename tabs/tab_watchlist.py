@@ -83,6 +83,8 @@ def save_watchlist_data(data):
     commit_to_github(WATCHLIST_CACHE_FILE, json_text, "Auto-commit watchlist_data.json")
 
 def render_tab_watchlist(full_csv_records_map=None):
+    st.markdown("#### ⭐ 관심종목 실적 관리")
+    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 병합된 셀 구조로 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
 
     watchlist = load_watchlist_data()
 
@@ -112,6 +114,7 @@ def render_tab_watchlist(full_csv_records_map=None):
             pass
         st.rerun()
 
+    # 상단 컨트롤: 삭제 버튼 우측 정렬
     _, col_del = st.columns([4, 1.5])
     with col_del:
         if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
@@ -221,8 +224,6 @@ def render_tab_watchlist(full_csv_records_map=None):
         market_cap = first_info.get("시총", "-")
 
         rowspan_attr = 'rowspan="2"' if second_info else ''
-
-        # 네이버 증권 링크 생성
         naver_stock_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
 
         yr1 = first_info.get("적용연도", "-")
