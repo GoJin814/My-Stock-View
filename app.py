@@ -347,8 +347,23 @@ if current_codes:
 
     # 2. 현재 시세 탭
     with tab2:
-        # 버튼들을 표 상단으로 이동하여 배치
-        b_col0, b_col1, b_col2, b_col3 = st.columns([2, 1.5, 2, 2])
+        # 우측 버튼과 동일한 붉은색 스타일을 확실하게 적용하기 위한 CSS 주입
+        st.markdown("""
+            <style>
+            div[data-testid="stButton"] > button[kind="primary"] {
+                background-color: #ff4b4b !important;
+                border-color: #ff4b4b !important;
+                color: white !important;
+            }
+            div[data-testid="stButton"] > button[kind="primary"]:hover {
+                background-color: #ff3333 !important;
+                border-color: #ff3333 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # 상단 우측에 관심종목 추가 및 삭제 버튼 배치
+        _, top_space, b_col0, b_col1 = st.columns([1, 1, 2, 2])
         
         with b_col0:
             if st.button("⭐ 선택 종목을 관심종목에 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
@@ -453,17 +468,6 @@ if current_codes:
                     
                     st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
 
-        # 우측 버튼과 동일한 붉은색 스타일을 적용하기 위한 CSS 주입
-        st.markdown("""
-            <style>
-            div.stButton > button[kind="primary"] {
-                background-color: #ff4b4b !important;
-                border-color: #ff4b4b !important;
-                color: white !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
                 raw_del = st.query_params.get("del_codes", "")
@@ -481,8 +485,14 @@ if current_codes:
                     st.rerun()
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
-                        
-        with b_col2:
+
+        # 테이블 렌더링
+        edited_basic_df = render_tab_basic(df_basic)
+
+        st.write("")
+        # 다운로드 및 백업 버튼은 기존처럼 표 아래 배치
+        _, d_col1, d_col2 = st.columns([2.5, 2, 2])
+        with d_col1:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
             st.download_button(
                 "📥 전체 결과 CSV 다운로드",
@@ -492,7 +502,7 @@ if current_codes:
                 use_container_width=True,
                 key="btn_down_csv_basic"
             )
-        with b_col3:
+        with d_col2:
             codes_txt_data = "\n".join(current_codes).encode('utf-8')
             st.download_button(
                 "📋 종목코드 백업(TXT)",
@@ -503,10 +513,6 @@ if current_codes:
                 use_container_width=True,
                 key="btn_down_txt_basic"
             )
-
-        st.write("")
-        # 표 상단으로 버튼들이 이동한 뒤에 테이블 렌더링
-        edited_basic_df = render_tab_basic(df_basic)
 
         st.write("")
         show_add_box = st.toggle("➕ 종목코드 추가 및 일괄 등록 (파일 / 텍스트 입력)", value=False)
