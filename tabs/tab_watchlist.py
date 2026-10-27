@@ -47,7 +47,7 @@ def save_watchlist_data(data):
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("현재 시세 탭에서 선택한 종목의 데이터를 즉시 불러와 2단 행으로 관리합니다.")
+    st.caption("현재 시세 탭에서 선택한 종목의 데이터를 직전연도/최근연도별로 완벽하게 매칭하여 2단 행으로 관리합니다.")
 
     watchlist = load_watchlist_data()
 
@@ -76,10 +76,6 @@ def render_tab_watchlist(full_csv_records_map=None):
                     prev_yr = rec.get("직전연도", "-")
                     latest_yr = rec.get("최근연도", "-")
 
-                    # 현재 PER, PBR 값 정확하게 매핑
-                    per_val = rec.get("현재PER", "-")
-                    pbr_val = rec.get("현재PBR", "-")
-
                     def fmt_val(v, suffix=""):
                         if v is None or pd.isna(v) or v == "-":
                             return "-"
@@ -87,44 +83,58 @@ def render_tab_watchlist(full_csv_records_map=None):
                             return f"{v:,.0f}{suffix}"
                         return f"{v}{suffix}"
 
+                    def fmt_rate(v):
+                        if v is None or pd.isna(v) or v == "-":
+                            return "-"
+                        if isinstance(v, (int, float)):
+                            return f"{v:.2f}%"
+                        return str(v)
+
+                    # 주당가치 및 실적 탭에 이미 연도별로 저장되어 있는 데이터 추출
                     prev_metrics = {
-                        "ROE": f"{rec.get('ROE_직전', 0):.2f}%" if pd.notna(rec.get('ROE_직전')) else "-",
-                        "매출액": fmt_val(rec.get('매출액_직전'), "억"),
-                        "영업익": fmt_val(rec.get('영업익_직전'), "억"),
-                        "당기순이익": fmt_val(rec.get('순이익_직전'), "억")
+                        "PER": rec.get("PER_직전", "-"),
+                        "PBR": rec.get("PBR_직전", "-"),
+                        "ROE": fmt_rate(rec.get("ROE_직전")),
+                        "매출액": fmt_val(rec.get("매출액_직전"), "억"),
+                        "영업익": fmt_val(rec.get("영업익_직전"), "억"),
+                        "당기순이익": fmt_val(rec.get("순이익_직전"), "억")
                     }
 
                     latest_metrics = {
-                        "ROE": f"{rec.get('ROE_최근', 0):.2f}%" if pd.notna(rec.get('ROE_최근')) else "-",
-                        "매출액": fmt_val(rec.get('매출액_최근'), "억"),
-                        "영업익": fmt_val(rec.get('영업익_최근'), "억"),
-                        "당기순이익": fmt_val(rec.get('순이익_최근'), "억")
+                        "PER": rec.get("PER_최근", "-"),
+                        "PBR": rec.get("PBR_최근", "-"),
+                        "ROE": fmt_rate(rec.get("ROE_최근")),
+                        "매출액": fmt_val(rec.get("매출액_최근"), "억"),
+                        "영업익": fmt_val(rec.get("영업익_최근"), "억"),
+                        "당기순이익": fmt_val(rec.get("순이익_최근"), "억")
                     }
 
                     row_list_data = []
 
+                    # 윗줄: 직전연도 데이터
                     if prev_yr != "-":
                         row_list_data.append({
                             "종목명": stock_name,
                             "현재가": curr_price_str,
                             "시총": market_cap,
                             "적용연도": prev_yr,
-                            "PER": per_val,
-                            "PBR": pbr_val,
+                            "PER": prev_metrics["PER"],
+                            "PBR": prev_metrics["PBR"],
                             "ROE": prev_metrics["ROE"],
                             "매출액": prev_metrics["매출액"],
                             "영업익": prev_metrics["영업익"],
                             "당기순이익": prev_metrics["당기순이익"]
                         })
 
+                    # 아랫줄: 최신연도 데이터 (최신연도가 없으면 빈칸)
                     if latest_yr != "-":
                         row_list_data.append({
                             "종목명": stock_name,
                             "현재가": curr_price_str,
                             "시총": market_cap,
                             "적용연도": latest_yr,
-                            "PER": per_val,
-                            "PBR": pbr_val,
+                            "PER": latest_metrics["PER"],
+                            "PBR": latest_metrics["PBR"],
                             "ROE": latest_metrics["ROE"],
                             "매출액": latest_metrics["매출액"],
                             "영업익": latest_metrics["영업익"],
@@ -135,7 +145,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                     added_count += 1
 
                 save_watchlist_data(watchlist)
-                st.success(f"🎉 총 {added_count}개 종목의 데이터가 즉시 반영되었습니다!")
+                st.success(f"🎉 총 {added_count}개 종목의 데이터가 직전/최신 연도별로 즉시 반영되었습니다!")
                 st.rerun()
 
     if not watchlist:
@@ -160,6 +170,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                         "당기순이익": info.get("당기순이익", "-")
                     })
                 else:
+                    # 두 번째 행: 종목명, 현재가, 시총 칸을 공백으로 합친 효과 연출
                     rows.append({
                         "종목명": "",
                         "현재가": "",
