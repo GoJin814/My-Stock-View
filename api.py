@@ -58,12 +58,17 @@ def fetch_finance(code: str):
     return {}
 
 def extract_row_list(obj):
-    """재무 JSON 구조에서 rowList를 가볍게 추출"""
+    """재무 JSON 구조에서 rowList를 안전하게 추출하는 재귀 탐색 함수"""
     if isinstance(obj, dict):
         if "rowList" in obj and isinstance(obj["rowList"], list):
             return obj["rowList"]
-        # 딕셔너리 내부를 한 뎁스만 빠르게 탐색
         for v in obj.values():
-            if isinstance(v, dict) and "rowList" in v and isinstance(v["rowList"], list):
-                return v["rowList"]
+            found = extract_row_list(v)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = extract_row_list(item)
+            if found:
+                return found
     return []
