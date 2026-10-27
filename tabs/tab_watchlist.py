@@ -7,6 +7,7 @@ import base64
 import requests
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_FILE = "watchlist_codes.txt"
@@ -52,9 +53,7 @@ def fetch_watchlist_item(code: str):
     
     stock_name = basic.get("stockName", "")
     if not stock_name or stock_name == "-":
-        stock_name = code
-
-    pc_url = f"https://finance.naver.com/item/main.naver?code={code}"
+        stock_name = ""
 
     raw_close = basic.get("closePrice", "")
     if not raw_close or raw_close == "-":
@@ -156,9 +155,9 @@ def fetch_watchlist_item(code: str):
     
     if fin_info["prev_yr"]:
         items.append({
+            "선택": "",
             "종목코드": code, 
             "종목명": stock_name, 
-            "링크": pc_url,
             "현재가": curr_price_str, 
             "시총": market_cap,
             "적용연도": fin_info["prev_yr"],
@@ -173,9 +172,9 @@ def fetch_watchlist_item(code: str):
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
+            "선택": "",
             "종목코드": code, 
             "종목명": empty_space if is_second_row else stock_name, 
-            "링크": pc_url,
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
             "적용연도": fin_info["latest_yr"],
@@ -217,49 +216,58 @@ def save_watchlist_codes(codes):
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
 
-    if not watchlist_codes:
-        st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
-    else:
-        st.markdown("##### 📌 관심종목 리스트")
-        select_all = st.checkbox("☑️ 전체 종목 선택 / 해제", key="watchlist_all_chk")
-
-        codes_to_delete = []
-        
+    rows = []
+    if watchlist_codes:
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(fetch_watchlist_item, watchlist_codes))
 
         for info_list in results:
             if not info_list:
                 continue
-            code = info_list[0]["종목코드"]
-            stock_name = info_list[0]["종목명"]
-            pc_url = info_list[0]["링크"]
+            for info in info_list:
+                rows.append(info)
 
-            # 종목별 개별 체크박스 생성
-            col_chk, col_title = st.columns([0.5, 9.5])
-            with col_chk:
-                is_checked = st.checkbox("", value=select_all, key=f"watch_chk_{code}")
-                if is_checked:
-                    codes_to_delete.append(code)
-            with col_title:
-                st.markdown(f"**[{code}] [{stock_name}]({pc_url})** (네이버 증권 이동)")
+    if rows:
+        df_watch = pd.DataFrame(rows)
+        
+        # 현재시세 탭과 동일하게 tab_basic ID를 사용하여 styles.py의 자바스크립트 엔진과 완벽 연동
+        render_multi_header_table(
+            df_watch,
+            tab_name="tab_basic",
+            has_checkbox=True,
+            has_naver_link=True
+        )
 
-            # 해당 종목의 연도별 실적 테이블 표시
-            sub_df = pd.DataFrame(info_list).drop(columns=["종목코드", "종목명", "링크"])
-            st.dataframe(sub_df, hide_index=True, use_container_width=True)
-            st.write("---")
-
+        st.write("")
+        
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+                raw_del = st.query_params.get("del_codes", "")
+                codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+                
+                if not codes_to_delete:
+                    for key, val in st.session_state.items():
+                        if val is True:
+                            for code in watchlist_codes:
+                                if code in str(key) and code not in codes_to_delete:
+                                    codes_to_delete.append(code)
+
                 codes_to_delete = list(dict.fromkeys(codes_to_delete))
+
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
                     save_watchlist_codes(new_codes)
+                    
+                    if "del_codes" in st.query_params:
+                        del st.query_params["del_codes"]
+                        
                     st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
+    else:
+        st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
     st.write("---")
 
