@@ -7,6 +7,7 @@ import requests
 import re
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
@@ -160,27 +161,35 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     watchlist_codes = load_watchlist_codes()
 
+    # 1. URL 파라미터(del_codes)를 통한 체크박스 동기화 처리
+    query_params = st.query_params
+    del_codes_param = query_params.get("del_codes", "")
+    checked_codes_from_url = [c.strip() for c in del_codes_param.split(",") if c.strip()]
+
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
     if watchlist_codes:
         col_l, col_r = st.columns([3, 1.8])
         with col_l:
-            select_all = st.checkbox("전체 선택 / 해제", key="watchlist_master_select")
-            if select_all != st.session_state.get("_prev_master_select", False):
-                for code in watchlist_codes:
-                    st.session_state.watchlist_checks[code] = select_all
-                st.session_state["_prev_master_select"] = select_all
+            st.caption("💡 각 행의 체크박스를 선택하여 항목을 삭제할 수 있습니다.")
 
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                codes_to_delete = [code for code, checked in st.session_state.watchlist_checks.items() if checked]
+                # URL 파라미터 또는 세션 상태 기반 삭제 대상 확인
+                codes_to_delete = list(set(
+                    [code for code, checked in st.session_state.watchlist_checks.items() if checked] +
+                    checked_codes_from_url
+                ))
+                
                 if not codes_to_delete:
-                    st.warning("⚠️ 삭제할 종목을 선택해 주세요.")
+                    st.warning("⚠️ 삭제할 종목을 체크해 주세요.")
                 else:
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
                     save_watchlist_codes(new_codes)
                     st.session_state.watchlist_checks = {}
+                    if "del_codes" in st.query_params:
+                        del st.query_params["del_codes"]
                     st.success("🗑️ 선택한 종목 삭제 완료")
                     st.rerun()
 
@@ -195,27 +204,20 @@ def render_tab_watchlist(full_csv_records_map=None):
         if not info_list:
             continue
         code = info_list[0]["종목코드"]
-        is_checked = st.session_state.watchlist_checks.get(code, False)
+        is_checked = code in checked_codes_from_url or st.session_state.watchlist_checks.get(code, False)
 
         for i, info in enumerate(info_list):
-            stock_name = info["종목명"]
-            # PC 버전 네이버증권 URL 생성 및 LinkColumn 전용 마크다운 형식 지정 ([종목명](URL))
-            pc_naver_url = f"https://finance.naver.com/item/main.naver?code={code}"
-            linked_display_name = f"[{stock_name}]({pc_naver_url})" if i == 0 else ""
-
             if i > 0:
                 display_name = ""
                 display_price = ""
                 display_mcap = ""
-                display_check = False
             else:
-                display_name = linked_display_name
+                display_name = info["종목명"]
                 display_price = info["현재가"]
                 display_mcap = info["시총"]
-                display_check = is_checked
 
             rows.append({
-                "선택": display_check,
+                "선택": "",
                 "종목코드": code,
                 "종목명": display_name,
                 "현재가": display_price,
@@ -231,34 +233,20 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     if rows:
         df_watch = pd.DataFrame(rows)
-        edited_df = st.data_editor(
+        
+        # styles.py의 공통 그리드 렌더링 함수 활용 (체크박스 및 PC 네이버 링크 완벽 지원)
+        render_multi_header_table(
             df_watch,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
-                "종목코드": None,
-                "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=100),
-                "현재가": st.column_config.TextColumn("현재가", width=90),
-                "시총": st.column_config.TextColumn("시총", width=90),
-                "적용연도": st.column_config.TextColumn("적용연도", width=70),
-            },
-            disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
-            hide_index=True,
-            use_container_width=True,
-            key="watchlist_editor"
+            tab_name="tab_watchlist",
+            has_checkbox=True,
+            has_naver_link=True
         )
-
-        if edited_df is not None and "선택" in edited_df.columns:
-            for code in watchlist_codes:
-                sub_df = edited_df[edited_df["종목코드"] == code]
-                if not sub_df.empty:
-                    any_checked = sub_df["선택"].any()
-                    st.session_state.watchlist_checks[code] = bool(any_checked)
     else:
         st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
     st.write("---")
 
-    # 하단 토글 및 종목코드 추가 기능
+    # 하단 토글을 켜면 종목코드 추가 입력창이 나타나도록 구성
     show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
     if show_manage_box:
         with st.container(border=True):
