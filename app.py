@@ -365,7 +365,6 @@ if current_codes:
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
         st.write("")
-        # st.data_editor를 사용하여 화면에서 체크한 상태를 파이썬 코드가 즉시 감지할 수 있도록 렌더링
         edited_basic_df = st.data_editor(
             df_basic,
             column_config={
@@ -384,7 +383,7 @@ if current_codes:
                 selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
 
                 if not selected_codes:
-                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 추가할 종목을 먼저 선택해 주세요.")
+                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
                 else:
                     watchlist_file = os.path.abspath("watchlist_data.json")
                     watchlist = {}
@@ -479,7 +478,7 @@ if current_codes:
                     with open(watchlist_file, "w", encoding="utf-8") as wf:
                         json.dump(watchlist, wf, ensure_ascii=False, indent=2)
                     
-                    st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다!")
+                    st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
                     st.rerun()
 
         with b_col1:
@@ -596,45 +595,41 @@ if current_codes:
                                             if 1 <= len(digits) <= 6:
                                                 extracted.append(digits.zfill(6))
 
-                                if extracted:
-                                    new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
+                                extracted_clean = [c.zfill(6) for c in extracted if len(c) == 6]
+                                if extracted_clean:
+                                    new_unique = [c for c in dict.fromkeys(extracted_clean) if c not in current_codes]
                                     if new_unique:
                                         current_codes.extend(new_unique)
                                         save_codes(current_codes)
                                         st.success(f"파일에서 {len(new_unique)}개 종목이 정상 등록되었습니다.")
                                         st.rerun()
+                                    else:
+                                        st.info("추출된 종목코드가 이미 모두 등록되어 있습니다.")
                                 else:
-                                    st.warning("파일 내에서 유효한 종목코드를 추출하지 못했습니다. 파일 형식을 확인해 주세요.")
+                                    st.warning("유효한 6자리 종목코드를 찾지 못했습니다.")
                             except Exception as e:
-                                st.error(f"파일 처리 중 오류 발생: {e}")
+                                st.error(f"파일 처리 중 오류: {e}")
 
-    # 3. 주당 가치 탭
     with tab3:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
-    # 4. 실적 탭
     with tab4:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
-    # 5. 국내지수 탭
     with tab5:
         edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
 
-    # 6. 생활비 수익률 탭
     with tab6:
         render_tab_returns_living()
 
-    # 7. 연금 수익률 탭
     with tab7:
         render_tab_returns_pension()
 
-    # 8. roun 수익률 탭
     with tab8:
         render_tab_returns_roun()
 
-    # 9. 진우 수익률 탭
     with tab9:
         render_tab_returns_jinwoo()
 
