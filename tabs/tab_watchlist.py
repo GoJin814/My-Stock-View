@@ -45,13 +45,12 @@ def save_watchlist_data(data):
         f.write(json_text)
     commit_to_github(WATCHLIST_CACHE_FILE, json_text, "Auto-commit watchlist_data.json")
 
-def render_tab_watchlist():
-    st.markdown("#### ⭐ 관심종목 실적 관리 (직전연도 / 최신연도)")
-    st.caption("현재 시세 탭에서 선택한 종목의 '직전연도'와 '가장 마지막 연도' 데이터를 정확히 매칭하여 2단 행으로 관리합니다.")
+def render_tab_watchlist(full_csv_records_map=None):
+    st.markdown("#### ⭐ 관심종목 실적 관리 (초고속 메모리 연동)")
+    st.caption("현재 시세 탭에서 선택한 종목의 데이터를 이미 로드된 메모리에서 즉시 불러와 2단 행으로 관리합니다.")
 
     watchlist = load_watchlist_data()
 
-    # 1. '현재 시세' 탭에서 선택된 종목 코드 가져오기
     query_params = st.query_params
     del_codes_str = query_params.get("del_codes", "")
     selected_codes = [c.strip().zfill(6) for c in del_codes_str.split(",") if c.strip() and c.strip().isdigit()]
@@ -60,92 +59,55 @@ def render_tab_watchlist():
     with c_btn1:
         if st.button("📥 현재 시세 선택 종목 가져오기", type="primary", use_container_width=True):
             if not selected_codes:
-                st.warning("⚠️ '현재 시세' 탭에서 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
+                st.warning("⚠️ '현재 시세' 탭에서 체크박스로 선택된 종목이 없습니다.")
+            elif not full_csv_records_map:
+                st.warning("⚠️ 동기화된 종목 데이터가 없습니다. 상단의 '실시간 시세 동기화'를 먼저 실행해 주세요.")
             else:
-                from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
-                import numpy as np
-
                 added_count = 0
                 for code in selected_codes:
-                    # 기본 시세 정보 (현재가, 시총, PER, PBR)
-                    basic = fetch_basic(code)
-                    integration = fetch_integration(code)
+                    rec = full_csv_records_map.get(code)
+                    if not rec:
+                        continue
                     
-                    stock_name = basic.get("stockName", f"종목_{code}")
+                    stock_name = rec.get("종목명", f"종목_{code}")
+                    curr_price_str = rec.get("현재가", "-")
+                    market_cap = rec.get("시총", "-")
                     
-                    raw_close = basic.get("closePrice", "-")
-                    curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
+                    prev_yr = rec.get("직전연도", "-")
+                    latest_yr = rec.get("최근연도", "-")
 
-                    total_infos = integration.get("totalInfos", [])
-                    market_cap = "-"
-                    integration_dict = {}
-                    for item in total_infos:
-                        item_code = str(item.get("code", "")).strip()
-                        item_key = str(item.get("key", "")).strip()
-                        item_val = str(item.get("value", "")).strip()
-                        if item_code == "marketValue" or item_key in ["시총", "시가총액"]:
-                            market_cap = item_val
-                        integration_dict[item_key] = item_val
+                    per_val = rec.get("현재PER", "-")
+                    pbr_val = rec.get("현재PBR", "-")
 
-                    raw_per = basic.get("per", integration_dict.get("PER", "-"))
-                    raw_pbr = basic.get("pbr", integration_dict.get("PBR", "-"))
-                    
-                    per_val = f"{str(raw_per).replace('배', '')}배" if raw_per not in ["-", "N/A", None] else "-"
-                    pbr_val = f"{str(raw_pbr).replace('배', '')}배" if raw_pbr not in ["-", "N/A", None] else "-"
+                    def fmt_val(v, suffix=""):
+                        if v is None or pd.isna(v) or v == "-":
+                            return "-"
+                        if isinstance(v, (int, float)):
+                            return f"{v:,.0f}{suffix}"
+                        return f"{v}{suffix}"
 
-                    # 재무 데이터 추출 (엄격히 직전연도와 마지막 연도만 타겟팅)
-                    fin_json = fetch_finance(code)
-                    row_list = extract_row_list(fin_json)
-                    
-                    sorted_all_years = []
-                    if row_list:
-                        all_years = set()
-                        for row in row_list:
-                            columns = row.get("columns", {})
-                            if columns:
-                                all_years.update(columns.keys())
-                        sorted_all_years = sorted(list(all_years))
+                    prev_metrics = {
+                        "ROE": f"{rec.get('ROE_직전', 0):.2f}%" if pd.notna(rec.get('ROE_직전')) else "-",
+                        "매출액": fmt_val(rec.get('매출액_직전'), "억"),
+                        "영업익": fmt_val(rec.get('영업익_직전'), "억"),
+                        "당기순이익": fmt_val(rec.get('순이익_직전'), "억")
+                    }
 
-                    # 정확히 마지막 연도와 직전 연도 추출
-                    latest_k = sorted_all_years[-1] if sorted_all_years else None
-                    prev_k = sorted_all_years[-2] if len(sorted_all_years) >= 2 else None
+                    latest_metrics = {
+                        "ROE": f"{rec.get('ROE_최근', 0):.2f}%" if pd.notna(rec.get('ROE_최근')) else "-",
+                        "매출액": fmt_val(rec.get('매출액_최근'), "억"),
+                        "영업익": fmt_val(rec.get('영업익_최근'), "억"),
+                        "당기순이익": fmt_val(rec.get('순이익_최근'), "억")
+                    }
 
-                    def get_metrics_for_yr(yr_key):
-                        metrics = {"매출액": "-", "영업익": "-", "당기순이익": "-", "ROE": "-"}
-                        if not yr_key or not row_list:
-                            return metrics
-                        for row in row_list:
-                            raw_title = row.get("title", "").strip().replace(" ", "")
-                            columns = row.get("columns", {})
-                            if not columns: continue
-                            c_item = columns.get(yr_key, {})
-                            c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
-
-                            if raw_title in ["매출액", "수익"]:
-                                metrics["매출액"] = f"{c_val:,.0f}억" if pd.notna(c_val) and c_val != 0 else "-"
-                            elif raw_title == "영업이익":
-                                metrics["영업익"] = f"{c_val:,.0f}억" if pd.notna(c_val) and c_val != 0 else "-"
-                            elif raw_title in ["당기순이익", "당기순익"]:
-                                metrics["당기순이익"] = f"{c_val:,.0f}억" if pd.notna(c_val) and c_val != 0 else "-"
-                            elif "ROE" in raw_title:
-                                metrics["ROE"] = f"{c_val:.2f}%" if pd.notna(c_val) and c_val != 0 else "-"
-                        return metrics
-
-                    prev_metrics = get_metrics_for_yr(prev_k)
-                    latest_metrics = get_metrics_for_yr(latest_k)
-
-                    prev_yr_str = f"{prev_k[:4]}년" if prev_k else ""
-                    latest_yr_str = f"{latest_k[:4]}년" if latest_k else ""
-
-                    # 2단 행 구성 (직전연도 / 최신연도)
                     row_list_data = []
 
-                    if prev_k:
+                    if prev_yr != "-":
                         row_list_data.append({
                             "종목명": stock_name,
                             "현재가": curr_price_str,
                             "시총": market_cap,
-                            "적용연도": prev_yr_str,
+                            "적용연도": prev_yr,
                             "PER": per_val,
                             "PBR": pbr_val,
                             "ROE": prev_metrics["ROE"],
@@ -154,12 +116,12 @@ def render_tab_watchlist():
                             "당기순이익": prev_metrics["당기순이익"]
                         })
 
-                    if latest_k:
+                    if latest_yr != "-":
                         row_list_data.append({
                             "종목명": stock_name,
                             "현재가": curr_price_str,
                             "시총": market_cap,
-                            "적용연도": latest_yr_str,
+                            "적용연도": latest_yr,
                             "PER": per_val,
                             "PBR": pbr_val,
                             "ROE": latest_metrics["ROE"],
@@ -172,14 +134,13 @@ def render_tab_watchlist():
                     added_count += 1
 
                 save_watchlist_data(watchlist)
-                st.success(f"🎉 총 {added_count}개 종목의 실적 데이터가 관심종목에 반영되었습니다!")
+                st.success(f"🎉 총 {added_count}개 종목의 데이터가 메모리에서 즉시 로드되어 반영되었습니다!")
                 st.rerun()
 
     if not watchlist:
         st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택한 뒤 위 버튼을 눌러주세요.")
         return
 
-    # 저장된 데이터프레임 구성 (종목명, 현재가, 시총은 첫 번째 행에만 표시)
     rows = []
     for code, info_list in watchlist.items():
         if isinstance(info_list, list):
@@ -216,10 +177,9 @@ def render_tab_watchlist():
     df_watch = pd.DataFrame(rows)
 
     st.write("")
-    st.markdown("#### 📋 관심종목 리스트 (직전연도 / 최신연도)")
+    st.markdown("#### 📋 관심종목 리스트")
     st.dataframe(df_watch, hide_index=True, use_container_width=True)
 
-    # 개별 종목 삭제 기능
     st.write("")
     with st.expander("🗑️ 관심종목 개별 관리 (삭제)"):
         options_map = {}
