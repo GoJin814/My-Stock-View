@@ -109,6 +109,7 @@ def fetch_watchlist_item(code: str):
         return f"{str(v).strip()}배"
 
     items = []
+    # 직전 연도 데이터 구성
     if fin_info["prev_yr"] != "-":
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
@@ -121,6 +122,7 @@ def fetch_watchlist_item(code: str):
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
         })
 
+    # 최근 연도 데이터 구성
     if fin_info["latest_yr"] != "-":
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
@@ -191,6 +193,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
+    # 병렬로 관심종목 데이터 실시간 로드
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(fetch_watchlist_item, watchlist_codes))
 
@@ -206,20 +209,20 @@ def render_tab_watchlist(full_csv_records_map=None):
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
+            # 첫 번째 행에만 종목명, 현재가, 시총, 체크박스를 표시하고 두 번째 행부터는 중복 출력 방지 (체크박스는 타입 에러 방지를 위해 False 유지)
             if i > 0:
                 display_name = ""
                 display_price = ""
                 display_mcap = ""
+                display_check = False
             else:
                 display_name = linked_name
                 display_price = info["현재가"]
                 display_mcap = info["시총"]
-
-            # 체크박스 열 대신 종목명 앞에 선택 상태 기호(☑/☐)를 텍스트로 표시하여 불필요한 박스 완전 제거
-            check_icon = "☑ 선택됨" if is_checked else "☐ 선택"
+                display_check = is_checked
 
             rows.append({
-                "선택": check_icon if i == 0 else "",
+                "선택": display_check,
                 "종목코드": code,
                 "종목명": display_name,
                 "현재가": display_price,
@@ -239,17 +242,25 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     df_watch = pd.DataFrame(rows)
 
-    # 데이터 에디터 대신 일반 st.dataframe을 사용하여 텍스트 기반 깔끔한 리스트 구현 (삭제 기능은 상단 버튼 활용)
-    st.dataframe(
+    edited_df = st.data_editor(
         df_watch,
         column_config={
-            "선택": st.column_config.TextColumn("선택", width=60),
+            "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
             "종목코드": None,
             "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=90),
             "현재가": st.column_config.TextColumn("현재가", width=90),
             "시총": st.column_config.TextColumn("시총", width=90),
             "적용연도": st.column_config.TextColumn("적용연도", width=70),
         },
+        disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
         hide_index=True,
-        use_container_width=True
+        use_container_width=True,
+        key="watchlist_editor"
     )
+
+    if edited_df is not None and "선택" in edited_df.columns:
+        for code in watchlist_codes:
+            sub_df = edited_df[edited_df["종목코드"] == code]
+            if not sub_df.empty:
+                any_checked = sub_df["선택"].any()
+                st.session_state.watchlist_checks[code] = bool(any_checked)
