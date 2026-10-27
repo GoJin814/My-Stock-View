@@ -9,12 +9,51 @@ import streamlit.components.v1 as components
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
 
 def load_watchlist_data():
+    # 1. 세션 상태에 이미 데이터가 있으면 최우선 반환 (새로고침/코드 업데이트 시 유실 방지)
+    if "persistent_watchlist" in st.session_state and st.session_state.persistent_watchlist:
+        return st.session_state.persistent_watchlist
+
+    # 2. 로컬 파일에서 로드 시도
+    data = {}
     if os.path.exists(WATCHLIST_CACHE_FILE):
         try:
             with open(WATCHLIST_CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
             pass
+
+    # 3. 로컬 파일이 비어있다면 GitHub 저장소에서 복구 시도 (데이터 영구 보존)
+    if not data:
+        github_data = load_from_github(WATCHLIST_CACHE_FILE)
+        if github_data:
+            data = github_data
+            # 로컬 파일도 복원
+            with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+    st.session_state.persistent_watchlist = data
+    return data
+
+def load_from_github(filename):
+    token = st.secrets.get("GITHUB_TOKEN")
+    repo = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not token or not repo:
+        return {}
+    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
+    headers = {
+        "Authorization": f"Bearer {token.strip()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    try:
+        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
+        if res.status_code == 200:
+            content_b64 = res.json().get("content", "")
+            content_bytes = base64.b64decode(content_b64)
+            return json.loads(content_bytes.decode("utf-8"))
+    except Exception:
+        pass
     return {}
 
 def commit_to_github(filename, content_str, commit_message="Auto-update watchlist data"):
@@ -41,12 +80,15 @@ def commit_to_github(filename, content_str, commit_message="Auto-update watchlis
         return False
 
 def save_watchlist_data(data):
+    st.session_state.persistent_watchlist = data
     json_text = json.dumps(data, ensure_ascii=False, indent=2)
     with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
         f.write(json_text)
     commit_to_github(WATCHLIST_CACHE_FILE, json_text, "Auto-commit watchlist_data.json")
 
 def render_tab_watchlist(full_csv_records_map=None):
+    st.markdown("#### ⭐ 관심종목 실적 관리")
+    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 병합된 셀 구조로 관리합니다.")
 
     watchlist = load_watchlist_data()
 
@@ -76,7 +118,6 @@ def render_tab_watchlist(full_csv_records_map=None):
             pass
         st.rerun()
 
-    # 상단 컨트롤: 삭제 버튼을 오른쪽으로 배치
     _, col_del = st.columns([4, 1.5])
     with col_del:
         if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
@@ -101,7 +142,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     all_checked = all(st.session_state.watchlist_checks.get(c, False) for c in watchlist.keys()) and len(watchlist) > 0
     master_checked_attr = "checked" if all_checked else ""
 
-    # HTML 표 구성 (선택 및 종목명 열 폭 최소화 스타일 적용)
     html_parts = [
         f"""
         <html>
