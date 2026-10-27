@@ -187,6 +187,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     if watchlist_codes:
         col_l, col_r = st.columns([3, 1.8])
         with col_l:
+            st.caption("💡 각 행의 체크박스를 선택하여 항목을 삭제할 수 있습니다.")
 
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
