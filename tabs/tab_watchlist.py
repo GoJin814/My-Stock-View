@@ -156,61 +156,35 @@ def save_watchlist_codes(codes):
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("'현재 시세' 탭에서 추가하거나, 아래에서 종목코드를 직접 입력하여 관심종목을 관리할 수 있습니다.")
+    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
 
     watchlist_codes = load_watchlist_codes()
 
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
-    # 종목코드 직접 추가 입력 영역
-    st.write("")
-    with st.container(border=True):
-        st.markdown("##### ➕ 종목코드 직접 추가")
-        add_col1, add_col2 = st.columns([3, 1])
-        with add_col1:
-            input_code = st.text_input("종목코드 입력 (예: 005930)", placeholder="6자리 종목코드를 입력하세요", label_visibility="collapsed", key="input_new_watchlist_code")
-        with add_col2:
-            if st.button("추가하기", use_container_width=True, type="primary"):
-                cleaned_code = input_code.strip().zfill(6)
-                if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
-                    if cleaned_code not in watchlist_codes:
-                        watchlist_codes.append(cleaned_code)
-                        save_watchlist_codes(watchlist_codes)
-                        st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+    if watchlist_codes:
+        col_l, col_r = st.columns([3, 1.8])
+        with col_l:
+            select_all = st.checkbox("전체 선택 / 해제", key="watchlist_master_select")
+            if select_all != st.session_state.get("_prev_master_select", False):
+                for code in watchlist_codes:
+                    st.session_state.watchlist_checks[code] = select_all
+                st.session_state["_prev_master_select"] = select_all
+
+        with col_r:
+            if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+                codes_to_delete = [code for code, checked in st.session_state.watchlist_checks.items() if checked]
+                if not codes_to_delete:
+                    st.warning("⚠️ 삭제할 종목을 선택해 주세요.")
                 else:
-                    st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
+                    new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
+                    save_watchlist_codes(new_codes)
+                    st.session_state.watchlist_checks = {}
+                    st.success("🗑️ 선택한 종목 삭제 완료")
+                    st.rerun()
 
-    st.write("")
-
-    if not watchlist_codes:
-        st.info("등록된 관심종목이 없습니다. 위 입력창에서 종목코드를 추가해 주세요.")
-        return
-
-    col_l, col_r = st.columns([3, 1.8])
-    with col_l:
-        select_all = st.checkbox("전체 선택 / 해제", key="watchlist_master_select")
-        if select_all != st.session_state.get("_prev_master_select", False):
-            for code in watchlist_codes:
-                st.session_state.watchlist_checks[code] = select_all
-            st.session_state["_prev_master_select"] = select_all
-
-    with col_r:
-        if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-            codes_to_delete = [code for code, checked in st.session_state.watchlist_checks.items() if checked]
-            if not codes_to_delete:
-                st.warning("⚠️ 삭제할 종목을 선택해 주세요.")
-            else:
-                new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
-                save_watchlist_codes(new_codes)
-                st.session_state.watchlist_checks = {}
-                st.success("🗑️ 선택한 종목 삭제 완료")
-                st.rerun()
-
-    st.write("")
+        st.write("")
 
     # 병렬로 관심종목 데이터 실시간 로드
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -225,7 +199,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         for i, info in enumerate(info_list):
             stock_name = info["종목명"]
-            naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
+            naver_url =[span_0](start_span)[span_0](end_span) f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
             if i > 0:
@@ -254,31 +228,51 @@ def render_tab_watchlist(full_csv_records_map=None):
                 "당기순이익": info["당기순이익"]
             })
 
-    if not rows:
-        st.info("표시할 관심종목 데이터가 없습니다.")
-        return
+    if rows:
+        df_watch = pd.DataFrame(rows)
+        edited_df = st.data_editor(
+            df_watch,
+            column_config={
+                "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
+                "종목코드": None,
+                "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=90),
+                "현재가": st.column_config.TextColumn("현재가", width=90),
+                "시총": st.column_config.TextColumn("시총", width=90),
+                "적용연도": st.column_config.TextColumn("적용연도", width=70),
+            },
+            disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
+            hide_index=True,
+            use_container_width=True,
+            key="watchlist_editor"
+        )
 
-    df_watch = pd.DataFrame(rows)
+        if edited_df is not None and "선택" in edited_df.columns:
+            for code in watchlist_codes:
+                sub_df = edited_df[edited_df["종목코드"] == code]
+                if not sub_df.empty:
+                    any_checked = sub_df["선택"].any()
+                    st.session_state.watchlist_checks[code] = bool(any_checked)
+    else:
+        st.info("등록된 관심종목이 없습니다. 아래 메뉴를 펼쳐 종목코드를 추가해 주세요.")
 
-    edited_df = st.data_editor(
-        df_watch,
-        column_config={
-            "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
-            "종목코드": None,
-            "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=90),
-            "현재가": st.column_config.TextColumn("현재가", width=90),
-            "시총": st.column_config.TextColumn("시총", width=90),
-            "적용연도": st.column_config.TextColumn("적용연도", width=70),
-        },
-        disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
-        hide_index=True,
-        use_container_width=True,
-        key="watchlist_editor"
-    )
+    st.write("---")
 
-    if edited_df is not None and "선택" in edited_df.columns:
-        for code in watchlist_codes:
-            sub_df = edited_df[edited_df["종목코드"] == code]
-            if not sub_df.empty:
-                any_checked = sub_df["선택"].any()
-                st.session_state.watchlist_checks[code] = bool(any_checked)
+    # 표 하단에 접이식(expander) 형태로 종목코드 추가 기능 배치
+    with st.expander("➕ 종목코드 추가 및 관리 (열기)", expanded=False):
+        st.caption("6자리 종목코드를 직접 입력하여 관심종목에 추가할 수 있습니다.")
+        add_col1, add_col2 = st.columns([3, 1])
+        with add_col1:
+            input_code = st.text_input("종목코드 입력", placeholder="예: 005930 (삼성전자)", label_visibility="collapsed", key="input_new_watchlist_code")
+        with add_col2:
+            if st.button("종목 추가", use_container_width=True, type="primary"):
+                cleaned_code = input_code.strip().zfill(6)
+                if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
+                    if cleaned_code not in watchlist_codes:
+                        watchlist_codes.append(cleaned_code)
+                        save_watchlist_codes(watchlist_codes)
+                        st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+                else:
+                    st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
