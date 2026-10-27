@@ -342,9 +342,9 @@ if current_codes:
         "📈 수익률-진우"
     ])
 
-    # 1. 관심종목 탭
+    # 1. 관심종목 탭 (full_csv_records를 전달하여 다른 탭과 정렬 순서 연동)
     with tab1:
-        render_tab_watchlist()
+        render_tab_watchlist(full_csv_records)
 
     # 2. 현재 시세 탭
     with tab2:
@@ -610,26 +610,33 @@ if current_codes:
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류: {e}")
 
+    # 3. 주당 가치 탭
     with tab3:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
+    # 4. 실적 탭
     with tab4:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
+    # 5. 국내지수 탭
     with tab5:
         edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
 
+    # 6. 생활비 수익률 탭
     with tab6:
         render_tab_returns_living()
 
+    # 7. 연금 수익률 탭
     with tab7:
         render_tab_returns_pension()
 
+    # 8. roun 수익률 탭
     with tab8:
         render_tab_returns_roun()
 
+    # 9. 진우 수익률 탭
     with tab9:
         render_tab_returns_jinwoo()
 
