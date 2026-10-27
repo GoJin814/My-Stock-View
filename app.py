@@ -348,6 +348,12 @@ if current_codes:
 
     # 2. 현재 시세 탭
     with tab2:
+        edited_basic_df = render_tab_basic(df_basic)
+
+        # 쿼리 파라미터 기반으로 현재시세 탭의 선택 종목 추출 연동
+        raw_del = st.query_params.get("del_codes", "")
+        selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
@@ -364,26 +370,10 @@ if current_codes:
 
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
-        st.write("")
-        edited_basic_df = st.data_editor(
-            df_basic,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False, width=45),
-                "종목코드": st.column_config.TextColumn("종목코드", width=80),
-            },
-            disabled=["종목명", "종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
-            hide_index=True,
-            use_container_width=True,
-            key="market_stock_editor"
-        )
-
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
-                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
-
                 if not selected_codes:
-                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 추가할 종목을 먼저 선택해 주세요.")
+                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
                 else:
                     watchlist_file = os.path.abspath("watchlist_data.json")
                     watchlist = {}
@@ -483,13 +473,14 @@ if current_codes:
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
-                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
-                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
-
                 if selected_codes:
                     remaining_codes = [c for c in current_codes if c not in selected_codes]
                     save_codes(remaining_codes)
                     fetch_single_stock.clear()
+                    try:
+                        st.query_params.clear()
+                    except Exception:
+                        pass
                     st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
                     st.rerun()
                 else:
