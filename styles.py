@@ -531,7 +531,7 @@ def inject_client_sort_sync_engine():
             }
         };
 
-        // 📌 탭 위치 기억 및 복원 로직 (필터 토글 변경 시에도 탭 유지)
+        // 📌 탭 위치 기억 및 안정적인 폴링 복원 로직
         function restoreActiveTab() {
             const urlParams = new URLSearchParams(win.location.search);
             let targetIdx = urlParams.get('active_tab');
@@ -540,13 +540,20 @@ def inject_client_sort_sync_engine():
             }
             if (targetIdx !== null) {
                 targetIdx = parseInt(targetIdx, 10);
-                const tabs = doc.querySelectorAll('.stTabs [data-baseweb="tab"]');
-                if (tabs[targetIdx]) {
-                    // 현재 선택된 탭과 다를 경우에만 클릭 이벤트 발생
-                    if (tabs[targetIdx].getAttribute('aria-selected') !== 'true') {
-                        tabs[targetIdx].click();
+                let attempts = 0;
+                const interval = setInterval(() => {
+                    const tabs = doc.querySelectorAll('.stTabs [data-baseweb="tab"]');
+                    if (tabs.length > targetIdx) {
+                        clearInterval(interval);
+                        if (tabs[targetIdx] && tabs[targetIdx].getAttribute('aria-selected') !== 'true') {
+                            tabs[targetIdx].click();
+                        }
                     }
-                }
+                    attempts++;
+                    if (attempts > 50) { // 최대 2.5초 동안 탭 생성 대기
+                        clearInterval(interval);
+                    }
+                }, 50);
             }
         }
 
@@ -732,10 +739,8 @@ def inject_client_sort_sync_engine():
             });
         }
 
-        setTimeout(function() {
-            applySavedOrderToAll();
-            restoreActiveTab();
-        }, 100);
+        applySavedOrderToAll();
+        restoreActiveTab();
     })();
     </script>
     """, height=0, width=0)
