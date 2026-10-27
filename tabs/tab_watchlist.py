@@ -60,26 +60,12 @@ def render_tab_watchlist(full_csv_records_map=None):
         if st.button("📥 현재 시세 선택 종목 가져오기", type="primary", use_container_width=True):
             if not selected_codes:
                 st.warning("⚠️ '현재 시세' 탭에서 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
+            elif not full_csv_records_map:
+                st.warning("⚠️ 동기화된 데이터가 없습니다. 상단의 '실시간 시세 동기화'를 먼저 실행해 주세요.")
             else:
-                # 만약 전달받은 맵이 없다면, API를 통해 즉석에서 필요한 종목만 빠르게 가져오도록 보완
-                from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
-                import numpy as np
-
-                # 맵이 비어있으면 직접 구성 시도
-                target_map = full_csv_records_map if full_csv_records_map else {}
-                
                 added_count = 0
                 for code in selected_codes:
-                    rec = target_map.get(code)
-                    if not rec:
-                        # 맵에 없으면 즉석 조회 (비상용)
-                        from __main__ import fetch_single_stock
-                        try:
-                            _, _, _, c_rec, _, _ = fetch_single_stock(code)
-                            rec = c_rec
-                        except Exception:
-                            continue
-
+                    rec = full_csv_records_map.get(code)
                     if not rec:
                         continue
                     
@@ -90,6 +76,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                     prev_yr = rec.get("직전연도", "-")
                     latest_yr = rec.get("최근연도", "-")
 
+                    # 현재 PER, PBR 값 정확하게 매핑
                     per_val = rec.get("현재PER", "-")
                     pbr_val = rec.get("현재PBR", "-")
 
@@ -109,7 +96,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
                     latest_metrics = {
                         "ROE": f"{rec.get('ROE_최근', 0):.2f}%" if pd.notna(rec.get('ROE_최근')) else "-",
-                        "매출액": fmt_val(rec.get('매출액_직전'), "억") if rec.get('매출액_최근') in [None, "-", 0, np.nan] else fmt_val(rec.get('매출액_최근'), "억"),
+                        "매출액": fmt_val(rec.get('매출액_최근'), "억"),
                         "영업익": fmt_val(rec.get('영업익_최근'), "억"),
                         "당기순이익": fmt_val(rec.get('순이익_최근'), "억")
                     }
