@@ -363,8 +363,8 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
-        # 관심종목 추가 및 선택 종목 삭제 버튼을 우측 상단으로 배치
-        _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
+        # 관심종목 추가 버튼만 우측 상단에 유지
+        _, top_space, b_col0, _ = st.columns([1, 1, 1.8, 1.8])
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
@@ -388,7 +388,6 @@ if current_codes:
                     WATCHLIST_FILE = "watchlist_codes.txt"
                     watchlist_codes = []
                     
-                    # 1. 기존 watchlist_codes.txt 파일 읽어오기
                     if os.path.exists(WATCHLIST_FILE):
                         try:
                             with open(WATCHLIST_FILE, "r", encoding="utf-8") as wf:
@@ -396,7 +395,6 @@ if current_codes:
                         except Exception:
                             pass
 
-                    # 2. 새로운 코드 추가 (중복 방지)
                     added_count = 0
                     for code in selected_codes:
                         if code not in watchlist_codes:
@@ -404,12 +402,10 @@ if current_codes:
                             added_count += 1
 
                     if added_count > 0:
-                        # 3. 텍스트 파일 내용 생성 및 저장
                         content = "\n".join(watchlist_codes) + ("\n" if watchlist_codes else "")
                         with open(WATCHLIST_FILE, "w", encoding="utf-8") as wf:
                             wf.write(content)
                         
-                        # 4. GitHub 자동 커밋 연동
                         commit_to_github(
                             WATCHLIST_FILE, 
                             content, 
@@ -426,7 +422,14 @@ if current_codes:
                     else:
                         st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
 
-        with b_col1:
+        # 테이블 렌더링 및 에디터 수정 결과값(체크 상태 포함) 받기
+        edited_basic_df = render_tab_basic(df_basic)
+
+        st.write("")
+
+        # 선택 종목 삭제 버튼을 표 바로 밑에 배치
+        _, b_col1_center, _ = st.columns([1, 2, 1])
+        with b_col1_center:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
                 raw_del = st.query_params.get("del_codes", "")
                 selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
@@ -444,11 +447,8 @@ if current_codes:
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
-        # 테이블 렌더링 및 에디터 수정 결과값(체크 상태 포함) 받기
-        edited_basic_df = render_tab_basic(df_basic)
-
         st.write("")
-        # 다운로드 및 백업 버튼은 기존처럼 표 아래 배치
+        # 다운로드 및 백업 버튼은 표 아래 버튼들 하단에 배치
         _, d_col1, d_col2 = st.columns([2.5, 2, 2])
         with d_col1:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
