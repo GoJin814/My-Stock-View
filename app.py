@@ -466,6 +466,7 @@ if current_codes:
                         json.dump(watchlist, wf, ensure_ascii=False, indent=2)
                     
                     st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                    st.rerun()
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
