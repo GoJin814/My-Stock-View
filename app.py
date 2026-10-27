@@ -368,19 +368,26 @@ if current_codes:
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # 현재 시세 탭에서 체크된 종목 코드 수집
+                # 1. 렌더링된 에디터 결과(edited_basic_df)에서 체크된 종목 코드 추출
                 selected_codes = []
-                for param_key, param_val in st.query_params.items():
-                    if param_val:
-                        codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
-                        if codes:
-                            selected_codes.extend(codes)
-                selected_codes = list(dict.fromkeys(selected_codes))
+                if 'edited_basic_df' in locals() and edited_basic_df is not None and "선택" in edited_basic_df.columns and "종목코드" in edited_basic_df.columns:
+                    checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
+                    if not checked_rows.empty:
+                        selected_codes = checked_rows["종목코드"].dropna().astype(str).str.zfill(6).tolist()
+
+                # 2. 보조적으로 쿼리 파라미터나 기존 df_basic 확인
+                if not selected_codes:
+                    for param_key, param_val in st.query_params.items():
+                        if param_val:
+                            codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
+                            if codes:
+                                selected_codes.extend(codes)
+                    selected_codes = list(dict.fromkeys(selected_codes))
 
                 if not selected_codes and "선택" in df_basic.columns:
                     checked_sub = df_basic[df_basic["선택"] == True]
                     if not checked_sub.empty:
-                        selected_codes = checked_sub["종목코드"].dropna().astype(str).tolist()
+                        selected_codes = checked_sub["종목코드"].dropna().astype(str).str.zfill(6).tolist()
 
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
