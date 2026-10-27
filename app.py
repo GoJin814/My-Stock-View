@@ -190,28 +190,20 @@ def fetch_single_stock(code: str):
     else:
         div_val = "-"
 
-    # 모바일용 대신 PC 버전 네이버 증권 상세 페이지 주소로 수정
-    naver_link = f"https://finance.naver.com/item/main.naver?code={code}"
-    
-    # st.column_config.LinkColumn에서 이름만 깔끔하게 보이도록 마크다운 링크 형식으로 설정
-    display_stock_name = f"[{stock_name}]({naver_link})"
-
     rec_basic = {
         "선택": False,
-        "종목명": display_stock_name,
+        "종목명": stock_name,
         "종목코드": code,
         "현재가": curr_price_str,
         "시총": market_cap,
         "현재 PER": per_val,
         "현재 PBR": pbr_val,
         "DPS(원)": dps_display,
-        "배당수익률": div_val,
-        "_num_PER_최근": fin_info['cur_per'], "_num_PBR_최근": fin_info['cur_pbr'],
-        "_num_PER_직전": fin_info['prev_per'], "_num_PBR_직전": fin_info['prev_pbr'],
+        "배당수익률": div_val
     }
 
     rec_perf = {
-        "종목명": display_stock_name,
+        "종목명": stock_name,
         "종목코드": code,
         "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
         "영업익_직전": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
@@ -230,7 +222,7 @@ def fetch_single_stock(code: str):
     c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
 
     rec_share = {
-        "종목명": display_stock_name,
+        "종목명": stock_name,
         "종목코드": code,
         "PER_직전": p_per_str, "PBR_직전": p_pbr_str, "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
         "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-", "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
@@ -350,9 +342,9 @@ if current_codes:
         "📈 수익률-진우"
     ])
 
-    # 1. 관심종목 탭 (full_csv_records를 전달하여 다른 탭과 정렬 순서 연동)
+    # 1. 관심종목 탭
     with tab1:
-        render_tab_watchlist(full_csv_records)
+        render_tab_watchlist()
 
     # 2. 현재 시세 탭
     with tab2:
@@ -370,35 +362,13 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
+        # 관심종목 추가 및 선택 종목 삭제 버튼을 우측 상단으로 배치
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
-        st.write("")
-        
-        # 전체 선택/해제 기능 추가 (체크박스 상태 토글)
-        select_all = st.checkbox("☑️ 전체 선택 / 해제", value=False, key="select_all_market_checkbox")
-        if select_all:
-            df_basic["선택"] = True
-        else:
-            if "market_stock_editor" in st.session_state and st.session_state["market_stock_editor"].get("edited_rows"):
-                pass # 사용자의 개별 조작 유지
-
-        edited_basic_df = st.data_editor(
-            df_basic,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False, width=45),
-                "종목코드": st.column_config.TextColumn("종목코드", width=80),
-                "종목명": st.column_config.LinkColumn("종목명", width=120, display_text=r"\[(.*?)\]\(http.*?\)"),
-            },
-            disabled=["종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
-            hide_index=True,
-            use_container_width=True,
-            key="market_stock_editor"
-        )
-
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
-                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
+                raw_del = st.query_params.get("del_codes", "")
+                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
 
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
@@ -501,19 +471,27 @@ if current_codes:
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
-                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
-                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
+                raw_del = st.query_params.get("del_codes", "")
+                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
 
                 if selected_codes:
                     remaining_codes = [c for c in current_codes if c not in selected_codes]
                     save_codes(remaining_codes)
                     fetch_single_stock.clear()
+                    try:
+                        st.query_params.clear()
+                    except Exception:
+                        pass
                     st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
                     st.rerun()
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
+        # 테이블 렌더링
+        edited_basic_df = render_tab_basic(df_basic)
+
         st.write("")
+        # 다운로드 및 백업 버튼은 기존처럼 표 아래 배치
         _, d_col1, d_col2 = st.columns([2.5, 2, 2])
         with d_col1:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
@@ -613,20 +591,17 @@ if current_codes:
                                             if 1 <= len(digits) <= 6:
                                                 extracted.append(digits.zfill(6))
 
-                                extracted_clean = [c.zfill(6) for c in extracted if len(c) == 6]
-                                if extracted_clean:
-                                    new_unique = [c for c in dict.fromkeys(extracted_clean) if c not in current_codes]
+                                if extracted:
+                                    new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
                                     if new_unique:
                                         current_codes.extend(new_unique)
                                         save_codes(current_codes)
                                         st.success(f"파일에서 {len(new_unique)}개 종목이 정상 등록되었습니다.")
                                         st.rerun()
-                                    else:
-                                        st.info("추출된 종목코드가 이미 모두 등록되어 있습니다.")
                                 else:
-                                    st.warning("유효한 6자리 종목코드를 찾지 못했습니다.")
+                                    st.warning("파일 내에서 유효한 종목코드를 추출하지 못했습니다. 파일 형식을 확인해 주세요.")
                             except Exception as e:
-                                st.error(f"파일 처리 중 오류: {e}")
+                                st.error(f"파일 처리 중 오류 발생: {e}")
 
     # 3. 주당 가치 탭
     with tab3:
@@ -658,6 +633,7 @@ if current_codes:
     with tab9:
         render_tab_returns_jinwoo()
 
+    # 무새로고침 클라이언트 정렬 및 탭 간 동기화 엔진 마운트
     inject_client_sort_sync_engine()
 
 else:
