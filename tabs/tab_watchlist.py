@@ -7,7 +7,6 @@ import base64
 import requests
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
-from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_FILE = "watchlist_codes.txt"
@@ -157,7 +156,6 @@ def fetch_watchlist_item(code: str):
     
     if fin_info["prev_yr"]:
         items.append({
-            "선택": "",
             "종목코드": code, 
             "종목명": stock_name if stock_name else empty_space, 
             "현재가": curr_price_str if curr_price_str else empty_space, 
@@ -174,7 +172,6 @@ def fetch_watchlist_item(code: str):
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
-            "선택": "",
             "종목코드": code, 
             "종목명": empty_space if is_second_row else (stock_name if stock_name else empty_space), 
             "현재가": empty_space if is_second_row else (curr_price_str if curr_price_str else empty_space), 
@@ -191,7 +188,6 @@ def fetch_watchlist_item(code: str):
     return items
 
 def load_watchlist_codes():
-    """watchlist_codes.txt 파일에서 관심종목 코드를 불러오며, 기본값을 두지 않고 빈 리스트를 반환합니다."""
     codes = []
     if os.path.exists(WATCHLIST_FILE):
         try:
@@ -219,55 +215,65 @@ def save_watchlist_codes(codes):
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
 
-    rows = []
     if watchlist_codes:
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(fetch_watchlist_item, watchlist_codes))
 
+        rows = []
         for info_list in results:
             if not info_list:
                 continue
             for info in info_list:
                 rows.append(info)
 
-    if rows:
-        df_watch = pd.DataFrame(rows)
-        
-        render_multi_header_table(
-            df_watch,
-            tab_name="tab_basic",
-            has_checkbox=True,
-            has_naver_link=True
-        )
+        if rows:
+            df_watch = pd.DataFrame(rows)
+            
+            # 고유한 세션 상태 딕셔너리 키 생성
+            if "watchlist_selected_codes" not in st.session_state:
+                st.session_state.watchlist_selected_codes = {}
 
-        st.write("")
-        
-        col_l, col_r = st.columns([3, 1.8])
-        with col_r:
-            if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                raw_del = st.query_params.get("del_codes", "")
-                codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+            st.write("##### 📌 관심종목 목록")
+            
+            # 전체 선택 토글 버튼 제공
+            select_all = st.checkbox("전체 선택 / 해제", key="watchlist_select_all")
+
+            codes_to_delete = []
+            
+            # 각 종목별로 체크박스 및 데이터 출력
+            for code in watchlist_codes:
+                sub_df = df_watch[df_watch["종목코드"] == code]
+                if sub_df.empty:
+                    continue
                 
-                if not codes_to_delete:
-                    for key, val in st.session_state.items():
-                        if val is True:
-                            for code in watchlist_codes:
-                                if code in str(key) and code not in codes_to_delete:
-                                    codes_to_delete.append(code)
+                stock_name = sub_df.iloc[0]["종목명"].strip()
+                if not stock_name or stock_name == "\u3164":
+                    stock_name = code
 
-                codes_to_delete = list(dict.fromkeys(codes_to_delete))
+                col_chk, col_info = st.columns([0.5, 9.5])
+                with col_chk:
+                    is_checked = st.checkbox("", value=select_all, key=f"chk_watch_{code}")
+                    if is_checked:
+                        codes_to_delete.append(code)
+                with col_info:
+                    st.markdown(f"**[{code}] {stock_name}**")
+                    # 스타일 테이블 유지 렌더링
+                    from styles import render_multi_header_table
+                    render_multi_header_table(sub_df.drop(columns=["종목코드"]), tab_name=f"watch_{code}", has_checkbox=False, has_naver_link=True)
+                st.markdown("---")
 
-                if not codes_to_delete:
-                    st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
-                else:
-                    new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
-                    save_watchlist_codes(new_codes)
-                    
-                    if "del_codes" in st.query_params:
-                        del st.query_params["del_codes"]
-                        
-                    st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
-                    st.rerun()
+            col_l, col_r = st.columns([3, 1.8])
+            with col_r:
+                if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+                    if not codes_to_delete:
+                        st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
+                    else:
+                        new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
+                        save_watchlist_codes(new_codes)
+                        st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
+                        st.rerun()
+        else:
+            st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
     else:
         st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
