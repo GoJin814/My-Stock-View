@@ -264,24 +264,40 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         st.write("")
         
+        # 테이블 하단에 선택 항목 삭제 버튼 배치
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+                # 1. 세션 상태 및 쿼리 파라미터에서 체크된 종목 코드 수집
+                checked_codes_from_state = []
+                if "watchlist_checks" in st.session_state:
+                    # 체크박스가 True로 설정된 종목코드 추출
+                    checked_codes_from_state = [
+                        code for code, checked in st.session_state.watchlist_checks.items() if checked
+                    ]
+                
                 codes_to_delete = list(set(
-                    [code for code, checked in st.session_state.watchlist_checks.items() if checked] +
+                    checked_codes_from_state +
                     checked_codes_from_url
                 ))
                 
                 if not codes_to_delete:
-                    st.warning("⚠️ 삭제할 종목을 체크해 주세요.")
+                    st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
+                    # 기존 관심종목 리스트에서 체크된 항목들을 제외
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
+                    
+                    # 파일 저장 및 GitHub 커밋 실행
                     save_watchlist_codes(new_codes)
+                    
+                    # 체크 상태 초기화
                     st.session_state.watchlist_checks = {}
                     if "del_codes" in st.query_params:
                         del st.query_params["del_codes"]
-                    st.success("🗑️ 선택한 종목 삭제 완료")
+                        
+                    st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
+
     else:
         st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
