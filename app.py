@@ -190,20 +190,26 @@ def fetch_single_stock(code: str):
     else:
         div_val = "-"
 
+    # PC 버전 네이버 증권 링크 연동 형식 적용 (tab_share, tab_perf와 동일 규격)
+    naver_link = f"https://finance.naver.com/item/main.nhn?code={code}"
+    display_stock_name = f'<a href="{naver_link}" target="_blank" style="text-decoration: none; color: inherit;">{stock_name}</a>'
+
     rec_basic = {
         "선택": False,
-        "종목명": stock_name,
+        "종목명": display_stock_name,
         "종목코드": code,
         "현재가": curr_price_str,
         "시총": market_cap,
         "현재 PER": per_val,
         "현재 PBR": pbr_val,
         "DPS(원)": dps_display,
-        "배당수익률": div_val
+        "배당수익률": div_val,
+        "_num_PER_최근": fin_info['cur_per'], "_num_PBR_최근": fin_info['cur_pbr'],
+        "_num_PER_직전": fin_info['prev_per'], "_num_PBR_직전": fin_info['prev_pbr'],
     }
 
     rec_perf = {
-        "종목명": stock_name,
+        "종목명": display_stock_name,
         "종목코드": code,
         "매출_직전": f"{fin_info['prev_rev']:,.0f}억" if pd.notna(fin_info['prev_rev']) else "-",
         "영업익_직전": f"{fin_info['prev_op']:,.0f}억" if pd.notna(fin_info['prev_op']) else "-",
@@ -222,7 +228,7 @@ def fetch_single_stock(code: str):
     c_pbr_str = f"{fin_info['cur_pbr']:.2f}배" if pd.notna(fin_info['cur_pbr']) else "-"
 
     rec_share = {
-        "종목명": stock_name,
+        "종목명": display_stock_name,
         "종목코드": code,
         "PER_직전": p_per_str, "PBR_직전": p_pbr_str, "ROE_직전": f"{fin_info['prev_roe']:.2f}%" if pd.notna(fin_info['prev_roe']) else "-",
         "EPS_직전": f"{fin_info['prev_eps']:,.0f}원" if pd.notna(fin_info['prev_eps']) else "-", "BPS_직전": f"{fin_info['prev_bps']:,.0f}원" if pd.notna(fin_info['prev_bps']) else "-",
@@ -365,13 +371,23 @@ if current_codes:
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
         st.write("")
+        
+        # 전체 선택/해제 기능 추가 (체크박스 상태 토글)
+        select_all = st.checkbox("☑️ 전체 선택 / 해제", value=False, key="select_all_market_checkbox")
+        if select_all:
+            df_basic["선택"] = True
+        else:
+            if "market_stock_editor" in st.session_state and st.session_state["market_stock_editor"].get("edited_rows"):
+                pass # 사용자의 개별 조작 유지
+
         edited_basic_df = st.data_editor(
             df_basic,
             column_config={
                 "선택": st.column_config.CheckboxColumn("선택", default=False, width=45),
                 "종목코드": st.column_config.TextColumn("종목코드", width=80),
+                "종목명": st.column_config.LinkColumn("종목명", width=120, display_text=r'<a href="(.*?)".*?>(.*?)</a>'),
             },
-            disabled=["종목명", "종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
+            disabled=["종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
             hide_index=True,
             use_container_width=True,
             key="market_stock_editor"
