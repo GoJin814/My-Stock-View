@@ -30,7 +30,7 @@ def fetch_watchlist_item(code: str):
             market_cap = str(item.get("value", "")).strip()
 
     fin_info = {
-        "prev_yr": "-", "latest_yr": "-",
+        "prev_yr": "", "latest_yr": "",
         "prev_per": np.nan, "cur_per": np.nan,
         "prev_pbr": np.nan, "cur_pbr": np.nan,
         "prev_roe": np.nan, "cur_roe": np.nan,
@@ -92,21 +92,21 @@ def fetch_watchlist_item(code: str):
 
     def fmt_val(v, suffix=""):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-            return "-"
+            return ""
         if isinstance(v, (int, float)):
             return f"{v:,.0f}{suffix}"
         return f"{str(v).strip()}{suffix}"
 
     def fmt_rate(v):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-            return "-"
+            return ""
         if isinstance(v, (int, float)):
             return f"{v:.2f}%"
         return f"{str(v).strip()}%"
 
     def fmt_multi(v):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-            return "-"
+            return ""
         return f"{str(v).strip()}배"
 
     items = []
