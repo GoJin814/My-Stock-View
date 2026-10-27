@@ -255,6 +255,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
+        # 렌더링 함수 호출 (테이블 내부에서 체크된 항목들이 query_params에 반영되도록 지원)
         render_multi_header_table(
             df_watch,
             tab_name="tab_watchlist",
@@ -268,31 +269,36 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                codes_to_delete = []
+                # 1. URL 쿼리 파라미터에 기록된 삭제 대상 코드 수집 (현재시세 탭 방식)
+                raw_del = st.query_params.get("del_codes", "")
+                codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
                 
-                # 1. st.session_state 전체를 순회하며 체크된 종목코드(또는 관련 키) 색출
-                for key, val in st.session_state.items():
-                    if val is True and any(code in str(key) for code in watchlist_codes):
-                        for code in watchlist_codes:
-                            if code in str(key) and code not in codes_to_delete:
-                                codes_to_delete.append(code)
-                
-                # 2. 지정된 체크 상태 딕셔너리 검사
-                if "watchlist_checks" in st.session_state and isinstance(st.session_state.watchlist_checks, dict):
+                # 2. 만약 쿼리에 없다면 st.session_state 및 렌더링 테이블에서 직접 체크된 종목 코드 탐색
+                if not codes_to_delete:
+                    for key, val in st.session_state.items():
+                        if val is True:
+                            for code in watchlist_codes:
+                                if code in str(key) and code not in codes_to_delete:
+                                    codes_to_delete.append(code)
+
+                # 3. 추가로 watchlist_checks 세션 딕셔너리 검사
+                if not codes_to_delete and "watchlist_checks" in st.session_state and isinstance(st.session_state.watchlist_checks, dict):
                     for code, checked in st.session_state.watchlist_checks.items():
                         if checked and code in watchlist_codes and code not in codes_to_delete:
                             codes_to_delete.append(code)
 
-                # 3. URL 파라미터에 전달된 삭제 대상 코드 합산
-                codes_to_delete = list(set(codes_to_delete + checked_codes_from_url))
-                
+                codes_to_delete = list(dict.fromkeys(codes_to_delete))
+
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
+                    # 선택된 종목들을 제외한 새 리스트 생성
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
+                    
+                    # 파일 저장 및 GitHub 동기화 실행
                     save_watchlist_codes(new_codes)
                     
-                    # 체크 상태 초기화
+                    # 상태 및 쿼리 초기화
                     st.session_state.watchlist_checks = {}
                     if "del_codes" in st.query_params:
                         del st.query_params["del_codes"]
