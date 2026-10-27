@@ -477,7 +477,7 @@ if current_codes:
                         }
 
                         row_list_data = []
-                        # 연도별 데이터 맵핑 및 누락된 연도 처리 (제이알글로벌리츠 등 연도 꼬임 방지)
+                        # API에서 수집된 실제 연도들을 기준으로 동적으로 정렬 및 맵핑
                         year_data_map = {}
                         for yr_label, metrics_dict in [(prev_yr, prev_metrics), (latest_yr, latest_metrics)]:
                             if yr_label != "-" and yr_label:
@@ -490,15 +490,19 @@ if current_codes:
                                         "영업익": metrics_dict["영업익"], "당기순이익": metrics_dict["당기순이익"]
                                     }
 
-                        for target_yr in ["2025년", "2026년"]:
-                            if target_yr in year_data_map:
-                                row_list_data.append(year_data_map[target_yr])
-                            else:
-                                row_list_data.append({
-                                    "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-                                    "적용연도": target_yr, "PER": "-", "PBR": "-", "ROE": "-", 
-                                    "매출액": "-", "영업익": "-", "당기순이익": "-"
-                                })
+                        # 수집된 연도들을 오름차순으로 정렬 (예: 2025년, 2026년, 이후 연도 확장 가능)
+                        sorted_years = sorted(list(year_data_map.keys()), key=lambda x: re.sub(r'[^0-9]', '', x))
+                        
+                        if sorted_years:
+                            for yr in sorted_years:
+                                row_list_data.append(year_data_map[yr])
+                        else:
+                            # 데이터가 전혀 없을 경우 기본 처리
+                            row_list_data.append({
+                                "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+                                "적용연도": latest_yr if latest_yr != "-" else "최근", "PER": "-", "PBR": "-", "ROE": "-", 
+                                "매출액": "-", "영업익": "-", "당기순이익": "-"
+                            })
 
                         watchlist[code] = row_list_data
                         added_count += 1
