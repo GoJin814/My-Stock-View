@@ -126,6 +126,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
                     if prev_yr != "-":
                         row_list_data.append({
+                            "종목코드": code,
                             "종목명": stock_name,
                             "현재가": curr_price_str,
                             "시총": market_cap,
@@ -140,6 +141,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
                     if latest_yr != "-":
                         row_list_data.append({
+                            "종목코드": code,
                             "종목명": stock_name,
                             "현재가": curr_price_str,
                             "시총": market_cap,
@@ -163,6 +165,7 @@ def render_tab_watchlist(full_csv_records_map=None):
         st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택한 뒤 위 버튼을 눌러주세요.")
         return
 
+    # 데이터프레임 구성 (선택 체크박스 컬럼 추가)
     rows = []
     for code, info_list in watchlist.items():
         if isinstance(info_list, list):
@@ -174,6 +177,8 @@ def render_tab_watchlist(full_csv_records_map=None):
 
                 if i == 0:
                     rows.append({
+                        "선택": False,
+                        "종목코드": code,
                         "종목명": clean_cell(info.get("종목명", code)),
                         "현재가": clean_cell(info.get("현재가", "-")),
                         "시총": clean_cell(info.get("시총", "-")),
@@ -187,6 +192,8 @@ def render_tab_watchlist(full_csv_records_map=None):
                     })
                 else:
                     rows.append({
+                        "선택": False,
+                        "종목코드": code,
                         "종목명": "",
                         "현재가": "",
                         "시총": "",
@@ -198,29 +205,43 @@ def render_tab_watchlist(full_csv_records_map=None):
                         "영업익": clean_cell(info.get("영업익", "-")),
                         "당기순이익": clean_cell(info.get("당기순이익", "-"))
                     })
-        elif isinstance(info_list, dict):
-            rows.append(info_list)
-    
+
     df_watch = pd.DataFrame(rows)
 
     st.write("")
     st.markdown("#### 📋 관심종목 리스트")
-    st.dataframe(df_watch, hide_index=True, use_container_width=True)
+    
+    # 인터랙티브 에디터블 데이터프레임으로 출력하여 체크박스 선택 가능하도록 구성
+    edited_df = st.data_editor(
+        df_watch,
+        column_config={
+            "선택": st.column_config.CheckboxColumn("선택", default=False, width=50),
+            "종목코드": None  # 내부 식별용이므로 화면에서는 숨김
+        },
+        disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
+        hide_index=True,
+        use_container_width=True,
+        key="watchlist_editor"
+    )
 
     st.write("")
-    with st.expander("🗑️ 관심종목 개별 관리 (삭제)"):
-        options_map = {}
-        for code, info_list in watchlist.items():
-            first_item = info_list[0] if isinstance(info_list, list) and len(info_list) > 0 else info_list
-            s_name = first_item.get("종목명", code) if isinstance(first_item, dict) else code
-            options_map[f"{s_name} ({code})"] = code
+    c_del1, _ = st.columns([2, 5])
+    with c_del1:
+        if st.button("🗑️ 선택한 관심종목 일괄 삭제", type="primary", use_container_width=True):
+            # 체크된 행들의 종목코드 수집
+            checked_rows = edited_df[edited_df["선택"] == True]
+            codes_to_delete = checked_rows["종목코드"].dropna().unique().tolist()
 
-        selected_option = st.selectbox("삭제할 종목 선택", options=list(options_map.keys()), key="watch_del_select")
-        
-        if st.button("선택 종목 삭제", type="primary", key="watch_del_btn"):
-            target_code = options_map[selected_option]
-            if target_code in watchlist:
-                del watchlist[target_code]
+            if not codes_to_delete:
+                st.warning("⚠️ 삭제할 종목의 체크박스를 선택해 주세요.")
+            else:
+                deleted_names = []
+                for code in codes_to_delete:
+                    if code in watchlist:
+                        first_item = watchlist[code][0] if isinstance(watchlist[code], list) else {}
+                        deleted_names.append(first_item.get("종목명", code))
+                        del watchlist[code]
+                
                 save_watchlist_data(watchlist)
-                st.success(f"종목 '{selected_option}' 삭제 완료")
+                st.success(f"🗑️ 선택한 종목({', '.join(deleted_names)}) 삭제 완료")
                 st.rerun()
