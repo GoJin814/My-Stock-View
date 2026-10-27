@@ -47,7 +47,7 @@ def save_watchlist_data(data):
 
 def render_tab_watchlist():
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("현재 시세 탭에서 체크박스로 선택한 종목의 실적 데이터를 불러와 저장합니다. (2026년 등 최신 연도 데이터가 존재하면 최신 연도 우선 저장, YoY 제외)")
+    st.caption("현재 시세 탭에서 체크박스로 선택한 종목의 실적 데이터를 불러와 저장합니다. (최신 연도에 데이터가 없으면 값이 존재하는 가장 최근 직전 연도 데이터 자동 탐색, YoY 제외)")
 
     watchlist = load_watchlist_data()
 
@@ -88,58 +88,53 @@ def render_tab_watchlist():
                         sorted_all_years = sorted(list(all_years))
                         
                         if sorted_all_years:
-                            # 무조건 가장 마지막 연도(예: 2026년)를 최우선 타겟으로 설정
-                            target_k = sorted_all_years[-1]
-                            
-                            # 만약 가장 마지막 연도에 데이터가 아예 전무(모두 빈 값/0)하다면, 데이터가 있는 가장 최근 연도 탐색
-                            has_data_in_latest = False
-                            for row in row_list:
-                                cols = row.get("columns", {})
-                                val_item = cols.get(target_k)
-                                if val_item is not None:
-                                    num_v = to_num(val_item.get("value") if isinstance(val_item, dict) else val_item)
-                                    if pd.notna(num_v) and num_v != 0:
-                                        has_data_in_latest = True
-                                        break
-                            
-                            if not has_data_in_latest:
-                                # 뒤에서부터 거꾸로 돌며 값이 존재하는 첫 번째 연도 찾기
-                                for yr in reversed(sorted_all_years):
-                                    for row in row_list:
+                            # 2단계: 최신 연도부터 과거 방향(역순)으로 탐색하여 실제 데이터(매출액, 영업이익 등 주요 항목)가 존재하는 가장 가까운 연도 찾기
+                            valid_target_k = None
+                            for yr in reversed(sorted_all_years):
+                                has_valid_data = False
+                                for row in row_list:
+                                    raw_t = row.get("title", "").strip().replace(" ", "")
+                                    # 주요 실적 항목 중 하나라도 값이 있으면 유효한 연도로 판단
+                                    if raw_t in ["매출액", "수익", "영업이익", "당기순이익", "당기순익"]:
                                         cols = row.get("columns", {})
                                         val_item = cols.get(yr)
                                         if val_item is not None:
                                             num_v = to_num(val_item.get("value") if isinstance(val_item, dict) else val_item)
                                             if pd.notna(num_v) and num_v != 0:
-                                                target_k = yr
+                                                has_valid_data = True
                                                 break
-                                    if target_k == yr and has_data_in_latest:
-                                        break
+                                if has_valid_data:
+                                    valid_target_k = yr
+                                    break
+                            
+                            # 만약 위에서 못 찾았으면 안전하게 가장 마지막 연도 선택
+                            if not valid_target_k:
+                                valid_target_k = sorted_all_years[-1]
 
-                            if target_k:
-                                target_yr_str = f"{target_k[:4]}년"
+                            target_k = valid_target_k
+                            target_yr_str = f"{target_k[:4]}년"
 
-                                for row in row_list:
-                                    raw_title = row.get("title", "").strip().replace(" ", "")
-                                    columns = row.get("columns", {})
-                                    if not columns: continue
-                                    
-                                    # 선택된 target_k 연도 데이터 추출
-                                    c_item = columns.get(target_k, {})
-                                    c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
+                            # 3단계: 선택된 연도의 각 재무 항목 데이터 추출
+                            for row in row_list:
+                                raw_title = row.get("title", "").strip().replace(" ", "")
+                                columns = row.get("columns", {})
+                                if not columns: continue
+                                
+                                c_item = columns.get(target_k, {})
+                                c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
 
-                                    if raw_title in ["매출액", "수익"]:
-                                        fin_snapshot["매출액"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
-                                    elif raw_title == "영업이익":
-                                        fin_snapshot["영업익"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
-                                    elif raw_title in ["당기순이익", "당기순익"]:
-                                        fin_snapshot["순이익"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
-                                    elif any(k in raw_title for k in ["수정주당순이익", "주당순이익", "EPS"]):
-                                        fin_snapshot["EPS"] = f"{c_val:,.0f}원" if pd.notna(c_val) else "-"
-                                    elif any(k in raw_title for k in ["주당순자산", "BPS"]):
-                                        fin_snapshot["BPS"] = f"{c_val:,.0f}원" if pd.notna(c_val) else "-"
-                                    elif "ROE" in raw_title:
-                                        fin_snapshot["ROE"] = f"{c_val:.2f}%" if pd.notna(c_val) else "-"
+                                if raw_title in ["매출액", "수익"]:
+                                    fin_snapshot["매출액"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
+                                elif raw_title == "영업이익":
+                                    fin_snapshot["영업익"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
+                                elif raw_title in ["당기순이익", "당기순익"]:
+                                    fin_snapshot["순이익"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
+                                elif any(k in raw_title for k in ["수정주당순이익", "주당순이익", "EPS"]):
+                                    fin_snapshot["EPS"] = f"{c_val:,.0f}원" if pd.notna(c_val) else "-"
+                                elif any(k in raw_title for k in ["주당순자산", "BPS"]):
+                                    fin_snapshot["BPS"] = f"{c_val:,.0f}원" if pd.notna(c_val) else "-"
+                                elif "ROE" in raw_title:
+                                    fin_snapshot["ROE"] = f"{c_val:.2f}%" if pd.notna(c_val) else "-"
 
                     watchlist[code] = {
                         "종목명": stock_name,
@@ -149,7 +144,7 @@ def render_tab_watchlist():
                     added_count += 1
 
                 save_watchlist_data(watchlist)
-                st.success(f"🎉 총 {added_count}개 종목의 실적 데이터가 최신 연도 기준으로 관심종목에 반영되었습니다!")
+                st.success(f"🎉 총 {added_count}개 종목의 실적 데이터가 유효한 최신 연도 기준으로 관심종목에 반영되었습니다!")
                 st.rerun()
 
     if not watchlist:
