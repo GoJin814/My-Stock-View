@@ -114,7 +114,6 @@ def render_tab_watchlist(full_csv_records_map=None):
             pass
         st.rerun()
 
-    # 상단 컨트롤: 삭제 버튼 우측 정렬
     _, col_del = st.columns([4, 1.5])
     with col_del:
         if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
@@ -145,8 +144,8 @@ def render_tab_watchlist(full_csv_records_map=None):
         <head>
         <style>
             body {{
-                background-color: transparent;
-                color: #fafafa;
+                background-color: #0e1117;
+                color: #ffffff !important;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 margin: 0;
                 padding: 0;
@@ -156,10 +155,11 @@ def render_tab_watchlist(full_csv_records_map=None):
                 border-collapse: collapse;
                 font-size: 13px;
                 text-align: center;
+                background-color: #0e1117;
             }}
             .custom-stock-table th {{
                 background-color: #262730;
-                color: #ffffff;
+                color: #ffffff !important;
                 padding: 10px 6px;
                 border: 1px solid #464855;
                 text-align: center;
@@ -170,14 +170,16 @@ def render_tab_watchlist(full_csv_records_map=None):
                 border: 1px solid #31333F;
                 vertical-align: middle;
                 text-align: center;
+                color: #ffffff !important;
+                background-color: #0e1117;
             }}
             .custom-stock-table tr:hover {{
-                background-color: rgba(255, 255, 255, 0.03);
+                background-color: rgba(255, 255, 255, 0.06);
             }}
             .col-select {{ width: 35px; white-space: nowrap; }}
             .col-name {{ width: 85px; white-space: nowrap; }}
             .stock-link {{
-                color: #4da6ff;
+                color: #58a6ff !important;
                 text-decoration: none;
                 font-weight: bold;
             }}
