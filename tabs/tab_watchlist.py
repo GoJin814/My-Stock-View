@@ -173,7 +173,7 @@ def fetch_watchlist_item(code: str):
         is_second_row = (len(items) > 0)
         items.append({
             "선택": "",
-            "종목코드": empty_space if is_second_row else code, 
+            "종목코드": code, 
             "종목명": empty_space if is_second_row else stock_name, 
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
@@ -319,3 +319,4 @@ def render_tab_watchlist(full_csv_records_map=None):
                             st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
                     else:
                         st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
+                        
