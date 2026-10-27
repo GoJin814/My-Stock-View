@@ -367,15 +367,21 @@ if current_codes:
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # 기존 원본 로직 유지 (query_params 활용)
-                raw_del = st.query_params.get("del_codes", "")
-                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+                # 현재 시세 탭의 데이터를 직접 data_editor로 렌더링하여 체크된 행을 확실하게 추출
+                edited_basic_df = st.data_editor(
+                    df_basic,
+                    column_config={
+                        "선택": st.column_config.CheckboxColumn("선택", default=False, width=45),
+                        "종목코드": st.column_config.TextColumn("종목코드", width=80),
+                    },
+                    disabled=["종목명", "종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
+                    hide_index=True,
+                    use_container_width=True,
+                    key="market_stock_editor_direct"
+                )
 
-                # 만약 선택된 코드가 없다면 기본 데이터프레임 구조에서 안전하게 처리
-                if not selected_codes and "df_basic" in locals() and "선택" in df_basic.columns:
-                    checked_subset = df_basic[df_basic["선택"] == True]
-                    if not checked_subset.empty:
-                        selected_codes = checked_subset["종목코드"].dropna().astype(str).tolist()
+                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
+                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist() if not checked_rows.empty else []
 
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
@@ -446,8 +452,8 @@ if current_codes:
                             "PBR": fmt_multi(rec.get("PBR_최근")),
                             "ROE": fmt_rate(rec.get("ROE_최근")),
                             "매출액": fmt_val(rec.get("매출액_직전"), "억") if rec.get('매출액_최근') in [None, "-", 0, np.nan] else fmt_val(rec.get('매출액_최근'), "억"),
-                            "영업익": fmt_val(rec.get("영업익_최근"), "억"),
-                            "당기순이익": fmt_val(rec.get("순이익_최근"), "억") if "순이익_최근" in rec else fmt_val(rec.get("순이익_직전"), "억")
+                            "영업익": fmt_val(rec.get("영업익_직전"), "억"),
+                            "당기순이익": fmt_val(rec.get("순이익_직전"), "억") if "순이익_최근" not in rec else fmt_val(rec.get("순이익_최근"), "억")
                         }
 
                         row_list_data = []
