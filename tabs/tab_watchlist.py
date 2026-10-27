@@ -257,7 +257,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("---")
 
-    # 하단에 주요 지표 범위 토글 배치
-    show_highlight_box = st.toggle("🚨 주요 지표 범위", value=False)
-    if show_highlight_box:
-        st.info("💡 주요 지표 범위 기능이 활성화되었습니다. (필요한 추가 로직을 이 아래에 연결하여 사용하실 수 있습니다.)")
+    # 요청하신 문구로 변경하고 고유 key를 부여하여 에러 방지
+    show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
+    if show_manage_box:
+        st.info("💡 종목코드 추가 및 관리 기능이 활성화되었습니다. (필요한 추가 입력 로직을 이 아래에 연결하여 사용하실 수 있습니다.)")
