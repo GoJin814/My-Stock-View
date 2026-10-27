@@ -156,7 +156,7 @@ def save_watchlist_codes(codes):
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
+    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 관리합니다. 종목명을 클릭하면 PC 버전 네이버 증권 페이지로 이동합니다.")
 
     watchlist_codes = load_watchlist_codes()
 
@@ -199,9 +199,9 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         for i, info in enumerate(info_list):
             stock_name = info["종목명"]
-            # 링크 주소와 마크다운 서식을 결합하여 올바른 LinkColumn 규격 준수
-            naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
-            linked_display_name = f"[{stock_name} ↗]({naver_url})" if i == 0 else ""
+            # 촌스러운 화살표 제거 및 PC 버전 네이버증권 공식 URL 연결
+            pc_naver_url = f"https://finance.naver.com/item/main.naver?code={code}"
+            linked_display_name = f"[{stock_name}]({pc_naver_url})" if i == 0 else ""
 
             if i > 0:
                 display_name = ""
