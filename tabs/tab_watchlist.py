@@ -4,8 +4,11 @@ import json
 import os
 import base64
 import requests
+import re
+import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from concurrent.futures import ThreadPoolExecutor
+
 
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
 
