@@ -319,4 +319,3 @@ def render_tab_watchlist(full_csv_records_map=None):
                             st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
                     else:
                         st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
-ㅔ
