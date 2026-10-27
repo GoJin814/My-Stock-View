@@ -234,10 +234,10 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # 기존 스타일의 다중 헤더 테이블 렌더링 (전체 선택 체크박스 포함)
+        # 핵심: tab_name을 "tab_basic"으로 주어 styles.py의 자바스크립트 엔진이 체크박스를 완벽히 인식하게 함
         render_multi_header_table(
             df_watch,
-            tab_name="tab_watchlist",
+            tab_name="tab_basic",
             has_checkbox=True,
             has_naver_link=True
         )
@@ -247,11 +247,11 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                # URL 쿼리 파라미터(del_codes)에서 체크된 종목 코드 수집
+                # 1. 자바스크립트가 넘겨준 del_codes 쿼리 파라미터 수집
                 raw_del = st.query_params.get("del_codes", "")
                 codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
                 
-                # 만약 자바스크립트 동기화 전이라 파라미터가 비어있다면 세션 상태나 전체 코드 대상 체크 탐색
+                # 2. 백업용 안전장치: 혹시 파라미터가 없으면 세션 상태 검사
                 if not codes_to_delete:
                     for key, val in st.session_state.items():
                         if val is True:
