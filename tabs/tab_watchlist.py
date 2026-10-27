@@ -91,7 +91,7 @@ def fetch_watchlist_item(code: str):
                 fin_info["prev_pbr"] = p_val
 
     def fmt_val(v, suffix=""):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+        if v is None or pd.isna(v) or v == "" or str(v).lower() == "none":
             return ""
         if isinstance(v, (int, float)):
             return f"{v:,.0f}{suffix}"
