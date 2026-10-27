@@ -256,9 +256,10 @@ def render_tab_watchlist(full_csv_records_map=None):
                 if st.button("종목 추가", use_container_width=True, type="primary"):
                     cleaned_code = input_code.strip().zfill(6)
                     if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
-                        if cleaned_code not in watchlist_codes:
-                            watchlist_codes.append(cleaned_code)
-                            save_watchlist_codes(watchlist_codes)
+                        current_codes = load_watchlist_codes()
+                        if cleaned_code not in current_codes:
+                            current_codes.append(cleaned_code)
+                            save_watchlist_codes(current_codes)
                             st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
                             st.rerun()
                         else:
