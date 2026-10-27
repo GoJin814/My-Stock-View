@@ -173,7 +173,7 @@ def fetch_watchlist_item(code: str):
         is_second_row = (len(items) > 0)
         items.append({
             "선택": "",
-            "종목코드": code,  # 두 번째 줄에서도 종목코드를 유지해야 styles.py가 링크를 정상 생성함
+            "종목코드": code, 
             "종목명": empty_space if is_second_row else stock_name, 
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
@@ -230,7 +230,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # tab_name을 "tab_watchlist"로 주고 has_naver_link=True로 설정하여 styles.py가 종목코드를 보고 네이버 링크를 자동 생성하도록 함
         render_multi_header_table(
             df_watch,
             tab_name="tab_watchlist",
@@ -274,6 +273,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
     if show_manage_box:
         with st.container(border=True):
+            # 1. 현재시세 탭에서 가져오기 버튼
             if st.button("📥 현재시세 탭에서 체크된 종목 가져오기", use_container_width=True, type="secondary"):
                 selected_codes = []
                 for param_key, param_val in st.query_params.items():
@@ -299,6 +299,41 @@ def render_tab_watchlist(full_csv_records_map=None):
                         st.rerun()
                     else:
                         st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
+
+            st.markdown("---")
+
+            # 2. 백업 파일 다운로드 및 업로드(복구) 기능 추가
+            st.caption("📂 관심종목 백업 파일(TXT) 관리")
+            d_col1, d_col2 = st.columns(2)
+            
+            with d_col1:
+                current_codes = load_watchlist_codes()
+                file_content = "\n".join(current_codes) + ("\n" if current_codes else "")
+                st.download_button(
+                    label="💾 백업 파일 다운로드",
+                    data=file_content,
+                    file_name="watchlist_codes.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+
+            with d_col2:
+                uploaded_file = st.file_uploader("백업 파일 업로드 (복구)", type=["txt"], label_visibility="collapsed")
+                if uploaded_file is not None:
+                    try:
+                        content_bytes = uploaded_file.getvalue()
+                        decoded_str = content_bytes.decode("utf-8")
+                        uploaded_codes = [line.strip().zfill(6) for line in decoded_str.splitlines() if line.strip() and line.strip().isdigit()]
+                        uploaded_codes = list(dict.fromkeys(uploaded_codes))
+                        
+                        if uploaded_codes:
+                            save_watchlist_codes(uploaded_codes)
+                            st.success(f"🎉 총 {len(uploaded_codes)}개 종목 복구 완료!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ 업로드한 파일에 올바른 종목 코드가 없습니다.")
+                    except Exception as e:
+                        st.error(f"⚠️ 파일 처리 중 오류 발생: {e}")
 
             st.markdown("---")
             st.caption("6자리 종목코드를 직접 입력하여 관심종목에 추가할 수 있습니다.")
