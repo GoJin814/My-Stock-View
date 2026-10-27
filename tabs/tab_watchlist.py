@@ -200,7 +200,6 @@ def render_tab_watchlist(full_csv_records_map=None):
         for i, info in enumerate(info_list):
             stock_name = info["종목명"]
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
-            linked_name = f"[{stock_name}]({naver_url})"
 
             if i > 0:
                 display_name = ""
@@ -208,7 +207,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                 display_mcap = ""
                 display_check = False
             else:
-                display_name = linked_name
+                display_name = naver_url
                 display_price = info["현재가"]
                 display_mcap = info["시총"]
                 display_check = is_checked
@@ -217,6 +216,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                 "선택": display_check,
                 "종목코드": code,
                 "종목명": display_name,
+                "종목명_텍스트": stock_name,
                 "현재가": display_price,
                 "시총": display_mcap,
                 "적용연도": info["적용연도"],
@@ -235,12 +235,13 @@ def render_tab_watchlist(full_csv_records_map=None):
             column_config={
                 "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
                 "종목코드": None,
-                "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=90),
+                "종목명": None,
+                "종목명_텍스트": st.column_config.LinkColumn("종목명", help="네이버 증권으로 이동", width=100),
                 "현재가": st.column_config.TextColumn("현재가", width=90),
                 "시총": st.column_config.TextColumn("시총", width=90),
                 "적용연도": st.column_config.TextColumn("적용연도", width=70),
             },
-            disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
+            disabled=["종목명_텍스트", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
             hide_index=True,
             use_container_width=True,
             key="watchlist_editor"
