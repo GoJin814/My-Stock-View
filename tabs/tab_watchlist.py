@@ -199,9 +199,9 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         for i, info in enumerate(info_list):
             stock_name = info["종목명"]
-            # 촌스러운 화살표 제거 및 PC 버전 네이버증권 공식 URL 연결
+            # PC 버전 네이버증권 URL 생성 및 LinkColumn 전용 마크다운 형식 지정 ([종목명](URL))
             pc_naver_url = f"https://finance.naver.com/item/main.naver?code={code}"
-            display_name = pc_naver_url if i == 0 else ""
+            linked_display_name = f"[{stock_name}]({pc_naver_url})" if i == 0 else ""
 
             if i > 0:
                 display_name = ""
@@ -236,7 +236,7 @@ def render_tab_watchlist(full_csv_records_map=None):
             column_config={
                 "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
                 "종목코드": None,
-                "종목명": st.column_config.LinkColumn("종목명", display_text=r"code=(\d+)", width=100),
+                "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=100),
                 "현재가": st.column_config.TextColumn("현재가", width=90),
                 "시총": st.column_config.TextColumn("시총", width=90),
                 "적용연도": st.column_config.TextColumn("적용연도", width=70),
