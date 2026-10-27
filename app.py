@@ -367,32 +367,31 @@ if current_codes:
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # 1. 탭 내부(render_tab_basic)의 st.data_editor 세션 상태 또는 일반 data_editor 상태를 안전하게 탐색하여 체크된 행 추출
+                # st.session_state에서 data_editor의 체크 상태를 직접 추적
                 selected_codes = []
                 
-                # Streamlit session_state에서 에디터 관련 키들을 순회하며 체크된 행 탐색
-                for k, v in st.session_state.items():
-                    if isinstance(v, dict) and "edited_rows" in v:
-                        edited_rows_dict = v.get("edited_rows", {})
-                        if edited_rows_dict:
-                            temp_df = df_basic.copy()
-                            for idx_str, row_dict in edited_rows_dict.items():
-                                try:
-                                    idx = int(idx_str)
-                                    if "선택" in row_dict:
-                                        temp_df.loc[idx, "선택"] = row_dict["선택"]
-                                except Exception:
-                                    pass
-                            checked_subset = temp_df[temp_df["선택"] == True]
-                            if not checked_subset.empty:
-                                selected_codes = checked_subset["종목코드"].dropna().astype(str).tolist()
-                                break
+                # 세션 상태 내의 모든 에디터 키를 탐색하여 '선택'이 True인 행 색출
+                for key, state_val in st.session_state.items():
+                    if isinstance(state_val, dict) and "edited_rows" in state_val:
+                        edited_rows_dict = state_val.get("edited_rows", {})
+                        temp_df = df_basic.copy()
+                        for idx_str, row_changes in edited_rows_dict.items():
+                            try:
+                                idx = int(idx_str)
+                                if "선택" in row_changes:
+                                    temp_df.loc[idx, "선택"] = row_changes["선택"]
+                            except Exception:
+                                pass
+                        checked_rows = temp_df[temp_df["선택"] == True]
+                        if not checked_rows.empty:
+                            selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
+                            break
 
-                # 만약 세션 에디터 상태에서 못 찾았다면 df_basic 자체의 '선택' 컬럼 확인
+                # 세션에서 못 찾은 경우 df_basic 기본값 확인
                 if not selected_codes and "선택" in df_basic.columns:
-                    checked_subset = df_basic[df_basic["선택"] == True]
-                    if not checked_subset.empty:
-                        selected_codes = checked_subset["종목코드"].dropna().astype(str).tolist()
+                    checked_rows = df_basic[df_basic["선택"] == True]
+                    if not checked_rows.empty:
+                        selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist()
 
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
@@ -464,7 +463,7 @@ if current_codes:
                             "ROE": fmt_rate(rec.get("ROE_최근")),
                             "매출액": fmt_val(rec.get("매출액_직전"), "억") if rec.get('매출액_최근') in [None, "-", 0, np.nan] else fmt_val(rec.get('매출액_최근'), "억"),
                             "영업익": fmt_val(rec.get("영업익_최근"), "억"),
-                            "당기순이익": fmt_val(rec.get("순이익_최근"), "억")
+                            "당기순이익": fmt_val(rec.get("순이익_직전"), "억") if "순이익_최근" not in rec else fmt_val(rec.get("순이익_최근"), "억")
                         }
 
                         row_list_data = []
@@ -511,7 +510,7 @@ if current_codes:
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
-        # 테이블 렌더링
+        # 테이블 렌더링 (tab_basic 내부의 에디터 결과를 받도록 수정)
         edited_basic_df = render_tab_basic(df_basic)
 
         st.write("")
