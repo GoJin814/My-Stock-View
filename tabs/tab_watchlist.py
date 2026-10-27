@@ -9,7 +9,6 @@ import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from concurrent.futures import ThreadPoolExecutor
 
-
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -22,7 +21,6 @@ def fetch_watchlist_item(code: str):
     stock_name = basic.get("stockName", "-")
     raw_close = basic.get("closePrice", "-")
     curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
-    numeric_close = to_num(raw_close)
 
     total_infos = integration.get("totalInfos", [])
     market_cap = "-"
@@ -211,12 +209,24 @@ def render_tab_watchlist(full_csv_records_map=None):
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
+            # 동일 종목의 두 번째 행(예: 2026년)부터는 종목명, 현재가, 시총 반복 출력을 생략하여 깔끔하게 정리
+            if i > 0:
+                display_name = ""
+                display_price = ""
+                display_mcap = ""
+                display_check = False # 체크박스는 첫 번째 행에만 표시하여 중복 조작 방지
+            else:
+                display_name = linked_name
+                display_price = info["현재가"]
+                display_mcap = info["시총"]
+                display_check = is_checked
+
             rows.append({
-                "선택": is_checked if i == 0 else False,
+                "선택": display_check,
                 "종목코드": code,
-                "종목명": linked_name,
-                "현재가": info["현재가"],
-                "시총": info["시총"],
+                "종목명": display_name,
+                "현재가": display_price,
+                "시총": display_mcap,
                 "적용연도": info["적용연도"],
                 "PER": info["PER"],
                 "PBR": info["PBR"],
@@ -238,6 +248,9 @@ def render_tab_watchlist(full_csv_records_map=None):
             "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
             "종목코드": None,
             "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=90),
+            "현재가": st.column_config.TextColumn("현재가", width=90),
+            "시총": st.column_config.TextColumn("시총", width=90),
+            "적용연도": st.column_config.TextColumn("적용연도", width=70),
         },
         disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
         hide_index=True,
