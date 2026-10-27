@@ -253,11 +253,28 @@ def render_tab_watchlist(full_csv_records_map=None):
                     any_checked = sub_df["선택"].any()
                     st.session_state.watchlist_checks[code] = bool(any_checked)
     else:
-        st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 추가해 주세요.")
+        st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
     st.write("---")
 
-    # 요청하신 문구로 변경하고 고유 key를 부여하여 에러 방지
+    # 하단에 토글을 켜면 종목코드 추가 입력창이 나타나도록 구성
     show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
     if show_manage_box:
-        st.info("💡 종목코드 추가 및 관리 기능이 활성화되었습니다. (필요한 추가 입력 로직을 이 아래에 연결하여 사용하실 수 있습니다.)")
+        with st.container(border=True):
+            st.caption("6자리 종목코드를 직접 입력하여 관심종목에 추가할 수 있습니다.")
+            add_col1, add_col2 = st.columns([3, 1])
+            with add_col1:
+                input_code = st.text_input("종목코드 입력", placeholder="예: 005930 (삼성전자)", label_visibility="collapsed", key="input_new_watchlist_code")
+            with add_col2:
+                if st.button("종목 추가", use_container_width=True, type="primary"):
+                    cleaned_code = input_code.strip().zfill(6)
+                    if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
+                        if cleaned_code not in watchlist_codes:
+                            watchlist_codes.append(cleaned_code)
+                            save_watchlist_codes(watchlist_codes)
+                            st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+                    else:
+                        st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
