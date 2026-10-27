@@ -47,15 +47,15 @@ def save_watchlist_data(data):
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("'현재 시세' 탭에서 체크박스를 선택한 뒤 **[⭐ 선택 종목을 관심종목에 추가]** 버튼을 눌러주세요.")
+    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 2단 행으로 관리합니다.")
 
     watchlist = load_watchlist_data()
 
     if not watchlist:
-        st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택하고 추가해 주세요.")
+        st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택하고 [관심종목 추가] 버튼을 눌러주세요.")
         return
 
-    # 데이터프레임 구성
+    # 데이터프레임 구성 (전체 행에 반영할 일괄 선택 상태 반영)
     rows = []
     for code, info_list in watchlist.items():
         if isinstance(info_list, list):
@@ -99,6 +99,15 @@ def render_tab_watchlist(full_csv_records_map=None):
     df_watch = pd.DataFrame(rows)
 
     st.write("")
+    
+    # 상단 전체 선택 체크박스 제공
+    col_sel, _ = st.columns([1, 4])
+    with col_sel:
+        select_all = st.checkbox("전체 선택 / 해제", key="watchlist_select_all")
+
+    if select_all:
+        df_watch["선택"] = True
+
     edited_df = st.data_editor(
         df_watch,
         column_config={
