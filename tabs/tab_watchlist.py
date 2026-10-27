@@ -109,7 +109,6 @@ def fetch_watchlist_item(code: str):
         return f"{str(v).strip()}배"
 
     items = []
-    # 직전 연도 데이터 구성
     if fin_info["prev_yr"] != "-":
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
@@ -122,7 +121,6 @@ def fetch_watchlist_item(code: str):
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
         })
 
-    # 최근 연도 데이터 구성
     if fin_info["latest_yr"] != "-":
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
@@ -158,18 +156,39 @@ def save_watchlist_codes(codes):
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
+    st.caption("'현재 시세' 탭에서 추가하거나, 아래에서 종목코드를 직접 입력하여 관심종목을 관리할 수 있습니다.")
 
     watchlist_codes = load_watchlist_codes()
 
-    if not watchlist_codes:
-        st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택하고 [관심종목 추가] 버튼을 눌러주세요.")
-        return
+    if "watchlist_checks" not in st.session_state:
+        st.session_state.watchlist_checks = {}
+
+    # 종목코드 직접 추가 입력 영역
+    st.write("")
+    with st.container(border=True):
+        st.markdown("##### ➕ 종목코드 직접 추가")
+        add_col1, add_col2 = st.columns([3, 1])
+        with add_col1:
+            input_code = st.text_input("종목코드 입력 (예: 005930)", placeholder="6자리 종목코드를 입력하세요", label_visibility="collapsed", key="input_new_watchlist_code")
+        with add_col2:
+            if st.button("추가하기", use_container_width=True, type="primary"):
+                cleaned_code = input_code.strip().zfill(6)
+                if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
+                    if cleaned_code not in watchlist_codes:
+                        watchlist_codes.append(cleaned_code)
+                        save_watchlist_codes(watchlist_codes)
+                        st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+                else:
+                    st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
 
     st.write("")
 
-    if "watchlist_checks" not in st.session_state:
-        st.session_state.watchlist_checks = {}
+    if not watchlist_codes:
+        st.info("등록된 관심종목이 없습니다. 위 입력창에서 종목코드를 추가해 주세요.")
+        return
 
     col_l, col_r = st.columns([3, 1.8])
     with col_l:
@@ -209,7 +228,6 @@ def render_tab_watchlist(full_csv_records_map=None):
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
-            # 첫 번째 행에만 종목명, 현재가, 시총, 체크박스를 표시하고 두 번째 행부터는 중복 출력 방지 (체크박스는 타입 에러 방지를 위해 False 유지)
             if i > 0:
                 display_name = ""
                 display_price = ""
