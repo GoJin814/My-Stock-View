@@ -274,7 +274,7 @@ def get_all_stocks_parallel(codes_list):
 # 상단 헤더
 title_col, sync_col = st.columns([5, 1.2])
 with title_col:
-    st.title("Scanning_주식")
+    st.title("Scanning")
 with sync_col:
     st.write("")
     if st.button("🔄 실시간 시세 동기화", use_container_width=True):
