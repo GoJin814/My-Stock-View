@@ -191,6 +191,7 @@ def fetch_watchlist_item(code: str):
     return items
 
 def load_watchlist_codes():
+    """watchlist_codes.txt 파일에서 관심종목 코드를 불러오며, 기본값을 두지 않고 빈 리스트를 반환합니다."""
     codes = []
     if os.path.exists(WATCHLIST_FILE):
         try:
@@ -200,10 +201,7 @@ def load_watchlist_codes():
                     return list(dict.fromkeys(codes))
         except Exception:
             pass
-    
-    default_watchlist = ["005930", "000660"]
-    save_watchlist_codes(default_watchlist)
-    return default_watchlist
+    return []
 
 def save_watchlist_codes(codes):
     cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
@@ -221,20 +219,20 @@ def save_watchlist_codes(codes):
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(executor.map(fetch_watchlist_item, watchlist_codes))
-
     rows = []
-    for info_list in results:
-        if not info_list:
-            continue
-        for info in info_list:
-            rows.append(info)
+    if watchlist_codes:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(fetch_watchlist_item, watchlist_codes))
+
+        for info_list in results:
+            if not info_list:
+                continue
+            for info in info_list:
+                rows.append(info)
 
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # 핵심: tab_name을 "tab_basic"으로 주어 styles.py의 자바스크립트 엔진이 체크박스를 완벽히 인식하게 함
         render_multi_header_table(
             df_watch,
             tab_name="tab_basic",
@@ -247,11 +245,9 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
-                # 1. 자바스크립트가 넘겨준 del_codes 쿼리 파라미터 수집
                 raw_del = st.query_params.get("del_codes", "")
                 codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
                 
-                # 2. 백업용 안전장치: 혹시 파라미터가 없으면 세션 상태 검사
                 if not codes_to_delete:
                     for key, val in st.session_state.items():
                         if val is True:
