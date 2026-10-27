@@ -13,7 +13,6 @@ from concurrent.futures import ThreadPoolExecutor
 WATCHLIST_FILE = "watchlist_codes.txt"
 
 def commit_to_github(filename, content_str, commit_message="Auto-update watchlist from Streamlit"):
-    """GitHub API를 통해 관심종목 코드를 원격 저장소에 직접 커밋합니다."""
     token = st.secrets.get("GITHUB_TOKEN")
     repo = st.secrets.get("GITHUB_REPO")
     branch = st.secrets.get("GITHUB_BRANCH", "main")
@@ -48,18 +47,13 @@ def commit_to_github(filename, content_str, commit_message="Auto-update watchlis
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_watchlist_item(code: str):
-    """관심종목 코드를 받아 실시간으로 기본정보 및 최근/직전연도 실적을 파싱합니다."""
     basic = fetch_basic(code)
     integration = fetch_integration(code)
     fin_json = fetch_finance(code)
     
     stock_name = basic.get("stockName", "")
     if not stock_name or stock_name == "-":
-        stock_name = code
-
-    # 네이버 금융 링크 HTML 직접 생성
-    pc_url = f"https://finance.naver.com/item/main.naver?code={code}"
-    linked_stock_name = f'<a href="{pc_url}" target="_blank" class="naver-pc-link" style="color: #58a6ff; text-decoration: none; font-weight: 500;">{stock_name}</a>'
+        stock_name = ""
 
     raw_close = basic.get("closePrice", "")
     if not raw_close or raw_close == "-":
@@ -159,12 +153,11 @@ def fetch_watchlist_item(code: str):
     items = []
     empty_space = "\u3164"  
     
-    # 첫 번째 행 (직전 연도)
     if fin_info["prev_yr"]:
         items.append({
             "선택": "",
             "종목코드": code, 
-            "종목명": linked_stock_name, 
+            "종목명": stock_name, 
             "현재가": curr_price_str, 
             "시총": market_cap,
             "적용연도": fin_info["prev_yr"],
@@ -176,13 +169,12 @@ def fetch_watchlist_item(code: str):
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
         })
 
-    # 두 번째 행 (최근 연도 - 중복 방지)
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
             "선택": "",
             "종목코드": code, 
-            "종목명": empty_space if is_second_row else linked_stock_name, 
+            "종목명": empty_space if is_second_row else stock_name, 
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
             "적용연도": fin_info["latest_yr"],
@@ -238,12 +230,12 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # styles.py의 렌더러를 쓰되, has_naver_link를 False로 주어 자체 주입된 HTML 링크가 깨지지 않고 그대로 출력되도록 함
+        # styles.py의 렌더러가 종목코드와 col_name == "종목명"을 인식하여 네이버 링크를 자동 생성하도록 설정
         render_multi_header_table(
             df_watch,
-            tab_name="tab_basic",
+            tab_name="tab_watchlist",
             has_checkbox=True,
-            has_naver_link=False
+            has_naver_link=True
         )
 
         st.write("")
@@ -327,3 +319,4 @@ def render_tab_watchlist(full_csv_records_map=None):
                             st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
                     else:
                         st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
+ㅔ
