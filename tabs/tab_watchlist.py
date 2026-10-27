@@ -7,7 +7,6 @@ import base64
 import requests
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
-from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_FILE = "watchlist_codes.txt"
@@ -157,6 +156,7 @@ def fetch_watchlist_item(code: str):
     
     if fin_info["prev_yr"]:
         items.append({
+            "선택": False,
             "종목코드": code, 
             "종목명": stock_name if stock_name else empty_space, 
             "현재가": curr_price_str if curr_price_str else empty_space, 
@@ -173,6 +173,7 @@ def fetch_watchlist_item(code: str):
     if fin_info["latest_yr"]:
         is_second_row = (len(items) > 0)
         items.append({
+            "선택": False,
             "종목코드": code, 
             "종목명": empty_space if is_second_row else (stock_name if stock_name else empty_space), 
             "현재가": empty_space if is_second_row else (curr_price_str if curr_price_str else empty_space), 
@@ -198,10 +199,7 @@ def load_watchlist_codes():
                     return list(dict.fromkeys(codes))
         except Exception:
             pass
-    
-    default_watchlist = ["005930", "000660"]
-    save_watchlist_codes(default_watchlist)
-    return default_watchlist
+    return []
 
 def save_watchlist_codes(codes):
     cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
@@ -226,28 +224,18 @@ def render_tab_watchlist(full_csv_records_map=None):
     for info_list in results:
         if not info_list:
             continue
-        code = info_list[0]["종목코드"]
-
         for info in info_list:
-            rows.append({
-                "선택": False,  # 체크박스 상태를 명시적인 불리언(Boolean)으로 관리
-                "종목코드": code,
-                "종목명": info["종목명"],
-                "현재가": info["현재가"],
-                "시총": info["시총"],
-                "적용연도": info["적용연도"],
-                "PER": info["PER"],
-                "PBR": info["PBR"],
-                "ROE": info["ROE"],
-                "매출액": info["매출액"],
-                "영업익": info["영업익"],
-                "당기순이익": info["당기순이익"]
-            })
+            rows.append(info)
 
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # st.data_editor를 사용하여 체크박스 상태를 명확히 세션으로 받음 (styles.py 수정 불필요)
+        # 전체 선택 상태 관리 토글
+        select_all = st.checkbox("☑️ 전체 종목 선택 / 해제", key="watchlist_select_all_toggle")
+        if select_all:
+            df_watch["선택"] = True
+
+        # st.data_editor를 사용하여 체크박스 상태를 명확히 세션으로 받음
         edited_df = st.data_editor(
             df_watch,
             column_config={
