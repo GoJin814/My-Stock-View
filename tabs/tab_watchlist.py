@@ -41,6 +41,10 @@ def fetch_watchlist_item(code: str):
     }
 
     row_list = extract_row_list(fin_json)
+    
+    # 연도별 데이터를 임시로 담을 딕셔너리 (예: {"2025년": {...}, "2026년": {...}})
+    year_data_map = {}
+
     if row_list:
         for row in row_list:
             raw_title = row.get("title", "").strip().replace(" ", "")
@@ -48,48 +52,33 @@ def fetch_watchlist_item(code: str):
             if not columns:
                 continue
             
-            clean_years = []
-            for k in columns.keys():
+            # 각 컬럼의 연도 키를 분석하여 실제 연도(2025, 2026 등)와 매칭
+            for k, c_item in columns.items():
                 yr_match = re.search(r'(20\d{2})', str(k))
-                if yr_match:
-                    clean_years.append((yr_match.group(1), k))
-            clean_years = sorted(clean_years, key=lambda x: x[0])
-            sorted_keys = [item[1] for item in clean_years]
-            
-            if not sorted_keys:
-                continue
+                if not yr_match:
+                    continue
+                yr_str = yr_match.group(1) + "년"  # 예: "2025년", "2026년"
                 
-            latest_k = sorted_keys[-1]
-            prev_k = sorted_keys[-2] if len(sorted_keys) >= 2 else None
-            
-            fin_info["latest_yr"] = f"{re.search(r'(20\d{2})', str(latest_k)).group(1)}년" if re.search(r'(20\d{2})', str(latest_k)) else "-"
-            fin_info["prev_yr"] = f"{re.search(r'(20\d{2})', str(prev_k)).group(1)}년" if prev_k and re.search(r'(20\d{2})', str(prev_k)) else "-"
+                c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
+                
+                if yr_str not in year_data_map:
+                    year_data_map[yr_str] = {
+                        "PER": np.nan, "PBR": np.nan, "ROE": np.nan,
+                        "매출액": np.nan, "영업익": np.nan, "당기순이익": np.nan
+                    }
 
-            c_item = columns.get(latest_k, {})
-            c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
-            p_val = np.nan
-            if prev_k:
-                p_item = columns.get(prev_k, {})
-                p_val = to_num(p_item.get("value") if isinstance(p_item, dict) else p_item)
-
-            if raw_title in ["매출액", "수익"]:
-                fin_info["cur_rev"] = c_val
-                fin_info["prev_rev"] = p_val
-            elif raw_title == "영업이익":
-                fin_info["cur_op"] = c_val
-                fin_info["prev_op"] = p_val
-            elif raw_title in ["당기순이익", "당기순익"]:
-                fin_info["cur_np"] = c_val
-                fin_info["prev_np"] = p_val
-            elif "ROE" in raw_title:
-                fin_info["cur_roe"] = c_val
-                fin_info["prev_roe"] = p_val
-            elif "PER" in raw_title:
-                fin_info["cur_per"] = c_val
-                fin_info["prev_per"] = p_val
-            elif "PBR" in raw_title:
-                fin_info["cur_pbr"] = c_val
-                fin_info["prev_pbr"] = p_val
+                if raw_title in ["매출액", "수익"]:
+                    year_data_map[yr_str]["매출액"] = c_val
+                elif raw_title == "영업이익":
+                    year_data_map[yr_str]["영업익"] = c_val
+                elif raw_title in ["당기순이익", "당기순익"]:
+                    year_data_map[yr_str]["당기순이익"] = c_val
+                elif "ROE" in raw_title:
+                    year_data_map[yr_str]["ROE"] = c_val
+                elif "PER" in raw_title:
+                    year_data_map[yr_str]["PER"] = c_val
+                elif "PBR" in raw_title:
+                    year_data_map[yr_str]["PBR"] = c_val
 
     def fmt_val(v, suffix=""):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
@@ -111,30 +100,20 @@ def fetch_watchlist_item(code: str):
         return f"{str(v).strip()}배"
 
     items = []
-    # 직전 연도 데이터 구성
-    if fin_info["prev_yr"] != "-":
-        items.append({
-            "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-            "적용연도": fin_info["prev_yr"],
-            "PER": fmt_multi(fin_info["prev_per"]),
-            "PBR": fmt_multi(fin_info["prev_pbr"]),
-            "ROE": fmt_rate(fin_info["prev_roe"]),
-            "매출액": fmt_val(fin_info["prev_rev"], "억"),
-            "영업익": fmt_val(fin_info["prev_op"], "억"),
-            "당기순이익": fmt_val(fin_info["prev_np"], "억")
-        })
+    # 연도 문자열(2025년, 2026년 등)을 오름차순으로 정렬하여 정확한 칸에 배치
+    sorted_collected_years = sorted(list(year_data_map.keys()), key=lambda x: re.sub(r'[^0-9]', '', x))
 
-    # 최근 연도 데이터 구성
-    if fin_info["latest_yr"] != "-":
+    for yr in sorted_collected_years:
+        metrics = year_data_map[yr]
         items.append({
             "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
-            "적용연도": fin_info["latest_yr"],
-            "PER": fmt_multi(fin_info["cur_per"]),
-            "PBR": fmt_multi(fin_info["cur_pbr"]),
-            "ROE": fmt_rate(fin_info["cur_roe"]),
-            "매출액": fmt_val(fin_info["cur_rev"], "억"),
-            "영업익": fmt_val(fin_info["cur_op"], "억"),
-            "당기순이익": fmt_val(fin_info["cur_np"], "억")
+            "적용연도": yr,
+            "PER": fmt_multi(metrics["PER"]),
+            "PBR": fmt_multi(metrics["PBR"]),
+            "ROE": fmt_rate(metrics["ROE"]),
+            "매출액": fmt_val(metrics["매출액"], "억"),
+            "영업익": fmt_val(metrics["영업익"], "억"),
+            "당기순이익": fmt_val(metrics["당기순이익"], "억")
         })
 
     return items
