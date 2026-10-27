@@ -273,7 +273,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
     if show_manage_box:
         with st.container(border=True):
-            # 1. 현재시세 탭에서 가져오기 버튼
             if st.button("📥 현재시세 탭에서 체크된 종목 가져오기", use_container_width=True, type="secondary"):
                 selected_codes = []
                 for param_key, param_val in st.query_params.items():
@@ -302,7 +301,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
             st.markdown("---")
 
-            # 2. 백업 파일 다운로드 및 업로드(복구) 기능 추가
             st.caption("📂 관심종목 백업 파일(TXT) 관리")
             d_col1, d_col2 = st.columns(2)
             
