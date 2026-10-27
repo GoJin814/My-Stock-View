@@ -364,7 +364,7 @@ if current_codes:
         """, unsafe_allow_html=True)
 
         # 관심종목 추가 버튼 및 클라이언트 체크 상태 동기화 처리
-        _, top_space, b_col0, _ = st.columns([1, 1, 1.8, 1.8])
+        _, top_space, b_col0, _ = st.columns([4.2, 1.8])
         
         with b_col0:
             # 1. 쿼리 파라미터 및 브라우저에서 넘어온 체크된 종목 코드 안전하게 우선 수집
