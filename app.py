@@ -347,26 +347,26 @@ if current_codes:
 
     # 2. 현재 시세 탭
     with tab2:
-        # 우측 버튼과 동일한 붉은색 스타일을 확실하게 적용하기 위한 CSS 주입
+        # 관심종목 추가 및 삭제 버튼을 어둡고 통일감 있는 색상으로 맞추기 위한 CSS 주입
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
-                background-color: #ff4b4b !important;
-                border-color: #ff4b4b !important;
-                color: white !important;
+                background-color: #262730 !important;
+                border-color: #464855 !important;
+                color: #ffffff !important;
             }
             div[data-testid="stButton"] > button[kind="primary"]:hover {
-                background-color: #ff3333 !important;
-                border-color: #ff3333 !important;
+                background-color: #31333F !important;
+                border-color: #5b5e71 !important;
             }
             </style>
         """, unsafe_allow_html=True)
 
-        # 상단 우측에 관심종목 추가 및 삭제 버튼 배치
-        _, top_space, b_col0, b_col1 = st.columns([1, 1, 2, 2])
+        # 상단 우측에 간결해진 명칭의 관심종목 추가 버튼 및 삭제 버튼 배치
+        _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
         with b_col0:
-            if st.button("⭐ 선택 종목을 관심종목에 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
+            if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
                 raw_del = st.query_params.get("del_codes", "")
                 selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
 
