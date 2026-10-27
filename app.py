@@ -348,12 +348,6 @@ if current_codes:
 
     # 2. 현재 시세 탭
     with tab2:
-        edited_basic_df = render_tab_basic(df_basic)
-
-        # 쿼리 파라미터 기반으로 현재시세 탭의 선택 종목 추출 연동
-        raw_del = st.query_params.get("del_codes", "")
-        selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
-
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
@@ -368,10 +362,14 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
+        # 관심종목 추가 및 선택 종목 삭제 버튼을 우측 상단으로 배치
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
+                raw_del = st.query_params.get("del_codes", "")
+                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
                 else:
@@ -468,11 +466,14 @@ if current_codes:
                     with open(watchlist_file, "w", encoding="utf-8") as wf:
                         json.dump(watchlist, wf, ensure_ascii=False, indent=2)
                     
-                    st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다!")
+                    st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
                     st.rerun()
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
+                raw_del = st.query_params.get("del_codes", "")
+                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+
                 if selected_codes:
                     remaining_codes = [c for c in current_codes if c not in selected_codes]
                     save_codes(remaining_codes)
@@ -486,7 +487,11 @@ if current_codes:
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
+        # 테이블 렌더링
+        edited_basic_df = render_tab_basic(df_basic)
+
         st.write("")
+        # 다운로드 및 백업 버튼은 기존처럼 표 아래 배치
         _, d_col1, d_col2 = st.columns([2.5, 2, 2])
         with d_col1:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
