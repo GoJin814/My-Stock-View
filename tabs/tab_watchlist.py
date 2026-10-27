@@ -209,12 +209,12 @@ def render_tab_watchlist(full_csv_records_map=None):
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
-            # 첫 번째 행에만 체크박스를 두고, 두 번째 행 이후는 빈 문자열로 주어 체크박스 공간을 비움
+            # 첫 번째 행에만 종목명, 현재가, 시총, 체크박스를 표시하고 두 번째 행부터는 중복 출력 방지 (체크박스는 타입 에러 방지를 위해 False 유지)
             if i > 0:
                 display_name = ""
                 display_price = ""
                 display_mcap = ""
-                display_check = ""
+                display_check = False
             else:
                 display_name = linked_name
                 display_price = info["현재가"]
@@ -245,7 +245,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     edited_df = st.data_editor(
         df_watch,
         column_config={
-            # 빈 값("")과 체크박스 값이 모두 올 수 있도록 일반 컬럼 또는 체크박스 혼용 허용
             "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
             "종목코드": None,
             "종목명": st.column_config.LinkColumn("종목명", display_text=r"\[(.*?)\]", width=90),
