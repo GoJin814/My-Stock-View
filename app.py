@@ -21,7 +21,7 @@ from tabs.tab_returns_roun import render_tab_returns_roun
 from tabs.tab_returns_jinwoo import render_tab_returns_jinwoo
 
 
-st.set_page_config(page_title="Scanning_주식", layout="wide")
+st.set_page_config(page_title="Scanning", layout="wide")
 apply_custom_styles()
 
 SAVE_FILE = "saved_codes.txt"
