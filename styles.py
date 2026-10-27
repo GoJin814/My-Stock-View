@@ -521,7 +521,7 @@ def inject_client_sort_sync_engine():
             if (!canPull) return;
             canPull = false;
             const distY = e.changedTouches[0].clientY - touchStartY;
-            if (distY >= 180 && getRealScrollTop() <= 1) {
+            if (distY >= 250 && getRealScrollTop() <= 1) {
                 ptrBox.style.top = '20px';
                 ptrBox.style.opacity = '1';
                 setTimeout(function() { win.location.reload(); }, 120);
