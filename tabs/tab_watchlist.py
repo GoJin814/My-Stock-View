@@ -47,7 +47,7 @@ def save_watchlist_data(data):
 
 def render_tab_watchlist():
     st.markdown("#### ⭐ 관심종목 실적 관리 (2단 행 구조)")
-    st.caption("현재 시세 탭에서 선택한 종목의 데이터를 종목당 2줄(윗줄: 직전연도, 아랫줄: 최신연도)로 나누어 관리합니다.")
+    st.caption("종목명, 현재가, 시총은 1개의 값으로 합쳐서 출력되며, 윗줄은 직전연도, 아랫줄은 최신연도 실적을 표시합니다.")
 
     watchlist = load_watchlist_data()
 
@@ -123,7 +123,7 @@ def render_tab_watchlist():
                                 valid_years.append(yr)
 
                     latest_k = valid_years[-1] if valid_years else None
-                    prev_k = valid_years[-2] if len(valid_years) >= 2 else latest_k
+                    prev_k = valid_years[-2] if len(valid_years) >= 2 else None
 
                     def get_metrics_for_yr(yr_key):
                         metrics = {"매출액": "-", "영업익": "-", "당기순이익": "-", "ROE": "-"}
@@ -149,65 +149,86 @@ def render_tab_watchlist():
                     prev_metrics = get_metrics_for_yr(prev_k)
                     latest_metrics = get_metrics_for_yr(latest_k)
 
-                    prev_yr_str = f"{prev_k[:4]}년" if prev_k else "-"
-                    latest_yr_str = f"{latest_k[:4]}년" if latest_k else "-"
+                    prev_yr_str = f"{prev_k[:4]}년" if prev_k else ""
+                    latest_yr_str = f"{latest_k[:4]}년" if latest_k else ""
 
-                    # 종목당 2개의 행(직전연도, 최신연도)을 리스트 형태로 저장
-                    watchlist[code] = [
-                        {
+                    # 2단 행 구성 (직전연도 / 최신연도)
+                    # 종목명, 현재가, 시총은 합쳐서 1개의 값으로 동일하게 출력하되, 데이터가 없는 행은 연도 공백 처리
+                    row_list_data = []
+
+                    if prev_k:
+                        row_list_data.append({
                             "종목명": stock_name,
-                            "적용연도": prev_yr_str,
                             "현재가": curr_price_str,
                             "시총": market_cap,
+                            "적용연도": prev_yr_str,
                             "PER": per_val,
                             "PBR": pbr_val,
                             "ROE": prev_metrics["ROE"],
                             "매출액": prev_metrics["매출액"],
                             "영업익": prev_metrics["영업익"],
                             "당기순이익": prev_metrics["당기순이익"]
-                        },
-                        {
+                        })
+
+                    if latest_k:
+                        row_list_data.append({
                             "종목명": stock_name,
-                            "적용연도": latest_yr_str,
                             "현재가": curr_price_str,
                             "시총": market_cap,
+                            "적용연도": latest_yr_str,
                             "PER": per_val,
                             "PBR": pbr_val,
                             "ROE": latest_metrics["ROE"],
                             "매출액": latest_metrics["매출액"],
                             "영업익": latest_metrics["영업익"],
                             "당기순이익": latest_metrics["당기순이익"]
-                        }
-                    ]
+                        })
+
+                    watchlist[code] = row_list_data
                     added_count += 1
 
                 save_watchlist_data(watchlist)
-                st.success(f"🎉 총 {added_count}개 종목의 2개년 실적 데이터가 관심종목에 반영되었습니다!")
+                st.success(f"🎉 총 {added_count}개 종목의 실적 데이터가 관심종목에 반영되었습니다!")
                 st.rerun()
 
     if not watchlist:
         st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택한 뒤 위 버튼을 눌러주세요.")
         return
 
-    # 저장된 데이터프레임 구성 (종목당 2행 순차 배치)
+    # 저장된 데이터프레임 구성 (종목명, 현재가, 시총은 첫 번째 행에만 표시하고 두 번째 행은 공백 처리하여 합쳐진 효과 연출)
     rows = []
     for code, info_list in watchlist.items():
         if isinstance(info_list, list):
-            for info in info_list:
-                rows.append({
-                    "종목명": info.get("종목명", code),
-                    "적용연도": info.get("적용연도", "-"),
-                    "현재가": info.get("현재가", "-"),
-                    "시총": info.get("시총", "-"),
-                    "PER": info.get("PER", "-"),
-                    "PBR": info.get("PBR", "-"),
-                    "ROE": info.get("ROE", "-"),
-                    "매출액": info.get("매출액", "-"),
-                    "영업익": info.get("영업익", "-"),
-                    "당기순이익": info.get("당기순이익", "-")
-                })
+            for i, info in enumerate(info_list):
+                if i == 0:
+                    # 첫 번째 행(직전연도): 정보 정상 출력
+                    rows.append({
+                        "종목명": info.get("종목명", code),
+                        "현재가": info.get("현재가", "-"),
+                        "시총": info.get("시총", "-"),
+                        "적용연도": info.get("적용연도", ""),
+                        "PER": info.get("PER", "-"),
+                        "PBR": info.get("PBR", "-"),
+                        "ROE": info.get("ROE", "-"),
+                        "매출액": info.get("매출액", "-"),
+                        "영업익": info.get("영업익", "-"),
+                        "당기순이익": info.get("당기순이익", "-")
+                    })
+                else:
+                    # 두 번째 행(최신연도): 종목명, 현재가, 시총 칸을 합친 효과(공백 처리)
+                    rows.append({
+                        "종목명": "",
+                        "현재가": "",
+                        "시총": "",
+                        "적용연도": info.get("적용연도", ""),
+                        "PER": info.get("PER", "-"),
+                        "PBR": info.get("PBR", "-"),
+                        "ROE": info.get("ROE", "-"),
+                        "매출액": info.get("매출액", "-"),
+                        "영업익": info.get("영업익", "-"),
+                        "당기순이익": info.get("당기순이익", "-")
+                    })
         elif isinstance(info_list, dict):
-            # 하위 호환 구조 처리
             rows.append(info_list)
     
     df_watch = pd.DataFrame(rows)
@@ -219,7 +240,6 @@ def render_tab_watchlist():
     # 개별 종목 삭제 기능
     st.write("")
     with st.expander("🗑️ 관심종목 개별 관리 (삭제)"):
-        # 고유 종목별로 매핑 (리스트의 첫 번째 항목 기준 종목명 추출)
         options_map = {}
         for code, info_list in watchlist.items():
             first_item = info_list[0] if isinstance(info_list, list) and len(info_list) > 0 else info_list
