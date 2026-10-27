@@ -10,7 +10,7 @@ from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list,
 from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
-# 관심종목 전용 텍스트 파일명 지정
+# 관심종목 전용 텍스트 파일명으로 설정 (기존 json 파일 대체)
 WATCHLIST_FILE = "watchlist_codes.txt"
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -156,7 +156,7 @@ def fetch_watchlist_item(code: str):
     return items
 
 def load_watchlist_codes():
-    """watchlist_codes.txt 파일에서 관심종목 코드를 불러옵니다."""
+    """watchlist_codes.txt 파일에서 관심종목 코드를 안전하게 줄바꿈 단위로 읽어옵니다."""
     codes = []
     if os.path.exists(WATCHLIST_FILE):
         try:
@@ -170,18 +170,21 @@ def load_watchlist_codes():
     return list(dict.fromkeys(codes))
 
 def save_watchlist_codes(codes):
-    """추가/삭제된 관심종목 코드를 watchlist_codes.txt 파일에 반영합니다."""
+    """관심종목 코드를 txt에 저장하고 GitHub에 자동 커밋하여 리부트 시에도 유지되도록 합니다."""
     cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
     content = "\n".join(cleaned_codes) + ("\n" if cleaned_codes else "")
     
-    # 1. 로컬 텍스트 파일 저장
+    # 1. 로컬 파일 저장
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         f.write(content)
         
-    # 2. 현재시세 탭처럼 GitHub 자동 커밋 연동이 필요하다면 아래에 추가하세요.
+    # 2. GitHub 저장소 동기화 (현재시세 탭에서 사용 중인 커밋 함수명과 동일하게 맞추어 주세요)
     try:
-        # 예시: commit_to_github(WATCHLIST_FILE, content, f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)")
-        pass
+        commit_to_github(
+            WATCHLIST_FILE, 
+            content, 
+            f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
+        )
     except Exception as e:
         st.error(f"GitHub 동기화 실패: {e}")
 
