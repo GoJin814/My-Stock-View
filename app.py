@@ -367,12 +367,15 @@ if current_codes:
         
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # render_tab_basic이 반환한 edited_basic_df에서 '선택 == True'인 행을 정확히 추출
-                checked_rows = pd.DataFrame()
-                if edited_basic_df is not None and not edited_basic_df.empty and "선택" in edited_basic_df.columns:
-                    checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
+                # 기존 원본 로직 유지 (query_params 활용)
+                raw_del = st.query_params.get("del_codes", "")
+                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
 
-                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist() if not checked_rows.empty else []
+                # 만약 선택된 코드가 없다면 기본 데이터프레임 구조에서 안전하게 처리
+                if not selected_codes and "df_basic" in locals() and "선택" in df_basic.columns:
+                    checked_subset = df_basic[df_basic["선택"] == True]
+                    if not checked_subset.empty:
+                        selected_codes = checked_subset["종목코드"].dropna().astype(str).tolist()
 
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
@@ -432,7 +435,7 @@ if current_codes:
                         prev_metrics = {
                             "PER": fmt_multi(rec.get("PER_직전")),
                             "PBR": fmt_multi(rec.get("PBR_직전")),
-                        "ROE": fmt_rate(rec.get("ROE_직전")),
+                            "ROE": fmt_rate(rec.get("ROE_직전")),
                             "매출액": fmt_val(rec.get("매출액_직전"), "억"),
                             "영업익": fmt_val(rec.get("영업익_직전"), "억"),
                             "당기순이익": fmt_val(rec.get("순이익_직전"), "억")
