@@ -363,34 +363,29 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
-        # 관심종목 추가 버튼 및 클라이언트 체크 상태 동기화 처리
-        _, top_space, b_col0, _ = st.columns([4.2, 1.8])
+        # 💡 컬럼 비율을 [4.2, 1.8]로 주어 버튼을 오른쪽 끝으로 정렬
+        _, b_col0 = st.columns([4.2, 1.8])
         
         with b_col0:
-            # 1. 쿼리 파라미터 및 브라우저에서 넘어온 체크된 종목 코드 안전하게 우선 수집
             selected_codes = []
             
-            # 쿼리 파라미터 확인 (del_codes 또는 새로 추가한 선택 동기화 파라미터 활용)
             for param_key, param_val in st.query_params.items():
                 if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
                     codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
                     if codes:
                         selected_codes.extend(codes)
             
-            # 에디터 결과 데이터프레임 확인
             if not selected_codes and 'edited_basic_df' in locals() and edited_basic_df is not None:
                 if "선택" in edited_basic_df.columns and "종목코드" in edited_basic_df.columns:
                     checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
                     if not checked_rows.empty:
                         selected_codes = checked_rows["종목코드"].dropna().astype(str).str.zfill(6).tolist()
 
-            # 원본 df_basic 보조 확인
             if not selected_codes and "선택" in df_basic.columns and "종목코드" in df_basic.columns:
                 checked_sub = df_basic[df_basic["선택"] == True]
                 if not checked_sub.empty:
                     selected_codes = checked_sub["종목코드"].dropna().astype(str).str.zfill(6).tolist()
 
-            # 중복 제거 및 6자리 정합성 검증
             selected_codes = list(dict.fromkeys([c.zfill(6) for c in selected_codes if str(c).strip().isdigit() and len(str(c).strip()) <= 6]))
 
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
@@ -434,7 +429,7 @@ if current_codes:
                     else:
                         st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
 
-        # 테이블 렌더링 및 에디터 수정 결과값(체크 상태 포함) 받기
+        # 테이블 렌더링
         edited_basic_df = render_tab_basic(df_basic)
 
         st.write("")
