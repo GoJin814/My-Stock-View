@@ -190,9 +190,11 @@ def fetch_single_stock(code: str):
     else:
         div_val = "-"
 
-    # PC 버전 네이버 증권 링크 연동 형식 적용 (tab_share, tab_perf와 동일 규격)
-    naver_link = f"https://finance.naver.com/item/main.nhn?code={code}"
-    display_stock_name = f'<a href="{naver_link}" target="_blank" style="text-decoration: none; color: inherit;">{stock_name}</a>'
+    # 모바일용 대신 PC 버전 네이버 증권 상세 페이지 주소로 수정
+    naver_link = f"https://finance.naver.com/item/main.naver?code={code}"
+    
+    # st.column_config.LinkColumn에서 이름만 깔끔하게 보이도록 마크다운 링크 형식으로 설정
+    display_stock_name = f"[{stock_name}]({naver_link})"
 
     rec_basic = {
         "선택": False,
@@ -385,7 +387,7 @@ if current_codes:
             column_config={
                 "선택": st.column_config.CheckboxColumn("선택", default=False, width=45),
                 "종목코드": st.column_config.TextColumn("종목코드", width=80),
-                "종목명": st.column_config.LinkColumn("종목명", width=120, display_text=r'<a href="(.*?)".*?>(.*?)</a>'),
+                "종목명": st.column_config.LinkColumn("종목명", width=120, display_text=r"\[(.*?)\]\(http.*?\)"),
             },
             disabled=["종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
             hide_index=True,
