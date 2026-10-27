@@ -98,14 +98,14 @@ def fetch_watchlist_item(code: str):
         return f"{str(v).strip()}{suffix}"
 
     def fmt_rate(v):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+        if v is None or pd.isna(v) or v == "" or str(v).lower() == "none":
             return ""
         if isinstance(v, (int, float)):
             return f"{v:.2f}%"
         return f"{str(v).strip()}%"
 
     def fmt_multi(v):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+        if v is None or pd.isna(v) or v == "" or str(v).lower() == "none":
             return ""
         return f"{str(v).strip()}배"
 
