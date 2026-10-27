@@ -363,34 +363,39 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
-        # 관심종목 추가 버튼만 우측 상단에 유지
+        # 관심종목 추가 버튼 및 클라이언트 체크 상태 동기화 처리
         _, top_space, b_col0, _ = st.columns([1, 1, 1.8, 1.8])
         
         with b_col0:
-            if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # 1. 렌더링된 에디터 결과(edited_basic_df)에서 체크된 종목 코드 추출
-                selected_codes = []
-                if 'edited_basic_df' in locals() and edited_basic_df is not None and "선택" in edited_basic_df.columns and "종목코드" in edited_basic_df.columns:
+            # 1. 쿼리 파라미터 및 브라우저에서 넘어온 체크된 종목 코드 안전하게 우선 수집
+            selected_codes = []
+            
+            # 쿼리 파라미터 확인 (del_codes 또는 새로 추가한 선택 동기화 파라미터 활용)
+            for param_key, param_val in st.query_params.items():
+                if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
+                    codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
+                    if codes:
+                        selected_codes.extend(codes)
+            
+            # 에디터 결과 데이터프레임 확인
+            if not selected_codes and 'edited_basic_df' in locals() and edited_basic_df is not None:
+                if "선택" in edited_basic_df.columns and "종목코드" in edited_basic_df.columns:
                     checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
                     if not checked_rows.empty:
                         selected_codes = checked_rows["종목코드"].dropna().astype(str).str.zfill(6).tolist()
 
-                # 2. 보조적으로 쿼리 파라미터나 기존 df_basic 확인
-                if not selected_codes:
-                    for param_key, param_val in st.query_params.items():
-                        if param_val:
-                            codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
-                            if codes:
-                                selected_codes.extend(codes)
-                    selected_codes = list(dict.fromkeys(selected_codes))
+            # 원본 df_basic 보조 확인
+            if not selected_codes and "선택" in df_basic.columns and "종목코드" in df_basic.columns:
+                checked_sub = df_basic[df_basic["선택"] == True]
+                if not checked_sub.empty:
+                    selected_codes = checked_sub["종목코드"].dropna().astype(str).str.zfill(6).tolist()
 
-                if not selected_codes and "선택" in df_basic.columns:
-                    checked_sub = df_basic[df_basic["선택"] == True]
-                    if not checked_sub.empty:
-                        selected_codes = checked_sub["종목코드"].dropna().astype(str).str.zfill(6).tolist()
+            # 중복 제거 및 6자리 정합성 검증
+            selected_codes = list(dict.fromkeys([c.zfill(6) for c in selected_codes if str(c).strip().isdigit() and len(str(c).strip()) <= 6]))
 
+            if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
                 if not selected_codes:
-                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
+                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 표의 체크박스를 확인해 주세요.")
                 else:
                     WATCHLIST_FILE = "watchlist_codes.txt"
                     watchlist_codes = []
