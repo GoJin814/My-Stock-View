@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from styles import apply_custom_styles, inject_client_sort_sync_engine
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from tabs.tab_watchlist import render_tab_watchlist
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
 from tabs.tab_perf import render_tab_perf
@@ -324,10 +325,11 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 2. 8개 탭 분기 렌더링
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "📊 현재 시세", 
-    "💰 주당 가치",
+    # 2. 9개 탭 분기 렌더링
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    "⭐ 관심종목"
+    "📊 현재시세", 
+    "💰 주당가치",
     "📈 실적", 
     "🌐 국내지수",
     "📈 수익률-생활비",
@@ -336,8 +338,13 @@ if current_codes:
     "📈 수익률-진우"
 ])
 
-    # 1. 현재 시세 탭
+
+    #1. 관심종목 탭
     with tab1:
+        render_tab_watchlist()
+
+    # 2. 현재 시세 탭
+    with tab2:
         edited_basic_df = render_tab_basic(df_basic)
 
         b_col1, b_col2, b_col3 = st.columns([1.5, 2, 2])
@@ -463,16 +470,16 @@ if current_codes:
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
-    # 2. 주당 가치 탭
-    with tab2:
+    # 3. 주당 가치 탭
+    with tab3:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
-    # 3. 실적 탭
-    with tab3:
+    # 4. 실적 탭
+    with tab4:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
-    # 4. 국내지수 탭
-    with tab4:
+    # 5. 국내지수 탭
+    with tab5:
         edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
@@ -496,16 +503,16 @@ else:
                     st.success(f"{formatted} 등록 완료")
                     st.rerun()
 
-with tab5:
+with tab6:
     render_tab_returns_living()
 
-with tab6:
+with tab7:
     render_tab_returns_pension()
 
-with tab7:
+with tab8:
     render_tab_returns_roun()
 
-with tab8:
+with tab9:
     render_tab_returns_jinwoo()
 
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
