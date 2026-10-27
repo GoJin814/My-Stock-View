@@ -61,8 +61,26 @@ def render_tab_watchlist(full_csv_records_map=None):
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
-    col_c1, col_c2, _ = st.columns([1.5, 2, 4])
-    with col_c1:
+    query_params = st.query_params
+    toggle_code = query_params.get("toggle_code", "")
+    if toggle_code:
+        if toggle_code == "ALL_TOGGLE":
+            current_all = st.session_state.get("_prev_select_all", False)
+            new_all = not current_all
+            for code in watchlist.keys():
+                st.session_state.watchlist_checks[code] = new_all
+            st.session_state["_prev_select_all"] = new_all
+        elif toggle_code in watchlist:
+            st.session_state.watchlist_checks[toggle_code] = not st.session_state.watchlist_checks.get(toggle_code, False)
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
+        st.rerun()
+
+    # 상단 컨트롤: 삭제 버튼을 오른쪽으로 배치
+    _, col_del = st.columns([4, 1.5])
+    with col_del:
         if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
             codes_to_delete = [code for code, checked in st.session_state.watchlist_checks.items() if checked]
             if not codes_to_delete:
@@ -80,59 +98,57 @@ def render_tab_watchlist(full_csv_records_map=None):
                 st.success(f"🗑️ 선택한 종목({', '.join(deleted_names)}) 삭제 완료")
                 st.rerun()
 
-    with col_c2:
-        select_all = st.checkbox("전체 선택 / 해제", key="watchlist_select_all_cb")
-        if select_all != st.session_state.get("_prev_select_all", False):
-            for code in watchlist.keys():
-                st.session_state.watchlist_checks[code] = select_all
-            st.session_state["_prev_select_all"] = select_all
-
     st.write("")
 
-    # HTML 표 구성 (컴포넌트를 통해 안전하게 렌더링)
+    all_checked = all(st.session_state.watchlist_checks.get(c, False) for c in watchlist.keys()) and len(watchlist) > 0
+    master_checked_attr = "checked" if all_checked else ""
+
+    # HTML 표 구성 (선택 및 종목명 열 폭 최소화 스타일 적용)
     html_parts = [
-        """
+        f"""
         <html>
         <head>
         <style>
-            body {
+            body {{
                 background-color: transparent;
                 color: #fafafa;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 margin: 0;
                 padding: 0;
-            }
-            .custom-stock-table {
+            }}
+            .custom-stock-table {{
                 width: 100%;
                 border-collapse: collapse;
                 font-size: 13px;
                 text-align: center;
-            }
-            .custom-stock-table th {
+            }}
+            .custom-stock-table th {{
                 background-color: #262730;
                 color: #ffffff;
                 padding: 10px 6px;
                 border: 1px solid #464855;
                 text-align: center;
                 font-weight: 600;
-            }
-            .custom-stock-table td {
+            }}
+            .custom-stock-table td {{
                 padding: 10px 6px;
                 border: 1px solid #31333F;
                 vertical-align: middle;
                 text-align: center;
-            }
-            .custom-stock-table tr:hover {
+            }}
+            .custom-stock-table tr:hover {{
                 background-color: rgba(255, 255, 255, 0.03);
-            }
+            }}
+            .col-select {{ width: 35px; white-space: nowrap; }}
+            .col-name {{ width: 85px; white-space: nowrap; }}
         </style>
         </head>
         <body>
         <table class="custom-stock-table">
             <thead>
                 <tr>
-                    <th style="width: 45px;">선택</th>
-                    <th>종목명</th>
+                    <th class="col-select"><input type="checkbox" {master_checked_attr} onchange="window.parent.location.href='?toggle_code=ALL_TOGGLE'"></th>
+                    <th class="col-name">종목명</th>
                     <th>현재가</th>
                     <th>시총</th>
                     <th>적용연도</th>
@@ -176,8 +192,8 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         html_parts.append(f"""
             <tr>
-                <td {rowspan_attr}><input type="checkbox" {checked_attr} onchange="window.parent.location.href='?toggle_code={code}'"></td>
-                <td {rowspan_attr}><b>{stock_name}</b></td>
+                <td class="col-select" {rowspan_attr}><input type="checkbox" {checked_attr} onchange="window.parent.location.href='?toggle_code={code}'"></td>
+                <td class="col-name" {rowspan_attr}><b>{stock_name}</b></td>
                 <td {rowspan_attr}>{curr_price}</td>
                 <td {rowspan_attr}>{market_cap}</td>
                 <td><b>{yr1}</b></td>
@@ -214,16 +230,5 @@ def render_tab_watchlist(full_csv_records_map=None):
     html_parts.append("</tbody></table></body></html>")
     final_html = "".join(html_parts)
 
-    query_params = st.query_params
-    toggle_code = query_params.get("toggle_code", "")
-    if toggle_code and toggle_code in watchlist:
-        st.session_state.watchlist_checks[toggle_code] = not st.session_state.watchlist_checks.get(toggle_code, False)
-        try:
-            st.query_params.clear()
-        except Exception:
-            pass
-        st.rerun()
-
-    # 높이 자동 조절 (행 수에 따라 스크롤바 없이 깔끔하게 출력)
     calc_height = max(120, (total_rows * 45) + 60)
     components.html(final_html, height=calc_height, scrolling=False)
