@@ -385,41 +385,46 @@ if current_codes:
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
                 else:
-                    watchlist_file = os.path.abspath("watchlist_data.json")
+                    WATCHLIST_FILE = "watchlist_codes.txt"
                     watchlist_codes = []
                     
-                    # 기존에 저장된 코드 목록 불러오기 (리스트 형태로 관리)
-                    if os.path.exists(watchlist_file):
+                    # 1. 기존 watchlist_codes.txt 파일 읽어오기
+                    if os.path.exists(WATCHLIST_FILE):
                         try:
-                            with open(watchlist_file, "r", encoding="utf-8") as wf:
-                                existing = json.load(wf)
-                                if isinstance(existing, list):
-                                    watchlist_codes = existing
-                                elif isinstance(existing, dict):
-                                    watchlist_codes = list(existing.keys())
+                            with open(WATCHLIST_FILE, "r", encoding="utf-8") as wf:
+                                watchlist_codes = [line.strip().zfill(6) for line in wf.readlines() if line.strip() and line.strip().isdigit()]
                         except Exception:
                             pass
 
-                    # 새로운 코드 추가 (중복 방지)
+                    # 2. 새로운 코드 추가 (중복 방지)
+                    added_count = 0
                     for code in selected_codes:
                         if code not in watchlist_codes:
                             watchlist_codes.append(code)
+                            added_count += 1
 
-                    # 단순 코드 리스트만 JSON으로 저장
-                    json_text = json.dumps(watchlist_codes, ensure_ascii=False, indent=2)
-                    with open(watchlist_file, "w", encoding="utf-8") as wf:
-                        wf.write(json_text)
-                    
-                    # GitHub 동기화 반영 필요 시 기존 commit_to_github 함수 활용 가능
-                    commit_to_github("watchlist_data.json", json_text, f"Update watchlist codes ({len(watchlist_codes)} stocks)")
+                    if added_count > 0:
+                        # 3. 텍스트 파일 내용 생성 및 저장
+                        content = "\n".join(watchlist_codes) + ("\n" if watchlist_codes else "")
+                        with open(WATCHLIST_FILE, "w", encoding="utf-8") as wf:
+                            wf.write(content)
+                        
+                        # 4. GitHub 자동 커밋 연동
+                        commit_to_github(
+                            WATCHLIST_FILE, 
+                            content, 
+                            f"Auto-commit watchlist_codes.txt ({len(watchlist_codes)} stocks)"
+                        )
 
-                    try:
-                        st.query_params.clear()
-                    except Exception:
-                        pass
+                        try:
+                            st.query_params.clear()
+                        except Exception:
+                            pass
 
-                    st.success(f"🎉 총 {len(selected_codes)}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
-                    st.rerun()
+                        st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
