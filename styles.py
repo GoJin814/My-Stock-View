@@ -508,12 +508,12 @@ def inject_client_sort_sync_engine():
                 ptrBox.style.opacity = '0';
                 return;
             }
-            if (distY > 15) {
-                const pullY = Math.min((distY - 15) * 0.45, 80);
+            if (distY > 40) {
+                const pullY = Math.min((distY - 40) * 0.45, 80);
                 ptrBox.style.top = (pullY - 45) + 'px';
-                ptrBox.style.opacity = Math.min((distY - 15) / 50, 1);
+                ptrBox.style.opacity = Math.min((distY - 40) / 80, 1);
                 const svg = ptrBox.querySelector('#ptr_svg');
-                if (svg) svg.style.transform = 'rotate(' + (distY * 3.5) + 'deg)';
+                if (svg) svg.style.transform = 'rotate(' + (distY * 2.5) + 'deg)';
             }
         };
 
@@ -521,7 +521,7 @@ def inject_client_sort_sync_engine():
             if (!canPull) return;
             canPull = false;
             const distY = e.changedTouches[0].clientY - touchStartY;
-            if (distY >= 250 && getRealScrollTop() <= 1) {
+            if (distY >= 180 && getRealScrollTop() <= 1) {
                 ptrBox.style.top = '20px';
                 ptrBox.style.opacity = '1';
                 setTimeout(function() { win.location.reload(); }, 120);
@@ -531,107 +531,42 @@ def inject_client_sort_sync_engine():
             }
         };
 
-        // ⚡ 2. 체크박스 상태를 브라우저 URL 파라미터(del_codes)에 실시간 강제 동기화
-        function updateDelParam() {
-            const checkedCodes = [];
-            doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
-                const c = cb.getAttribute('data-code');
-                if (c && c.length === 6) checkedCodes.push(c);
-            });
-            try {
-                const url = new URL(win.location.href);
-                if (checkedCodes.length > 0) {
-                    url.searchParams.set('del_codes', checkedCodes.join(','));
-                } else {
-                    url.searchParams.delete('del_codes');
-                }
-                win.history.replaceState(null, '', url.toString());
-            } catch(e) {}
-        }
-
-        doc.addEventListener('change', function(e) {
-            if (e.target && e.target.classList.contains('header-select-all')) {
-                const isChecked = e.target.checked;
-                const tbl = e.target.closest('table');
-                if (tbl) {
-                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => {
-                        cb.checked = isChecked;
-                    });
-                }
-                updateDelParam();
-            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
-                updateDelParam();
-            }
-        });
-
-        doc.addEventListener('click', function(e) {
-            const btn = e.target.closest('button');
-            if (btn && btn.innerText.includes('선택 종목 삭제')) {
-                updateDelParam();
-            }
-        }, true);
-
-        // ⚡ 3. 테이블 정렬 및 탭 간 실시간 정렬 순서 동기화
-        function parseFin(str) {
-            if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
-            let clean = str.replace(/[,%원배\\s]/g, '').trim();
-
-            if (/^\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2}$/.test(clean)) {
-                let parts = clean.split(/[\\/\\-]/);
-                let y = parts[0];
-                let m = parts[1].padStart(2, '0');
-                let d = parts[2].padStart(2, '0');
-                return parseInt(y + m + d, 10);
-            }
-
-            if (clean.includes('조')) {
-                let parts = clean.split('조');
-                let jo = parseFloat(parts[0]) || 0;
-                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
-                return (jo * 10000) + rest;
-            } else if (clean.includes('억')) {
-                clean = clean.replace(/억/g, '');
-                return parseFloat(clean) || 0;
-            }
-            let num = parseFloat(clean);
-            return isNaN(num) ? str.trim() : num;
-        }
-
-        function sortTableByCodeList(table, codeOrder) {
-            if (!table || !codeOrder || codeOrder.length === 0) return;
-            const tbody = table.querySelector('tbody');
-            if (!tbody) return;
-
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort((a, b) => {
-                let cA = a.getAttribute('data-code');
-                let cB = b.getAttribute('data-code');
-                let iA = codeOrder.indexOf(cA);
-                let iB = codeOrder.indexOf(cB);
-                if (iA === -1) iA = 9999;
-                if (iB === -1) iB = 9999;
-                return iA - iB;
-            });
-            rows.forEach(r => tbody.appendChild(r));
-        }
-
-        function getActiveCodeOrder() {
+        // 📌 탭 위치 기억 및 복원 로직 (필터 토글 변경 시에도 탭 유지)
+        function restoreActiveTab() {
             const urlParams = new URLSearchParams(win.location.search);
-            const urlCodes = urlParams.get('sort_codes');
-            if (urlCodes) return urlCodes.split(',');
-            const saved = win.sessionStorage.getItem('stock_sync_order');
-            return saved ? JSON.parse(saved) : null;
-        }
-
-        function applySavedOrderToAll() {
-            const codeOrder = getActiveCodeOrder();
-            if (!codeOrder) return;
-            doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
-                sortTableByCodeList(tbl, codeOrder);
-            });
+            let targetIdx = urlParams.get('active_tab');
+            if (targetIdx === null) {
+                targetIdx = win.sessionStorage.getItem('active_tab_idx');
+            }
+            if (targetIdx !== null) {
+                targetIdx = parseInt(targetIdx, 10);
+                const tabs = doc.querySelectorAll('.stTabs [data-baseweb="tab"]');
+                if (tabs[targetIdx]) {
+                    // 현재 선택된 탭과 다를 경우에만 클릭 이벤트 발생
+                    if (tabs[targetIdx].getAttribute('aria-selected') !== 'true') {
+                        tabs[targetIdx].click();
+                    }
+                }
+            }
         }
 
         doc.addEventListener('click', function(e) {
+            const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
+            if (tabBtn) {
+                const tabs = Array.from(doc.querySelectorAll('.stTabs [data-baseweb="tab"]'));
+                const idx = tabs.indexOf(tabBtn);
+                if (idx !== -1) {
+                    win.sessionStorage.setItem('active_tab_idx', idx);
+                    try {
+                        const url = new URL(win.location.href);
+                        url.searchParams.set('active_tab', idx);
+                        win.history.replaceState(null, '', url.toString());
+                    } catch(err) {}
+                }
+                setTimeout(applySavedOrderToAll, 40);
+                return;
+            }
+
             if (e.target && e.target.classList.contains('header-select-all')) return;
 
             const th = e.target.closest('th.sortable-th');
@@ -697,14 +632,110 @@ def inject_client_sort_sync_engine():
             }
         });
 
-        doc.addEventListener('click', function(e) {
-            const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
-            if (tabBtn) {
-                setTimeout(applySavedOrderToAll, 40);
+        // ⚡ 2. 체크박스 상태를 브라우저 URL 파라미터(del_codes)에 실시간 강제 동기화
+        function updateDelParam() {
+            const checkedCodes = [];
+            doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
+                const c = cb.getAttribute('data-code');
+                if (c && c.length === 6) checkedCodes.push(c);
+            });
+            try {
+                const url = new URL(win.location.href);
+                if (checkedCodes.length > 0) {
+                    url.searchParams.set('del_codes', checkedCodes.join(','));
+                } else {
+                    url.searchParams.delete('del_codes');
+                }
+                win.history.replaceState(null, '', url.toString());
+            } catch(e) {}
+        }
+
+        doc.addEventListener('change', function(e) {
+            if (e.target && e.target.classList.contains('header-select-all')) {
+                const isChecked = e.target.checked;
+                const tbl = e.target.closest('table');
+                if (tbl) {
+                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => {
+                        cb.checked = isChecked;
+                    });
+                }
+                updateDelParam();
+            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
+                updateDelParam();
             }
         });
 
-        setTimeout(applySavedOrderToAll, 80);
+        doc.addEventListener('click', function(e) {
+            const btn = e.target.closest('button');
+            if (btn && btn.innerText.includes('선택 종목 삭제')) {
+                updateDelParam();
+            }
+        }, true);
+
+        // ⚡ 3. 테이블 정렬 및 탭 간 실시간 정렬 순서 동기화
+        function parseFin(str) {
+            if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
+            let clean = str.replace(/[,%원배\s]/g, '').trim();
+
+            if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(clean)) {
+                let parts = clean.split(/[\/\-]/);
+                let y = parts[0];
+                let m = parts[1].padStart(2, '0');
+                let d = parts[2].padStart(2, '0');
+                return parseInt(y + m + d, 10);
+            }
+
+            if (clean.includes('조')) {
+                let parts = clean.split('조');
+                let jo = parseFloat(parts[0]) || 0;
+                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
+                return (jo * 10000) + rest;
+            } else if (clean.includes('억')) {
+                clean = clean.replace(/억/g, '');
+                return parseFloat(clean) || 0;
+            }
+            let num = parseFloat(clean);
+            return isNaN(num) ? str.trim() : num;
+        }
+
+        function sortTableByCodeList(table, codeOrder) {
+            if (!table || !codeOrder || codeOrder.length === 0) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                let cA = a.getAttribute('data-code');
+                let cB = b.getAttribute('data-code');
+                let iA = codeOrder.indexOf(cA);
+                let iB = codeOrder.indexOf(cB);
+                if (iA === -1) iA = 9999;
+                if (iB === -1) iB = 9999;
+                return iA - iB;
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        function getActiveCodeOrder() {
+            const urlParams = new URLSearchParams(win.location.search);
+            const urlCodes = urlParams.get('sort_codes');
+            if (urlCodes) return urlCodes.split(',');
+            const saved = win.sessionStorage.getItem('stock_sync_order');
+            return saved ? JSON.parse(saved) : null;
+        }
+
+        function applySavedOrderToAll() {
+            const codeOrder = getActiveCodeOrder();
+            if (!codeOrder) return;
+            doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
+                sortTableByCodeList(tbl, codeOrder);
+            });
+        }
+
+        setTimeout(function() {
+            applySavedOrderToAll();
+            restoreActiveTab();
+        }, 100);
     })();
     </script>
     """, height=0, width=0)
