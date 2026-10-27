@@ -325,21 +325,20 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 2. 9개 탭 분기 렌더링
+    # 2. 9개 탭 분기 렌더링 (관심종목을 맨 앞으로 배치)
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-    "⭐ 관심종목"
-    "📊 현재시세", 
-    "💰 주당가치",
-    "📈 실적", 
-    "🌐 국내지수",
-    "📈 수익률-생활비",
-    "📈 수익률-연금",
-    "📈 수익률-로운",
-    "📈 수익률-진우"
-])
+        "⭐ 관심종목",
+        "📊 현재시세", 
+        "💰 주당가치",
+        "📈 실적", 
+        "🌐 국내지수",
+        "📈 수익률-생활비",
+        "📈 수익률-연금",
+        "📈 수익률-로운",
+        "📈 수익률-진우"
+    ])
 
-
-    #1. 관심종목 탭
+    # 1. 관심종목 탭
     with tab1:
         render_tab_watchlist()
 
@@ -484,6 +483,22 @@ if current_codes:
         st.write("")
         render_market_inputs()
 
+    # 6. 생활비 수익률 탭
+    with tab6:
+        render_tab_returns_living()
+
+    # 7. 연금 수익률 탭
+    with tab7:
+        render_tab_returns_pension()
+
+    # 8. roun 수익률 탭
+    with tab8:
+        render_tab_returns_roun()
+
+    # 9. 진우 수익률 탭
+    with tab9:
+        render_tab_returns_jinwoo()
+
     # 무새로고침 클라이언트 정렬 및 탭 간 동기화 엔진 마운트
     inject_client_sort_sync_engine()
 
@@ -502,17 +517,5 @@ else:
                     save_codes([formatted])
                     st.success(f"{formatted} 등록 완료")
                     st.rerun()
-
-with tab6:
-    render_tab_returns_living()
-
-with tab7:
-    render_tab_returns_pension()
-
-with tab8:
-    render_tab_returns_roun()
-
-with tab9:
-    render_tab_returns_jinwoo()
 
 st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
