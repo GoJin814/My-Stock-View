@@ -47,125 +47,15 @@ def save_watchlist_data(data):
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("현재 시세 탭에서 선택한 종목의 데이터를 직전연도/최근연도별로 완벽하게 매칭하여 2단 행으로 관리합니다.")
+    st.caption("'현재 시세' 탭에서 체크박스를 선택한 뒤 **[⭐ 선택 종목을 관심종목에 추가]** 버튼을 눌러주세요.")
 
     watchlist = load_watchlist_data()
 
-    query_params = st.query_params
-    del_codes_str = query_params.get("del_codes", "")
-    selected_codes = [c.strip().zfill(6) for c in del_codes_str.split(",") if c.strip() and c.strip().isdigit()]
-
-    c_btn1, c_btn2 = st.columns([2, 5])
-    with c_btn1:
-        if st.button("📥 현재 시세 선택 종목 가져오기", type="primary", use_container_width=True):
-            if not selected_codes:
-                st.warning("⚠️ '현재 시세' 탭에서 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
-            elif not full_csv_records_map:
-                st.warning("⚠️ 동기화된 데이터가 없습니다. 상단의 '실시간 시세 동기화'를 먼저 실행해 주세요.")
-            else:
-                added_count = 0
-                for code in selected_codes:
-                    rec = full_csv_records_map.get(code)
-                    if not rec:
-                        continue
-                    
-                    stock_name = rec.get("종목명", f"종목_{code}")
-                    curr_price_str = rec.get("현재가", "-")
-                    market_cap = rec.get("시총", "-")
-                    
-                    prev_yr = rec.get("직전연도", "-")
-                    latest_yr = rec.get("최근연도", "-")
-
-                    def fmt_val(v, suffix=""):
-                        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-                            return "-"
-                        if isinstance(v, (int, float)):
-                            return f"{v:,.0f}{suffix}"
-                        val_str = str(v).strip()
-                        if not val_str or val_str.lower() == "none":
-                            return "-"
-                        return f"{val_str}{suffix}"
-
-                    def fmt_rate(v):
-                        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-                            return "-"
-                        if isinstance(v, (int, float)):
-                            return f"{v:.2f}%"
-                        val_str = str(v).strip()
-                        if not val_str or val_str.lower() == "none":
-                            return "-"
-                        return f"{val_str}%" if not val_str.endswith("%") else val_str
-
-                    def fmt_multi(v):
-                        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
-                            return "-"
-                        val_str = str(v).strip()
-                        if not val_str or val_str.lower() == "none":
-                            return "-"
-                        return f"{val_str}배" if not val_str.endswith("배") else val_str
-
-                    prev_metrics = {
-                        "PER": fmt_multi(rec.get("PER_직전")),
-                        "PBR": fmt_multi(rec.get("PBR_직전")),
-                        "ROE": fmt_rate(rec.get("ROE_직전")),
-                        "매출액": fmt_val(rec.get("매출액_직전"), "억"),
-                        "영업익": fmt_val(rec.get("영업익_직전"), "억"),
-                        "당기순이익": fmt_val(rec.get("순이익_직전"), "억")
-                    }
-
-                    latest_metrics = {
-                        "PER": fmt_multi(rec.get("PER_최근")),
-                        "PBR": fmt_multi(rec.get("PBR_최근")),
-                        "ROE": fmt_rate(rec.get("ROE_최근")),
-                        "매출액": fmt_val(rec.get("매출액_최근"), "억"),
-                        "영업익": fmt_val(rec.get("영업익_최근"), "억"),
-                        "당기순이익": fmt_val(rec.get("순이익_최근"), "억")
-                    }
-
-                    row_list_data = []
-
-                    if prev_yr != "-":
-                        row_list_data.append({
-                            "종목코드": code,
-                            "종목명": stock_name,
-                            "현재가": curr_price_str,
-                            "시총": market_cap,
-                            "적용연도": prev_yr,
-                            "PER": prev_metrics["PER"],
-                            "PBR": prev_metrics["PBR"],
-                            "ROE": prev_metrics["ROE"],
-                            "매출액": prev_metrics["매출액"],
-                            "영업익": prev_metrics["영업익"],
-                            "당기순이익": prev_metrics["당기순이익"]
-                        })
-
-                    if latest_yr != "-":
-                        row_list_data.append({
-                            "종목코드": code,
-                            "종목명": stock_name,
-                            "현재가": curr_price_str,
-                            "시총": market_cap,
-                            "적용연도": latest_yr,
-                            "PER": latest_metrics["PER"],
-                            "PBR": latest_metrics["PBR"],
-                            "ROE": latest_metrics["ROE"],
-                            "매출액": latest_metrics["매출액"],
-                            "영업익": latest_metrics["영업익"],
-                            "당기순이익": latest_metrics["당기순이익"]
-                        })
-
-                    watchlist[code] = row_list_data
-                    added_count += 1
-
-                save_watchlist_data(watchlist)
-                st.success(f"🎉 총 {added_count}개 종목의 데이터가 반영되었습니다!")
-                st.rerun()
-
     if not watchlist:
-        st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택한 뒤 위 버튼을 눌러주세요.")
+        st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택하고 추가해 주세요.")
         return
 
-    # 데이터프레임 구성 (선택 체크박스 컬럼 추가)
+    # 데이터프레임 구성
     rows = []
     for code, info_list in watchlist.items():
         if isinstance(info_list, list):
@@ -209,14 +99,11 @@ def render_tab_watchlist(full_csv_records_map=None):
     df_watch = pd.DataFrame(rows)
 
     st.write("")
-    st.markdown("#### 📋 관심종목 리스트")
-    
-    # 인터랙티브 에디터블 데이터프레임으로 출력하여 체크박스 선택 가능하도록 구성
     edited_df = st.data_editor(
         df_watch,
         column_config={
             "선택": st.column_config.CheckboxColumn("선택", default=False, width=50),
-            "종목코드": None  # 내부 식별용이므로 화면에서는 숨김
+            "종목코드": None
         },
         disabled=["종목명", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
         hide_index=True,
@@ -228,7 +115,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     c_del1, _ = st.columns([2, 5])
     with c_del1:
         if st.button("🗑️ 선택한 관심종목 일괄 삭제", type="primary", use_container_width=True):
-            # 체크된 행들의 종목코드 수집
             checked_rows = edited_df[edited_df["선택"] == True]
             codes_to_delete = checked_rows["종목코드"].dropna().unique().tolist()
 
