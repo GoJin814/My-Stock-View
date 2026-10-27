@@ -375,7 +375,7 @@ if current_codes:
                     
                     # 체크박스(선택 컬럼, 보통 index 0)가 True로 체크된 행 파악
                     temp_df = df_basic.copy()
-                    for idx_str, row_dict in edited_rows_dict.items":
+                    for idx_str, row_dict in edited_rows_dict.items:
                         idx = int(idx_str)
                         if "선택" in row_dict:
                             temp_df.loc[idx, "선택"] = row_dict["선택"]
