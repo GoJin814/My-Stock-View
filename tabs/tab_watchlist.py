@@ -77,23 +77,36 @@ def render_tab_watchlist(full_csv_records_map=None):
                     latest_yr = rec.get("최근연도", "-")
 
                     def fmt_val(v, suffix=""):
-                        if v is None or pd.isna(v) or v == "-":
+                        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
                             return "-"
                         if isinstance(v, (int, float)):
                             return f"{v:,.0f}{suffix}"
-                        return f"{v}{suffix}"
+                        val_str = str(v).strip()
+                        if not val_str or val_str.lower() == "none":
+                            return "-"
+                        return f"{val_str}{suffix}"
 
                     def fmt_rate(v):
-                        if v is None or pd.isna(v) or v == "-":
+                        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
                             return "-"
                         if isinstance(v, (int, float)):
                             return f"{v:.2f}%"
-                        return str(v)
+                        val_str = str(v).strip()
+                        if not val_str or val_str.lower() == "none":
+                            return "-"
+                        return f"{val_str}%" if not val_str.endswith("%") else val_str
 
-                    # 주당가치 및 실적 탭에 이미 연도별로 저장되어 있는 데이터 추출
+                    def fmt_multi(v):
+                        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+                            return "-"
+                        val_str = str(v).strip()
+                        if not val_str or val_str.lower() == "none":
+                            return "-"
+                        return f"{val_str}배" if not val_str.endswith("배") else val_str
+
                     prev_metrics = {
-                        "PER": rec.get("PER_직전", "-"),
-                        "PBR": rec.get("PBR_직전", "-"),
+                        "PER": fmt_multi(rec.get("PER_직전")),
+                        "PBR": fmt_multi(rec.get("PBR_직전")),
                         "ROE": fmt_rate(rec.get("ROE_직전")),
                         "매출액": fmt_val(rec.get("매출액_직전"), "억"),
                         "영업익": fmt_val(rec.get("영업익_직전"), "억"),
@@ -101,8 +114,8 @@ def render_tab_watchlist(full_csv_records_map=None):
                     }
 
                     latest_metrics = {
-                        "PER": rec.get("PER_최근", "-"),
-                        "PBR": rec.get("PBR_최근", "-"),
+                        "PER": fmt_multi(rec.get("PER_최근")),
+                        "PBR": fmt_multi(rec.get("PBR_최근")),
                         "ROE": fmt_rate(rec.get("ROE_최근")),
                         "매출액": fmt_val(rec.get("매출액_최근"), "억"),
                         "영업익": fmt_val(rec.get("영업익_최근"), "억"),
@@ -111,7 +124,6 @@ def render_tab_watchlist(full_csv_records_map=None):
 
                     row_list_data = []
 
-                    # 윗줄: 직전연도 데이터
                     if prev_yr != "-":
                         row_list_data.append({
                             "종목명": stock_name,
@@ -126,7 +138,6 @@ def render_tab_watchlist(full_csv_records_map=None):
                             "당기순이익": prev_metrics["당기순이익"]
                         })
 
-                    # 아랫줄: 최신연도 데이터 (최신연도가 없으면 빈칸)
                     if latest_yr != "-":
                         row_list_data.append({
                             "종목명": stock_name,
@@ -145,7 +156,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                     added_count += 1
 
                 save_watchlist_data(watchlist)
-                st.success(f"🎉 총 {added_count}개 종목의 데이터가 직전/최신 연도별로 즉시 반영되었습니다!")
+                st.success(f"🎉 총 {added_count}개 종목의 데이터가 반영되었습니다!")
                 st.rerun()
 
     if not watchlist:
@@ -156,32 +167,36 @@ def render_tab_watchlist(full_csv_records_map=None):
     for code, info_list in watchlist.items():
         if isinstance(info_list, list):
             for i, info in enumerate(info_list):
+                def clean_cell(val):
+                    if val is None or pd.isna(val) or str(val).strip().lower() in ["none", ""]:
+                        return "-"
+                    return str(val).strip()
+
                 if i == 0:
                     rows.append({
-                        "종목명": info.get("종목명", code),
-                        "현재가": info.get("현재가", "-"),
-                        "시총": info.get("시총", "-"),
-                        "적용연도": info.get("적용연도", ""),
-                        "PER": info.get("PER", "-"),
-                        "PBR": info.get("PBR", "-"),
-                        "ROE": info.get("ROE", "-"),
-                        "매출액": info.get("매출액", "-"),
-                        "영업익": info.get("영업익", "-"),
-                        "당기순이익": info.get("당기순이익", "-")
+                        "종목명": clean_cell(info.get("종목명", code)),
+                        "현재가": clean_cell(info.get("현재가", "-")),
+                        "시총": clean_cell(info.get("시총", "-")),
+                        "적용연도": clean_cell(info.get("적용연도", "")),
+                        "PER": clean_cell(info.get("PER", "-")),
+                        "PBR": clean_cell(info.get("PBR", "-")),
+                        "ROE": clean_cell(info.get("ROE", "-")),
+                        "매출액": clean_cell(info.get("매출액", "-")),
+                        "영업익": clean_cell(info.get("영업익", "-")),
+                        "당기순이익": clean_cell(info.get("당기순이익", "-"))
                     })
                 else:
-                    # 두 번째 행: 종목명, 현재가, 시총 칸을 공백으로 합친 효과 연출
                     rows.append({
                         "종목명": "",
                         "현재가": "",
                         "시총": "",
-                        "적용연도": info.get("적용연도", ""),
-                        "PER": info.get("PER", "-"),
-                        "PBR": info.get("PBR", "-"),
-                        "ROE": info.get("ROE", "-"),
-                        "매출액": info.get("매출액", "-"),
-                        "영업익": info.get("영업익", "-"),
-                        "당기순이익": info.get("당기순이익", "-")
+                        "적용연도": clean_cell(info.get("적용연도", "")),
+                        "PER": clean_cell(info.get("PER", "-")),
+                        "PBR": clean_cell(info.get("PBR", "-")),
+                        "ROE": clean_cell(info.get("ROE", "-")),
+                        "매출액": clean_cell(info.get("매출액", "-")),
+                        "영업익": clean_cell(info.get("영업익", "-")),
+                        "당기순이익": clean_cell(info.get("당기순이익", "-"))
                     })
         elif isinstance(info_list, dict):
             rows.append(info_list)
