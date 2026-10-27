@@ -173,7 +173,7 @@ def fetch_watchlist_item(code: str):
         is_second_row = (len(items) > 0)
         items.append({
             "선택": "",
-            "종목코드": code, 
+            "종목코드": empty_space if is_second_row else code, 
             "종목명": empty_space if is_second_row else stock_name, 
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
