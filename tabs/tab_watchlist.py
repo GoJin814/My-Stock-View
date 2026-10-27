@@ -57,11 +57,9 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
-    # 세션 상태에 삭제 선택용 체크박스 관리 딕셔너리 초기화
     if "watchlist_checks" not in st.session_state:
         st.session_state.watchlist_checks = {}
 
-    # 상단 일괄 삭제 및 전체 선택 컨트롤
     col_c1, col_c2, _ = st.columns([1.5, 2, 4])
     with col_c1:
         if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
@@ -76,7 +74,6 @@ def render_tab_watchlist(full_csv_records_map=None):
                         deleted_names.append(first_item.get("종목명", code))
                         del watchlist[code]
                 
-                # 체크 상태 초기화 후 저장 및 새로고침
                 st.session_state.watchlist_checks = {}
                 save_watchlist_data(watchlist)
                 st.success(f"🗑️ 선택한 종목({', '.join(deleted_names)}) 삭제 완료")
@@ -91,58 +88,59 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
-    # HTML 표 디자인 및 스타일 정의 (가운데 정렬 및 병합 셀 스타일)
-    html_table = """
-    <style>
-        .custom-stock-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-            text-align: center;
-            background-color: transparent;
-        }
-        .custom-stock-table th {
-            background-color: #262730;
-            color: #ffffff;
-            padding: 10px 8px;
-            border: 1px solid #464855;
-            text-align: center;
-            font-weight: 600;
-        }
-        .custom-stock-table td {
-            padding: 10px 8px;
-            border: 1px solid #31333F;
-            vertical-align: middle;
-            text-align: center;
-        }
-        .custom-stock-table tr:hover {
-            background-color: rgba(255, 255, 255, 0.03);
-        }
-    </style>
-    <table class="custom-stock-table">
-        <thead>
-            <tr>
-                <th style="width: 50px;">선택</th>
-                <th>종목명</th>
-                <th>현재가</th>
-                <th>시총</th>
-                <th>적용연도</th>
-                <th>PER</th>
-                <th>PBR</th>
-                <th>ROE</th>
-                <th>매출액</th>
-                <th>영업익</th>
-                <th>당기순이익</th>
-            </tr>
-        </thead>
-        <tbody>
-    """
+    # HTML 표 구성 (안전하게 완전한 문자열로 결합)
+    html_parts = [
+        """
+        <style>
+            .custom-stock-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+                text-align: center;
+                background-color: transparent;
+            }
+            .custom-stock-table th {
+                background-color: #262730;
+                color: #ffffff;
+                padding: 10px 8px;
+                border: 1px solid #464855;
+                text-align: center;
+                font-weight: 600;
+            }
+            .custom-stock-table td {
+                padding: 10px 8px;
+                border: 1px solid #31333F;
+                vertical-align: middle;
+                text-align: center;
+            }
+            .custom-stock-table tr:hover {
+                background-color: rgba(255, 255, 255, 0.03);
+            }
+        </style>
+        <table class="custom-stock-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">선택</th>
+                    <th>종목명</th>
+                    <th>현재가</th>
+                    <th>시총</th>
+                    <th>적용연도</th>
+                    <th>PER</th>
+                    <th>PBR</th>
+                    <th>ROE</th>
+                    <th>매출액</th>
+                    <th>영업익</th>
+                    <th>당기순이익</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+    ]
 
     for code, info_list in watchlist.items():
         if not isinstance(info_list, list) or len(info_list) == 0:
             continue
         
-        # 세션 상태 체크값 연동
         is_checked = st.session_state.watchlist_checks.get(code, False)
         checked_attr = "checked" if is_checked else ""
 
@@ -153,10 +151,8 @@ def render_tab_watchlist(full_csv_records_map=None):
         curr_price = first_info.get("현재가", "-")
         market_cap = first_info.get("시총", "-")
 
-        # 행 개수 산정 (2단 행 병합 구조)
         rowspan_attr = 'rowspan="2"' if second_info else ''
 
-        # 1번째 줄 (직전연도 등)
         yr1 = first_info.get("적용연도", "-")
         per1 = first_info.get("PER", "-")
         pbr1 = first_info.get("PBR", "-")
@@ -165,7 +161,7 @@ def render_tab_watchlist(full_csv_records_map=None):
         op1 = first_info.get("영업익", "-")
         np1 = first_info.get("당기순이익", "-")
 
-        html_table += f"""
+        html_parts.append(f"""
             <tr>
                 <td {rowspan_attr}><input type="checkbox" name="chk_{code}" {checked_attr} onclick="window.location.href='?toggle_code={code}'"></td>
                 <td {rowspan_attr}><b>{stock_name}</b></td>
@@ -179,9 +175,8 @@ def render_tab_watchlist(full_csv_records_map=None):
                 <td>{op1}</td>
                 <td>{np1}</td>
             </tr>
-        """
+        """)
 
-        # 2번째 줄 (최근연도 등 존재할 경우)
         if second_info:
             yr2 = second_info.get("적용연도", "-")
             per2 = second_info.get("PER", "-")
@@ -191,7 +186,7 @@ def render_tab_watchlist(full_csv_records_map=None):
             op2 = second_info.get("영업익", "-")
             np2 = second_info.get("당기순이익", "-")
 
-            html_table += f"""
+            html_parts.append(f"""
                 <tr>
                     <td><b>{yr2}</b></td>
                     <td>{per2}</td>
@@ -201,21 +196,20 @@ def render_tab_watchlist(full_csv_records_map=None):
                     <td>{op2}</td>
                     <td>{np2}</td>
                 </tr>
-            """
+            """)
 
-    html_table += "</tbody></table>"
+    html_parts.append("</tbody></table>")
+    final_html = "".join(html_parts)
 
-    # 체크박스 클릭 시 쿼리 파라미터를 통해 세션 상태 토글 반영
     query_params = st.query_params
     toggle_code = query_params.get("toggle_code", "")
     if toggle_code and toggle_code in watchlist:
         st.session_state.watchlist_checks[toggle_code] = not st.session_state.watchlist_checks.get(toggle_code, False)
-        # 쿼리 파라미터 초기화 후 리런
         try:
             st.query_params.clear()
         except Exception:
             pass
         st.rerun()
 
-    # 커스텀 HTML 표 렌더링
-    st.markdown(html_table, unsafe_allow_html=True)
+    # unsafe_allow_html=True를 통해 HTML 표 완벽 렌더링
+    st.markdown(final_html, unsafe_allow_html=True)
