@@ -4,90 +4,164 @@ import json
 import os
 import base64
 import requests
+from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
 
-def load_watchlist_data():
-    if "persistent_watchlist" in st.session_state and st.session_state.persistent_watchlist:
-        return st.session_state.persistent_watchlist
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_watchlist_item(code: str):
+    """관심종목 코드를 받아 실시간으로 기본정보 및 최근/직전연도 실적을 파싱합니다."""
+    basic = fetch_basic(code)
+    integration = fetch_integration(code)
+    fin_json = fetch_finance(code)
+    
+    stock_name = basic.get("stockName", "-")
+    raw_close = basic.get("closePrice", "-")
+    curr_price_str = f"{raw_close}원" if (raw_close != "-" and "원" not in str(raw_close)) else str(raw_close)
+    numeric_close = to_num(raw_close)
 
-    data = {}
+    total_infos = integration.get("totalInfos", [])
+    market_cap = "-"
+    for item in total_infos:
+        if str(item.get("code", "")).strip() == "marketValue" or str(item.get("key", "")).strip() in ["시총", "시가총액"]:
+            market_cap = str(item.get("value", "")).strip()
+
+    fin_info = {
+        "prev_yr": "-", "latest_yr": "-",
+        "prev_per": np.nan, "cur_per": np.nan,
+        "prev_pbr": np.nan, "cur_pbr": np.nan,
+        "prev_roe": np.nan, "cur_roe": np.nan,
+        "prev_rev": np.nan, "cur_rev": np.nan,
+        "prev_op": np.nan, "cur_op": np.nan,
+        "prev_np": np.nan, "cur_np": np.nan,
+    }
+
+    row_list = extract_row_list(fin_json)
+    if row_list:
+        for row in row_list:
+            raw_title = row.get("title", "").strip().replace(" ", "")
+            columns = row.get("columns", {})
+            if not columns:
+                continue
+            
+            clean_years = []
+            for k in columns.keys():
+                yr_match = re.search(r'(20\d{2})', str(k))
+                if yr_match:
+                    clean_years.append((yr_match.group(1), k))
+            clean_years = sorted(clean_years, key=lambda x: x[0])
+            sorted_keys = [item[1] for item in clean_years]
+            
+            if not sorted_keys:
+                continue
+                
+            latest_k = sorted_keys[-1]
+            prev_k = sorted_keys[-2] if len(sorted_keys) >= 2 else None
+            
+            fin_info["latest_yr"] = f"{re.search(r'(20\d{2})', str(latest_k)).group(1)}년" if re.search(r'(20\d{2})', str(latest_k)) else "-"
+            fin_info["prev_yr"] = f"{re.search(r'(20\d{2})', str(prev_k)).group(1)}년" if prev_k and re.search(r'(20\d{2})', str(prev_k)) else "-"
+
+            c_item = columns.get(latest_k, {})
+            c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
+            p_val = np.nan
+            if prev_k:
+                p_item = columns.get(prev_k, {})
+                p_val = to_num(p_item.get("value") if isinstance(p_item, dict) else p_item)
+
+            if raw_title in ["매출액", "수익"]:
+                fin_info["cur_rev"] = c_val
+                fin_info["prev_rev"] = p_val
+            elif raw_title == "영업이익":
+                fin_info["cur_op"] = c_val
+                fin_info["prev_op"] = p_val
+            elif raw_title in ["당기순이익", "당기순익"]:
+                fin_info["cur_np"] = c_val
+                fin_info["prev_np"] = p_val
+            elif "ROE" in raw_title:
+                fin_info["cur_roe"] = c_val
+                fin_info["prev_roe"] = p_val
+            elif "PER" in raw_title:
+                fin_info["cur_per"] = c_val
+                fin_info["prev_per"] = p_val
+            elif "PBR" in raw_title:
+                fin_info["cur_pbr"] = c_val
+                fin_info["prev_pbr"] = p_val
+
+    def fmt_val(v, suffix=""):
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+            return "-"
+        if isinstance(v, (int, float)):
+            return f"{v:,.0f}{suffix}"
+        return f"{str(v).strip()}{suffix}"
+
+    def fmt_rate(v):
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+            return "-"
+        if isinstance(v, (int, float)):
+            return f"{v:.2f}%"
+        return f"{str(v).strip()}%"
+
+    def fmt_multi(v):
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+            return "-"
+        return f"{str(v).strip()}배"
+
+    items = []
+    # 직전 연도 데이터 구성
+    if fin_info["prev_yr"] != "-":
+        items.append({
+            "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+            "적용연도": fin_info["prev_yr"],
+            "PER": fmt_multi(fin_info["prev_per"]),
+            "PBR": fmt_multi(fin_info["prev_pbr"]),
+            "ROE": fmt_rate(fin_info["prev_roe"]),
+            "매출액": fmt_val(fin_info["prev_rev"], "억"),
+            "영업익": fmt_val(fin_info["prev_op"], "억"),
+            "당기순이익": fmt_val(fin_info["prev_np"], "억")
+        })
+
+    # 최근 연도 데이터 구성
+    if fin_info["latest_yr"] != "-":
+        items.append({
+            "종목코드": code, "종목명": stock_name, "현재가": curr_price_str, "시총": market_cap,
+            "적용연도": fin_info["latest_yr"],
+            "PER": fmt_multi(fin_info["cur_per"]),
+            "PBR": fmt_multi(fin_info["cur_pbr"]),
+            "ROE": fmt_rate(fin_info["cur_roe"]),
+            "매출액": fmt_val(fin_info["cur_rev"], "억"),
+            "영업익": fmt_val(fin_info["cur_op"], "억"),
+            "당기순이익": fmt_val(fin_info["cur_np"], "억")
+        })
+
+    return items
+
+def load_watchlist_codes():
+    codes = []
     if os.path.exists(WATCHLIST_CACHE_FILE):
         try:
             with open(WATCHLIST_CACHE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+                if isinstance(data, list):
+                    codes = [str(c).zfill(6) for c in data]
+                elif isinstance(data, dict):
+                    codes = [str(c).zfill(6) for c in data.keys()]
         except Exception:
             pass
+    return list(dict.fromkeys(codes))
 
-    if not data:
-        github_data = load_from_github(WATCHLIST_CACHE_FILE)
-        if github_data:
-            data = github_data
-            with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-    st.session_state.persistent_watchlist = data
-    return data
-
-def load_from_github(filename):
-    token = st.secrets.get("GITHUB_TOKEN")
-    repo = st.secrets.get("GITHUB_REPO")
-    branch = st.secrets.get("GITHUB_BRANCH", "main")
-    if not token or not repo:
-        return {}
-    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
-    headers = {
-        "Authorization": f"Bearer {token.strip()}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
-    try:
-        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
-        if res.status_code == 200:
-            content_b64 = res.json().get("content", "")
-            content_bytes = base64.b64decode(content_b64)
-            return json.loads(content_bytes.decode("utf-8"))
-    except Exception:
-        pass
-    return {}
-
-def commit_to_github(filename, content_str, commit_message="Auto-update watchlist data"):
-    token = st.secrets.get("GITHUB_TOKEN")
-    repo = st.secrets.get("GITHUB_REPO")
-    branch = st.secrets.get("GITHUB_BRANCH", "main")
-    if not token or not repo:
-        return False
-    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
-    headers = {
-        "Authorization": f"Bearer {token.strip()}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
-    try:
-        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
-        sha = res.json().get("sha") if res.status_code == 200 else None
-        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
-        payload = {"message": commit_message, "content": content_b64, "branch": branch}
-        if sha: payload["sha"] = sha
-        put_res = requests.put(url, headers=headers, json=payload, timeout=7)
-        return put_res.status_code in [200, 201]
-    except Exception:
-        return False
-
-def save_watchlist_data(data):
-    st.session_state.persistent_watchlist = data
-    json_text = json.dumps(data, ensure_ascii=False, indent=2)
+def save_watchlist_codes(codes):
+    json_text = json.dumps(codes, ensure_ascii=False, indent=2)
     with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
         f.write(json_text)
-    commit_to_github(WATCHLIST_CACHE_FILE, json_text, "Auto-commit watchlist_data.json")
 
 def render_tab_watchlist(full_csv_records_map=None):
     st.markdown("#### ⭐ 관심종목 실적 관리")
     st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
 
-    watchlist = load_watchlist_data()
+    watchlist_codes = load_watchlist_codes()
 
-    if not watchlist:
+    if not watchlist_codes:
         st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택하고 [관심종목 추가] 버튼을 눌러주세요.")
         return
 
@@ -100,7 +174,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     with col_l:
         select_all = st.checkbox("전체 선택 / 해제", key="watchlist_master_select")
         if select_all != st.session_state.get("_prev_master_select", False):
-            for code in watchlist.keys():
+            for code in watchlist_codes:
                 st.session_state.watchlist_checks[code] = select_all
             st.session_state["_prev_master_select"] = select_all
 
@@ -110,63 +184,48 @@ def render_tab_watchlist(full_csv_records_map=None):
             if not codes_to_delete:
                 st.warning("⚠️ 삭제할 종목을 선택해 주세요.")
             else:
-                deleted_names = []
-                for code in codes_to_delete:
-                    if code in watchlist:
-                        first_item = watchlist[code][0] if isinstance(watchlist[code], list) else {}
-                        deleted_names.append(first_item.get("종목명", code))
-                        del watchlist[code]
-                
+                new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
+                save_watchlist_codes(new_codes)
                 st.session_state.watchlist_checks = {}
-                save_watchlist_data(watchlist)
-                st.success(f"🗑️ 선택한 종목({', '.join(deleted_names)}) 삭제 완료")
+                st.success("🗑️ 선택한 종목 삭제 완료")
                 st.rerun()
 
     st.write("")
 
+    # 병렬로 관심종목 데이터 실시간 로드
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(fetch_watchlist_item, watchlist_codes))
+
     rows = []
-    seen_codes = set()
-    
-    for code, info_list in watchlist.items():
-        if code in seen_codes or not isinstance(info_list, list) or len(info_list) == 0:
+    for info_list in results:
+        if not info_list:
             continue
-        seen_codes.add(code)
-        
+        code = info_list[0]["종목코드"]
         is_checked = st.session_state.watchlist_checks.get(code, False)
 
-        valid_items = []
-        for info in info_list:
-            if isinstance(info, dict) and info.get("적용연도", "-") != "-":
-                if not any(v.get("적용연도") == info.get("적용연도") for v in valid_items):
-                    valid_items.append(info)
-
-        for i, info in enumerate(valid_items[:2]):
-            def clean_cell(val):
-                if val is None or pd.isna(val) or str(val).strip().lower() in ["none", ""]:
-                    return "-"
-                return str(val).strip()
-
-            stock_name = clean_cell(info.get("종목명", code))
+        for i, info in enumerate(info_list):
+            stock_name = info["종목명"]
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
-
-            curr_price = clean_cell(info.get("현재가", "-"))
-            market_cap = clean_cell(info.get("시총", "-"))
 
             rows.append({
                 "선택": is_checked if i == 0 else False,
                 "종목코드": code,
                 "종목명": linked_name,
-                "현재가": curr_price,
-                "시총": market_cap,
-                "적용연도": clean_cell(info.get("적용연도", "")),
-                "PER": clean_cell(info.get("PER", "-")),
-                "PBR": clean_cell(info.get("PBR", "-")),
-                "ROE": clean_cell(info.get("ROE", "-")),
-                "매출액": clean_cell(info.get("매출액", "-")),
-                "영업익": clean_cell(info.get("영업익", "-")),
-                "당기순이익": clean_cell(info.get("당기순이익", "-"))
+                "현재가": info["현재가"],
+                "시총": info["시총"],
+                "적용연도": info["적용연도"],
+                "PER": info["PER"],
+                "PBR": info["PBR"],
+                "ROE": info["ROE"],
+                "매출액": info["매출액"],
+                "영업익": info["영업익"],
+                "당기순이익": info["당기순이익"]
             })
+
+    if not rows:
+        st.info("표시할 관심종목 데이터가 없습니다.")
+        return
 
     df_watch = pd.DataFrame(rows)
 
@@ -184,7 +243,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     )
 
     if edited_df is not None and "선택" in edited_df.columns:
-        for code in watchlist.keys():
+        for code in watchlist_codes:
             sub_df = edited_df[edited_df["종목코드"] == code]
             if not sub_df.empty:
                 any_checked = sub_df["선택"].any()
