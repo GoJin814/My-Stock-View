@@ -73,7 +73,7 @@ def load_codes():
             if codes:
                 return list(dict.fromkeys(codes))
     
-    default_codes = ["178320", "001130", "086450", "007690", "095660", "161890"]
+    default_codes = ["005930"]
     save_codes(default_codes)
     return default_codes
 
