@@ -9,11 +9,9 @@ import streamlit.components.v1 as components
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
 
 def load_watchlist_data():
-    # 1. 세션 상태에 이미 데이터가 있으면 최우선 반환 (새로고침/코드 업데이트 시 유실 방지)
     if "persistent_watchlist" in st.session_state and st.session_state.persistent_watchlist:
         return st.session_state.persistent_watchlist
 
-    # 2. 로컬 파일에서 로드 시도
     data = {}
     if os.path.exists(WATCHLIST_CACHE_FILE):
         try:
@@ -22,12 +20,10 @@ def load_watchlist_data():
         except Exception:
             pass
 
-    # 3. 로컬 파일이 비어있다면 GitHub 저장소에서 복구 시도 (데이터 영구 보존)
     if not data:
         github_data = load_from_github(WATCHLIST_CACHE_FILE)
         if github_data:
             data = github_data
-            # 로컬 파일도 복원
             with open(WATCHLIST_CACHE_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -87,6 +83,8 @@ def save_watchlist_data(data):
     commit_to_github(WATCHLIST_CACHE_FILE, json_text, "Auto-commit watchlist_data.json")
 
 def render_tab_watchlist(full_csv_records_map=None):
+    st.markdown("#### ⭐ 관심종목 실적 관리")
+    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 병합된 셀 구조로 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
 
     watchlist = load_watchlist_data()
 
@@ -177,6 +175,14 @@ def render_tab_watchlist(full_csv_records_map=None):
             }}
             .col-select {{ width: 35px; white-space: nowrap; }}
             .col-name {{ width: 85px; white-space: nowrap; }}
+            .stock-link {{
+                color: #4da6ff;
+                text-decoration: none;
+                font-weight: bold;
+            }}
+            .stock-link:hover {{
+                text-decoration: underline;
+            }}
         </style>
         </head>
         <body>
@@ -218,6 +224,9 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         rowspan_attr = 'rowspan="2"' if second_info else ''
 
+        # 네이버 증권 링크 생성
+        naver_stock_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
+
         yr1 = first_info.get("적용연도", "-")
         per1 = first_info.get("PER", "-")
         pbr1 = first_info.get("PBR", "-")
@@ -229,7 +238,7 @@ def render_tab_watchlist(full_csv_records_map=None):
         html_parts.append(f"""
             <tr>
                 <td class="col-select" {rowspan_attr}><input type="checkbox" {checked_attr} onchange="window.parent.location.href='?toggle_code={code}'"></td>
-                <td class="col-name" {rowspan_attr}><b>{stock_name}</b></td>
+                <td class="col-name" {rowspan_attr}><a href="{naver_stock_url}" target="_blank" class="stock-link">{stock_name}</a></td>
                 <td {rowspan_attr}>{curr_price}</td>
                 <td {rowspan_attr}>{market_cap}</td>
                 <td><b>{yr1}</b></td>
