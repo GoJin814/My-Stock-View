@@ -173,7 +173,7 @@ def fetch_watchlist_item(code: str):
         is_second_row = (len(items) > 0)
         items.append({
             "선택": "",
-            "종목코드": code, 
+            "종목코드": code,  # 두 번째 줄에서도 종목코드를 유지해야 styles.py가 링크를 정상 생성함
             "종목명": empty_space if is_second_row else stock_name, 
             "현재가": empty_space if is_second_row else curr_price_str, 
             "시총": empty_space if is_second_row else market_cap,
@@ -230,7 +230,7 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # styles.py의 렌더러가 종목코드와 col_name == "종목명"을 인식하여 네이버 링크를 자동 생성하도록 설정
+        # tab_name을 "tab_watchlist"로 주고 has_naver_link=True로 설정하여 styles.py가 종목코드를 보고 네이버 링크를 자동 생성하도록 함
         render_multi_header_table(
             df_watch,
             tab_name="tab_watchlist",
@@ -319,4 +319,3 @@ def render_tab_watchlist(full_csv_records_map=None):
                             st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
                     else:
                         st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
-                        
