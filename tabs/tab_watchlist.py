@@ -3,12 +3,48 @@ import pandas as pd
 import json
 import os
 import re
+import base64
+import requests
 import numpy as np
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from styles import render_multi_header_table
 from concurrent.futures import ThreadPoolExecutor
 
 WATCHLIST_FILE = "watchlist_codes.txt"
+
+def commit_to_github(filename, content_str, commit_message="Auto-update watchlist from Streamlit"):
+    """GitHub API를 통해 관심종목 코드를 원격 저장소에 직접 커밋합니다."""
+    token = st.secrets.get("GITHUB_TOKEN")
+    repo = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    
+    if not token or not repo:
+        return False
+        
+    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
+    headers = {
+        "Authorization": f"Bearer {token.strip()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    
+    try:
+        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
+        sha = res.json().get("sha") if res.status_code == 200 else None
+            
+        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
+        payload = {
+            "message": commit_message,
+            "content": content_b64,
+            "branch": branch
+        }
+        if sha:
+            payload["sha"] = sha
+            
+        put_res = requests.put(url, headers=headers, json=payload, timeout=7)
+        return put_res.status_code in [200, 201]
+    except Exception:
+        return False
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_watchlist_item(code: str):
@@ -117,7 +153,7 @@ def fetch_watchlist_item(code: str):
         return f"{str(v).strip()}배"
 
     items = []
-    empty_space = "\u3164"  # 렌더링 함수 우회용 유니코드 공백
+    empty_space = "\u3164"  
     
     if fin_info["prev_yr"]:
         items.append({
@@ -174,16 +210,12 @@ def save_watchlist_codes(codes):
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         f.write(content)
         
-    # app.py에 정의된 commit_to_github 함수와 연동
-    from app import commit_to_github
-    try:
-        commit_to_github(
-            WATCHLIST_FILE, 
-            content, 
-            f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
-        )
-    except Exception as e:
-        st.error(f"GitHub 동기화 실패: {e}")
+    # 파일 내에 정의된 커밋 함수 직접 호출
+    commit_to_github(
+        WATCHLIST_FILE, 
+        content, 
+        f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
+    )
 
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
