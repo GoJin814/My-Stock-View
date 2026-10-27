@@ -47,34 +47,76 @@ def save_watchlist_data(data):
 
 def render_tab_watchlist():
     st.markdown("#### ⭐ 관심종목 최신 연도 실적 관리")
-    st.caption("현재 시세 탭에서 선택한 종목을 불러와 가장 마지막 연도 데이터(YoY 제외)를 영구 저장하고 모니터링합니다.")
+    st.caption("현재 시세 탭에서 체크박스로 선택한 종목의 '가장 마지막 연도' 데이터(YoY 제외)를 불러와 저장합니다.")
 
     watchlist = load_watchlist_data()
 
-    # 1. '현재 시세' 탭의 세션 상태에서 선택된 종목 코드 가져오기 (기존 체크박스 브리지 활용)
-    # 쿼리 파라미터나 st.session_state에 저장된 선택 종목 확인
+    # 1. '현재 시세' 탭(또는 세션)에서 선택된 종목 코드 가져오기
     query_params = st.query_params
     del_codes_str = query_params.get("del_codes", "")
-    selected_codes_from_market = [c.strip() for c in del_codes_str.split(",") if c.strip()]
+    selected_codes = [c.strip().zfill(6) for c in del_codes_str.split(",") if c.strip() and c.strip().isdigit()]
 
-    # UI 조작 버튼 영역
+    # 세션이나 편집된 데이터프레임에서 전체 종목 정보를 가져오기 위해 공용 함수 활용 가능 여부 확인
     c_btn1, c_btn2 = st.columns([2, 5])
     with c_btn1:
         if st.button("📥 현재 시세 선택 종목 가져오기", type="primary", use_container_width=True):
-            if not selected_codes_from_market:
-                st.warning("'현재 시세' 탭에서 체크박스로 선택된 종목이 없습니다.")
+            if not selected_codes:
+                st.warning("⚠️ '현재 시세' 탭에서 체크박스로 선택된 종목이 없습니다. 현재시세 탭에서 종목을 먼저 체크해 주세요.")
             else:
-                # '실적' 탭 등에서 사용하는 전체 데이터 소스나 네이버 API 캐시에서 해당 종목들의 마지막 연도 데이터를 추출해 저장
-                # 여기서는 세션에 캐시된 실적 데이터가 있다면 활용, 없으면 안내
-                st.success(f"선택된 {len(set(selected_codes_from_market))}개 종목을 관심종목으로 연동 중입니다...")
-                # 실제 데이터 매핑 로직 연결 지점
+                from api import fetch_finance, extract_row_list, to_num
+                import numpy as np
+
+                added_count = 0
+                for code in selected_codes:
+                    fin_json = fetch_finance(code)
+                    row_list = extract_row_list(fin_json)
+                    
+                    latest_yr_str = "-"
+                    fin_snapshot = {}
+
+                    if row_list:
+                        for row in row_list:
+                            raw_title = row.get("title", "").strip().replace(" ", "")
+                            columns = row.get("columns", {})
+                            if not columns: continue
+                            sorted_years = sorted(list(columns.keys()))
+                            if not sorted_years: continue
+                            
+                            # 가장 마지막 연도 정보만 추출 (YoY 제외)
+                            latest_k = sorted_years[-1]
+                            latest_yr_str = f"{latest_k[:4]}년"
+                            
+                            c_item = columns.get(latest_k, {})
+                            c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
+
+                            if raw_title in ["매출액", "수익"]:
+                                fin_snapshot["매출액"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
+                            elif raw_title == "영업이익":
+                                fin_snapshot["영업이익"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
+                            elif raw_title in ["당기순이익", "당기순익"]:
+                                fin_snapshot["순이익"] = f"{c_val:,.0f}억" if pd.notna(c_val) else "-"
+                            elif any(k in raw_title for k in ["수정주당순이익", "주당순이익", "EPS"]):
+                                fin_snapshot["EPS"] = f"{c_val:,.0f}원" if pd.notna(c_val) else "-"
+                            elif any(k in raw_title for k in ["주당순자산", "BPS"]):
+                                fin_snapshot["BPS"] = f"{c_val:,.0f}원" if pd.notna(c_val) else "-"
+                            elif "ROE" in raw_title:
+                                fin_snapshot["ROE"] = f"{c_val:.2f}%" if pd.notna(c_val) else "-"
+
+                    watchlist[code] = {
+                        "최신연도": latest_yr_str,
+                        **fin_snapshot
+                    }
+                    added_count += 1
+
+                save_watchlist_data(watchlist)
+                st.success(f"🎉 총 {added_count}개 종목의 최신 연도 실적(YoY 제외)이 관심종목에 성공적으로 저장되었습니다!")
                 st.rerun()
 
     if not watchlist:
         st.info("등록된 관심종목이 없습니다. '현재 시세' 탭에서 종목을 선택한 뒤 위 버튼을 눌러주세요.")
         return
 
-    # 데이터프레임 변환 및 출력
+    # 저장된 관심종목 데이터프레임 구성 및 출력
     rows = []
     for code, info in watchlist.items():
         rows.append({"종목코드": code, **info})
@@ -88,8 +130,8 @@ def render_tab_watchlist():
     # 개별 종목 삭제 기능
     st.write("")
     with st.expander("🗑️ 관심종목 개별 관리 (삭제)"):
-        target_code = st.selectbox("삭제할 종목 선택", options=list(watchlist.keys()))
-        if st.button("선택 종목 삭제", type="primary"):
+        target_code = st.selectbox("삭제할 종목 선택", options=list(watchlist.keys()), key="watch_del_select")
+        if st.button("선택 종목 삭제", type="primary", key="watch_del_btn"):
             if target_code in watchlist:
                 del watchlist[target_code]
                 save_watchlist_data(watchlist)
