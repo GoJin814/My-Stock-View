@@ -409,7 +409,7 @@ if current_codes:
                                     st.success(f"{formatted} 추가 및 GitHub 커밋 완료")
                                     st.rerun()
 
-                with tab_bulk_text:
+                                with tab_bulk_text:
                     bulk_text = st.text_area(
                         "종목코드 목록 붙여넣기 (줄바꿈, 쉼표, 공백 구분)",
                         placeholder="예시:\n005930\n000660, 035420 035720",
@@ -418,7 +418,8 @@ if current_codes:
                     )
                     if st.button("📥 텍스트 목록 일괄 추가", type="primary", key="btn_bulk_text_add"):
                         if bulk_text.strip():
-                            found_codes = re.findall(r'\b\d{6}\b', bulk_text)
+                            # 정확히 6자리 숫자만 정규식으로 추출
+                            found_codes = [c.zfill(6) for c in re.findall(r'\b\d{1,6}\b', bulk_text) if len(c.zfill(6)) == 6]
                             if found_codes:
                                 new_unique = [c for c in dict.fromkeys(found_codes) if c not in current_codes]
                                 if new_unique:
@@ -441,31 +442,37 @@ if current_codes:
                         if st.button("📥 파일에서 종목코드 일괄 추출/추가", type="primary", key="btn_bulk_file_add"):
                             try:
                                 extracted = []
+                                content_bytes = up_file.read()
+                                
                                 if up_file.name.endswith(".txt"):
-                                    content = up_file.read().decode("utf-8", errors="ignore")
-                                    extracted = re.findall(r'\b\d{6}\b', content)
+                                    content = content_bytes.decode("utf-8", errors="ignore")
+                                    extracted = [c.zfill(6) for c in re.findall(r'\b\d{1,6}\b', content) if len(c.zfill(6)) == 6]
                                 elif up_file.name.endswith((".xlsx", ".xls")):
-                                    df_file = pd.read_excel(up_file, dtype=str)
+                                    import io
+                                    df_file = pd.read_excel(io.BytesIO(content_bytes), dtype=str)
                                     for col in df_file.columns:
-                                        items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
-                                        valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
-                                        extracted.extend(valid_codes)
+                                        for val in df_file[col].dropna().astype(str):
+                                            digits = re.sub(r'[^0-9]', '', val)
+                                            if 1 <= len(digits) <= 6:
+                                                extracted.append(digits.zfill(6))
                                 elif up_file.name.endswith(".csv"):
-                                    df_file = pd.read_csv(up_file, dtype=str)
+                                    import io
+                                    df_file = pd.read_csv(io.BytesIO(content_bytes), dtype=str)
                                     for col in df_file.columns:
-                                        items = df_file[col].dropna().astype(str).str.strip().str.zfill(6)
-                                        valid_codes = [c for c in items if len(c) == 6 and c.isdigit()]
-                                        extracted.extend(valid_codes)
+                                        for val in df_file[col].dropna().astype(str):
+                                            digits = re.sub(r'[^0-9]', '', val)
+                                            if 1 <= len(digits) <= 6:
+                                                extracted.append(digits.zfill(6))
 
                                 if extracted:
                                     new_unique = [c for c in dict.fromkeys(extracted) if c not in current_codes]
                                     if new_unique:
                                         current_codes.extend(new_unique)
                                         save_codes(current_codes)
-                                        st.success(f"파일에서 {len(new_unique)}개 종목이 등록되었습니다.")
+                                        st.success(f"파일에서 {len(new_unique)}개 종목이 정상 등록되었습니다.")
                                         st.rerun()
                                 else:
-                                    st.info("파일 내 종목코드가 이미 등록되어 있습니다.")
+                                    st.warning("파일 내에서 유효한 종목코드를 추출하지 못했습니다. 파일 형식을 확인해 주세요.")
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
