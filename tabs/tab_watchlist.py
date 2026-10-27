@@ -83,8 +83,6 @@ def save_watchlist_data(data):
     commit_to_github(WATCHLIST_CACHE_FILE, json_text, "Auto-commit watchlist_data.json")
 
 def render_tab_watchlist(full_csv_records_map=None):
-    st.markdown("#### ⭐ 관심종목 실적 관리")
-    st.caption("'현재 시세' 탭에서 추가한 관심종목의 직전/최근연도 실적 데이터를 병합된 셀 구조로 관리합니다. 종목명을 클릭하면 네이버 증권 페이지로 이동합니다.")
 
     watchlist = load_watchlist_data()
 
