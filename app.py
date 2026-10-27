@@ -429,14 +429,15 @@ if current_codes:
                     else:
                         st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
 
-        # 테이블 렌더링
+        # 테이블 렌더링 및 에디터 수정 결과값(체크 상태 포함) 받기
         edited_basic_df = render_tab_basic(df_basic)
 
         st.write("")
 
-        # 선택 종목 삭제 버튼을 표 바로 밑에 배치
-        _, b_col1_center, _ = st.columns([1, 2, 1])
-        with b_col1_center:
+        # 💡 3개의 버튼을 하나의 행에 나란히 배치 ([삭제, CSV 다운로드, TXT 백업])
+        col_del, col_csv, col_bak = st.columns([1.6, 2.2, 1.8])
+
+        with col_del:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
                 raw_del = st.query_params.get("del_codes", "")
                 selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
@@ -454,10 +455,7 @@ if current_codes:
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
 
-        st.write("")
-        # 다운로드 및 백업 버튼은 표 아래 버튼들 하단에 배치
-        _, d_col1, d_col2 = st.columns([2.5, 2, 2])
-        with d_col1:
+        with col_csv:
             csv_data = pd.DataFrame(full_csv_records).to_csv(index=False).encode('utf-8-sig')
             st.download_button(
                 "📥 전체 결과 CSV 다운로드",
@@ -467,7 +465,8 @@ if current_codes:
                 use_container_width=True,
                 key="btn_down_csv_basic"
             )
-        with d_col2:
+
+        with col_bak:
             codes_txt_data = "\n".join(current_codes).encode('utf-8')
             st.download_button(
                 "📋 종목코드 백업(TXT)",
