@@ -4,6 +4,7 @@ import json
 import os
 import base64
 import requests
+import streamlit.components.v1 as components
 
 WATCHLIST_CACHE_FILE = "watchlist_data.json"
 
@@ -88,27 +89,35 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     st.write("")
 
-    # HTML 표 구성 (안전하게 완전한 문자열로 결합)
+    # HTML 표 구성 (컴포넌트를 통해 안전하게 렌더링)
     html_parts = [
         """
+        <html>
+        <head>
         <style>
+            body {
+                background-color: transparent;
+                color: #fafafa;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                margin: 0;
+                padding: 0;
+            }
             .custom-stock-table {
                 width: 100%;
                 border-collapse: collapse;
-                font-size: 14px;
+                font-size: 13px;
                 text-align: center;
-                background-color: transparent;
             }
             .custom-stock-table th {
                 background-color: #262730;
                 color: #ffffff;
-                padding: 10px 8px;
+                padding: 10px 6px;
                 border: 1px solid #464855;
                 text-align: center;
                 font-weight: 600;
             }
             .custom-stock-table td {
-                padding: 10px 8px;
+                padding: 10px 6px;
                 border: 1px solid #31333F;
                 vertical-align: middle;
                 text-align: center;
@@ -117,10 +126,12 @@ def render_tab_watchlist(full_csv_records_map=None):
                 background-color: rgba(255, 255, 255, 0.03);
             }
         </style>
+        </head>
+        <body>
         <table class="custom-stock-table">
             <thead>
                 <tr>
-                    <th style="width: 50px;">선택</th>
+                    <th style="width: 45px;">선택</th>
                     <th>종목명</th>
                     <th>현재가</th>
                     <th>시총</th>
@@ -137,10 +148,12 @@ def render_tab_watchlist(full_csv_records_map=None):
         """
     ]
 
+    total_rows = 0
     for code, info_list in watchlist.items():
         if not isinstance(info_list, list) or len(info_list) == 0:
             continue
         
+        total_rows += len(info_list)
         is_checked = st.session_state.watchlist_checks.get(code, False)
         checked_attr = "checked" if is_checked else ""
 
@@ -163,7 +176,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         html_parts.append(f"""
             <tr>
-                <td {rowspan_attr}><input type="checkbox" name="chk_{code}" {checked_attr} onclick="window.location.href='?toggle_code={code}'"></td>
+                <td {rowspan_attr}><input type="checkbox" {checked_attr} onchange="window.parent.location.href='?toggle_code={code}'"></td>
                 <td {rowspan_attr}><b>{stock_name}</b></td>
                 <td {rowspan_attr}>{curr_price}</td>
                 <td {rowspan_attr}>{market_cap}</td>
@@ -198,7 +211,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                 </tr>
             """)
 
-    html_parts.append("</tbody></table>")
+    html_parts.append("</tbody></table></body></html>")
     final_html = "".join(html_parts)
 
     query_params = st.query_params
@@ -211,5 +224,6 @@ def render_tab_watchlist(full_csv_records_map=None):
             pass
         st.rerun()
 
-    # unsafe_allow_html=True를 통해 HTML 표 완벽 렌더링
-    st.markdown(final_html, unsafe_allow_html=True)
+    # 높이 자동 조절 (행 수에 따라 스크롤바 없이 깔끔하게 출력)
+    calc_height = max(120, (total_rows * 45) + 60)
+    components.html(final_html, height=calc_height, scrolling=False)
