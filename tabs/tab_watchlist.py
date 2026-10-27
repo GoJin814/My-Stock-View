@@ -209,12 +209,12 @@ def render_tab_watchlist(full_csv_records_map=None):
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
             linked_name = f"[{stock_name}]({naver_url})"
 
-            # 동일 종목의 두 번째 행(예: 2026년)부터는 종목명, 현재가, 시총 반복 출력을 생략하여 깔끔하게 정리
+            # 첫 번째 행에만 종목명, 현재가, 시총, 체크박스를 표시하고 두 번째 행부터는 중복 출력 방지
             if i > 0:
                 display_name = ""
                 display_price = ""
                 display_mcap = ""
-                display_check = False # 체크박스는 첫 번째 행에만 표시하여 중복 조작 방지
+                display_check = ""
             else:
                 display_name = linked_name
                 display_price = info["현재가"]
