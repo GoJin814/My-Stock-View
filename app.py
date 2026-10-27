@@ -365,26 +365,25 @@ if current_codes:
         # 관심종목 추가 및 선택 종목 삭제 버튼을 우측 상단으로 배치
         _, top_space, b_col0, b_col1 = st.columns([1, 1, 1.8, 1.8])
         
+        st.write("")
+        
+        # app.py 내부에서 직접 data_editor를 렌더링하여 체크박스 상태를 정확히 추적합니다.
+        edited_basic_df = st.data_editor(
+            df_basic,
+            column_config={
+                "선택": st.column_config.CheckboxColumn("선택", default=False, width=45),
+                "종목코드": st.column_config.TextColumn("종목코드", width=80),
+            },
+            disabled=["종목명", "종목코드", "현재가", "시총", "현재 PER", "현재 PBR", "DPS(원)", "배당수익률"],
+            hide_index=True,
+            use_container_width=True,
+            key="market_stock_editor"
+        )
+
         with b_col0:
             if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                # 1. 쿼리 파라미터 대신 렌더링된 edited_basic_df 또는 df_basic에서 체크된 행 직접 추출
-                checked_rows = pd.DataFrame()
-                if "market_stock_editor" in st.session_state:
-                    editor_state = st.session_state["market_stock_editor"]
-                    edited_rows_dict = editor_state.get("edited_rows", {})
-                    
-                    # 체크박스(선택 컬럼, 보통 index 0)가 True로 체크된 행 파악
-                    temp_df = df_basic.copy()
-                    for idx_str, row_dict in edited_rows_dict.items:
-                        idx = int(idx_str)
-                        if "선택" in row_dict:
-                            temp_df.loc[idx, "선택"] = row_dict["선택"]
-                    checked_rows = temp_df[temp_df["선택"] == True]
-
-                # 세션에 에디터 상태가 없거나 체크된 항목이 없으면 df_basic 자체에서 확인 시도
-                if checked_rows.empty and "선택" in df_basic.columns:
-                    checked_rows = df_basic[df_basic["선택"] == True]
-
+                # data_editor 결과에서 체크된 행 직접 추출
+                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
                 selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist() if not checked_rows.empty else []
 
                 if not selected_codes:
@@ -488,17 +487,13 @@ if current_codes:
 
         with b_col1:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
-                raw_del = st.query_params.get("del_codes", "")
-                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+                checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
+                selected_codes = checked_rows["종목코드"].dropna().astype(str).tolist() if not checked_rows.empty else []
 
                 if selected_codes:
                     remaining_codes = [c for c in current_codes if c not in selected_codes]
                     save_codes(remaining_codes)
                     fetch_single_stock.clear()
-                    try:
-                        st.query_params.clear()
-                    except Exception:
-                        pass
                     st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
                     st.rerun()
                 else:
