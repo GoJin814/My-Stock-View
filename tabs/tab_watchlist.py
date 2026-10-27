@@ -242,15 +242,29 @@ def render_tab_watchlist(full_csv_records_map=None):
         col_l, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+                # 1. 쿼리 파라미터에서 삭제 대상 추출
                 raw_del = st.query_params.get("del_codes", "")
                 codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
                 
+                # 2. 파라미터가 비어있다면 세션 상태에서 체크된 항목 검사 (안전장치)
                 if not codes_to_delete:
                     for key, val in st.session_state.items():
                         if val is True:
                             for code in watchlist_codes:
                                 if code in str(key) and code not in codes_to_delete:
                                     codes_to_delete.append(code)
+
+                # 3. 만약 여전히 비어있다면 세션 내 체크박스 키 패턴(chk_ 등) 전수 조사
+                if not codes_to_delete:
+                    for key, val in st.session_state.items():
+                        if "chk" in str(key).lower() and val is True:
+                            for code in watchlist_codes:
+                                if code in str(key) and code not in codes_to_delete:
+                                    codes_to_delete.append(code)
+
+                # 4. 그래도 안 잡히면 사용자가 체크한 모든 종목 코드를 강제로 유추 (전체 체크된 상태 등)
+                if not codes_to_delete and raw_del:
+                    codes_to_delete = list(watchlist_codes) # 파라미터 존재 시 전체 선택 삭제로 간주
 
                 codes_to_delete = list(dict.fromkeys(codes_to_delete))
 
