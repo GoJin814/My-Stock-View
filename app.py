@@ -477,7 +477,7 @@ if current_codes:
                         }
 
                         row_list_data = []
-                        # 연도별 데이터 맵핑 및 누락된 연도 빈칸 처리
+                        # 연도별 데이터 맵핑 및 누락된 연도 처리 (제이알글로벌리츠 등 연도 꼬임 방지)
                         year_data_map = {}
                         for yr_label, metrics_dict in [(prev_yr, prev_metrics), (latest_yr, latest_metrics)]:
                             if yr_label != "-" and yr_label:
