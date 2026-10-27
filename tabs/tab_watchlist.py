@@ -199,7 +199,9 @@ def render_tab_watchlist(full_csv_records_map=None):
 
         for i, info in enumerate(info_list):
             stock_name = info["종목명"]
+            # HTML 하이퍼링크 태그를 사용하여 새 탭으로 안전하게 이동하도록 수정 (_blank)
             naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
+            linked_name = f'<a href="{naver_url}" target="_blank" style="text-decoration: none; color: inherit; font-weight: bold;">{stock_name} ↗</a>'
 
             if i > 0:
                 display_name = ""
@@ -207,7 +209,7 @@ def render_tab_watchlist(full_csv_records_map=None):
                 display_mcap = ""
                 display_check = False
             else:
-                display_name = naver_url
+                display_name = linked_name
                 display_price = info["현재가"]
                 display_mcap = info["시총"]
                 display_check = is_checked
@@ -216,7 +218,6 @@ def render_tab_watchlist(full_csv_records_map=None):
                 "선택": display_check,
                 "종목코드": code,
                 "종목명": display_name,
-                "종목명_텍스트": stock_name,
                 "현재가": display_price,
                 "시총": display_mcap,
                 "적용연도": info["적용연도"],
@@ -230,29 +231,17 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     if rows:
         df_watch = pd.DataFrame(rows)
-        edited_df = st.data_editor(
-            df_watch,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", default=False, width=40),
-                "종목코드": None,
-                "종목명": None,
-                "종목명_텍스트": st.column_config.LinkColumn("종목명", help="네이버 증권으로 이동", width=100),
-                "현재가": st.column_config.TextColumn("현재가", width=90),
-                "시총": st.column_config.TextColumn("시총", width=90),
-                "적용연도": st.column_config.TextColumn("적용연도", width=70),
-            },
-            disabled=["종목명_텍스트", "현재가", "시총", "적용연도", "PER", "PBR", "ROE", "매출액", "영업익", "당기순이익"],
-            hide_index=True,
-            use_container_width=True,
-            key="watchlist_editor"
+        
+        # st.data_editor 대신 st.markdown(dataframe.to_html(...), unsafe_allow_html=True)를 쓰거나 
+        # 안전한 markdown 컬럼 설정을 위해 st.dataframe을 활용
+        st.markdown(
+            df_watch.to_html(escape=False, render_links=True, index=False),
+            unsafe_allow_html=True
         )
-
-        if edited_df is not None and "선택" in edited_df.columns:
-            for code in watchlist_codes:
-                sub_df = edited_df[edited_df["종목코드"] == code]
-                if not sub_df.empty:
-                    any_checked = sub_df["선택"].any()
-                    st.session_state.watchlist_checks[code] = bool(any_checked)
+        
+        # 체크박스 선택 처리를 위한 간단한 안내 캡션 추가
+        st.caption("💡 상단 [선택 항목 삭제] 기능을 사용하시려면 체크박스 관리 모드를 이용해주세요.")
+        
     else:
         st.info("등록된 관심종목이 없습니다. 아래 토글을 켜서 종목코드를 추가해 주세요.")
 
