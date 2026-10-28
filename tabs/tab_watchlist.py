@@ -154,9 +154,9 @@ def fetch_watchlist_item(code: str):
             return "-"
         return f"{str(v).strip()}배"
 
-    # 💡 직전 연도와 최근 연도를 구분하여 포맷팅하는 함수 추가
-    numeric_close = to_num(raw_close)
-    
+    # 💡 2026년 데이터가 없어 2025년 데이터를 대체할 때 '(예)' 표시 추가
+    numeric_key_close = to_num(raw_close)
+
     def fmt_dps_prev(v):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return "-"
@@ -164,15 +164,28 @@ def fetch_watchlist_item(code: str):
             return f"{v:,.0f}원"
         return f"{str(v).strip()}원"
 
-    def fmt_dps_latest(v):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+    def fmt_dps_latest(cur_v, prev_v):
+        is_fallback = False
+        target_v = cur_v
+        
+        # 2026년 값이 없으면 2025년 값으로 대체하고 fallback 플래그 켜기
+        if target_v is None or pd.isna(target_v) or target_v == "-" or str(target_v).lower() == "none":
+            target_v = prev_v
+            is_fallback = True
+
+        if target_v is None or pd.isna(target_v) or target_v == "-" or str(target_v).lower() == "none":
             return "-"
         
-        dps_str = f"{v:,.0f}원" if isinstance(v, (int, float)) else f"{str(v).strip()}원"
+        dps_str = f"{target_v:,.0f}원" if isinstance(target_v, (int, float)) else f"{str(target_v).strip()}원"
         
-        if isinstance(v, (int, float)) and numeric_close is not None and not pd.isna(numeric_close) and numeric_close > 0:
-            yield_val = (v / numeric_close) * 100.0
-            return f"{dps_str} ({yield_val:.1f}%)"
+        # 대체(fallback)된 경우 배당금 뒤에 ' (예)' 추가
+        if is_fallback:
+            dps_str += " (예)"
+
+        if isinstance(target_v, (int, float)) and numeric_key_close is not None and not pd.isna(numeric_key_close) and numeric_key_close > 0:
+            yield_val = (target_v / numeric_key_close) * 100.0
+            # 💡 HTML <br> 태그로 2줄 출력 (예: 150원 (예) <br> (1.3%))
+            return f"{dps_str}<br>({yield_val:.1f}%)"
         return dps_str
 
     items = []
