@@ -154,12 +154,13 @@ def fetch_watchlist_item(code: str):
             return "-"
         return f"{str(v).strip()}배"
 
-    # 💡 현재가 숫자 변환 및 배당수익률 계산 함수 추가
-    numeric_close = to_num(raw_close)
-    def fmt_div_yield(dps):
-        if dps is None or pd.isna(dps) or dps == "-" or numeric_close is None or pd.isna(numeric_close) or numeric_close <= 0:
+    # 💡 주당배당금(원 단위) 포맷 함수로 변경
+    def fmt_dps(v):
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return "-"
-        return f"{(dps / numeric_close) * 100.0:.2f}%"
+        if isinstance(v, (int, float)):
+            return f"{v:,.0f}원"
+        return f"{str(v).strip()}원"
 
     items = []
     empty_space = "\u3164"  
@@ -175,7 +176,7 @@ def fetch_watchlist_item(code: str):
             "PER": fmt_multi(fin_info["prev_per"]),
             "PBR": fmt_multi(fin_info["prev_pbr"]),
             "ROE": fmt_rate(fin_info["prev_roe"]),
-            "배당수익률": fmt_div_yield(fin_info["prev_dps"]), # 👈 ROE와 매출액 사이 추가
+            "배당금": fmt_dps(fin_info["prev_dps"]), # 👈 컬럼명 '배당금'으로 변경
             "매출액": fmt_val(fin_info["prev_rev"], "억"),
             "영업익": fmt_val(fin_info["prev_op"], "억"),
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
@@ -193,7 +194,7 @@ def fetch_watchlist_item(code: str):
             "PER": fmt_multi(fin_info["cur_per"]),
             "PBR": fmt_multi(fin_info["cur_pbr"]),
             "ROE": fmt_rate(fin_info["cur_roe"]),
-            "배당수익률": fmt_div_yield(fin_info["cur_dps"]), # 👈 ROE와 매출액 사이 추가
+            "배당금": fmt_dps(fin_info["cur_dps"]), # 👈 컬럼명 '배당금'으로 변경
             "매출액": fmt_val(fin_info["cur_rev"], "억"),
             "영업익": fmt_val(fin_info["cur_op"], "억"),
             "당기순이익": fmt_val(fin_info["cur_np"], "억")
