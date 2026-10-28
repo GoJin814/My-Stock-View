@@ -213,7 +213,7 @@ def apply_custom_styles():
 
         /* 💡 종목별로 묶이는 2줄마다(짝수 번째 행) 굵은 구분선 적용 */
         .custom-grid-table tr:nth-child(even) td {
-            border-bottom: 2px solid #ffffff !important;
+            border-bottom: 2px solid #64748b !important;
         }
 
         .custom-grid-table th.sortable-th {
