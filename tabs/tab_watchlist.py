@@ -154,13 +154,26 @@ def fetch_watchlist_item(code: str):
             return "-"
         return f"{str(v).strip()}배"
 
-    # 💡 주당배당금(원 단위) 포맷 함수로 변경
-    def fmt_dps(v):
+    # 💡 직전 연도와 최근 연도를 구분하여 포맷팅하는 함수 추가
+    numeric_close = to_num(raw_close)
+    
+    def fmt_dps_prev(v):
         if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
             return "-"
         if isinstance(v, (int, float)):
             return f"{v:,.0f}원"
         return f"{str(v).strip()}원"
+
+    def fmt_dps_latest(v):
+        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+            return "-"
+        
+        dps_str = f"{v:,.0f}원" if isinstance(v, (int, float)) else f"{str(v).strip()}원"
+        
+        if isinstance(v, (int, float)) and numeric_close is not None and not pd.isna(numeric_close) and numeric_close > 0:
+            yield_val = (v / numeric_close) * 100.0
+            return f"{dps_str} ({yield_val:.1f}%)"
+        return dps_str
 
     items = []
     empty_space = "\u3164"  
@@ -176,7 +189,7 @@ def fetch_watchlist_item(code: str):
             "PER": fmt_multi(fin_info["prev_per"]),
             "PBR": fmt_multi(fin_info["prev_pbr"]),
             "ROE": fmt_rate(fin_info["prev_roe"]),
-            "배당금": fmt_dps(fin_info["prev_dps"]), # 👈 컬럼명 '배당금'으로 변경
+            "배당금": fmt_dps_prev(fin_info["prev_dps"]), # 👈 직전 연도: 배당금만 출력
             "매출액": fmt_val(fin_info["prev_rev"], "억"),
             "영업익": fmt_val(fin_info["prev_op"], "억"),
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
@@ -194,7 +207,7 @@ def fetch_watchlist_item(code: str):
             "PER": fmt_multi(fin_info["cur_per"]),
             "PBR": fmt_multi(fin_info["cur_pbr"]),
             "ROE": fmt_rate(fin_info["cur_roe"]),
-            "배당금": fmt_dps(fin_info["cur_dps"]), # 👈 컬럼명 '배당금'으로 변경
+            "배당금": fmt_dps_latest(fin_info["cur_dps"]), # 👈 최근 연도: 배당금(배당수익률) 형식 출력
             "매출액": fmt_val(fin_info["cur_rev"], "억"),
             "영업익": fmt_val(fin_info["cur_op"], "억"),
             "당기순이익": fmt_val(fin_info["cur_np"], "억")
