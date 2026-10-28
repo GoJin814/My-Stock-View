@@ -202,13 +202,18 @@ def apply_custom_styles():
         .custom-grid-table td {
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
-            padding: 9px 10px !important;
-            border-bottom: 2px solid #2d3748 !important;
+            padding: 8px 10px !important;
+            border-bottom: 1px solid #1e242c !important; /* 기본 행은 얇은 선 */
             border-right: 1px solid #1e242c !important;
             white-space: nowrap !important;
             text-align: center !important;
             font-variant-numeric: tabular-nums !important;
             position: relative;
+        }
+
+        /* 💡 종목별로 묶이는 2줄마다(짝수 번째 행) 굵은 구분선 적용 */
+        .custom-grid-table tr:nth-child(even) td {
+            border-bottom: 2px solid #2d3748 !important;
         }
 
         .custom-grid-table th.sortable-th {
