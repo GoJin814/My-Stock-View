@@ -78,7 +78,7 @@ def fetch_watchlist_item(code: str):
         "prev_rev": np.nan, "cur_rev": np.nan,
         "prev_op": np.nan, "cur_op": np.nan,
         "prev_np": np.nan, "cur_np": np.nan,
-        "prev_dps": np.nan, "cur_dps": np.nan,                
+        "prev_dps": np.nan, "cur_dps": np.nan,
     }
 
     row_list = extract_row_list(fin_json)
@@ -154,10 +154,6 @@ def fetch_watchlist_item(code: str):
             return "-"
         return f"{str(v).strip()}배"
 
-    # 💡 2026년 데이터가 없어 2025년 데이터를 대체할 때 '(예)' 표시 추가
-    numeric_key_close = to_num(raw_close)
-
-    # 💡 안전한 타입 변환과 예외 처리가 포함된 배당금 포맷팅 함수
     numeric_key_close = to_num(raw_close)
 
     def fmt_dps_prev(v):
@@ -172,7 +168,6 @@ def fetch_watchlist_item(code: str):
         is_fallback = False
         target_v = cur_v
         
-        # 최근 연도 값이 없으면 직전 연도 값으로 대체
         if target_v is None or pd.isna(target_v) or target_v == "-" or str(target_v).lower() == "none":
             target_v = prev_v
             is_fallback = True
@@ -186,7 +181,6 @@ def fetch_watchlist_item(code: str):
         else:
             dps_str = f"{str(target_v).strip()}원"
         
-        # 대체(fallback)된 경우 배당금 뒤에 ' (예)' 추가
         if is_fallback:
             dps_str += " (예)"
 
@@ -210,7 +204,7 @@ def fetch_watchlist_item(code: str):
             "PER": fmt_multi(fin_info["prev_per"]),
             "PBR": fmt_multi(fin_info["prev_pbr"]),
             "ROE": fmt_rate(fin_info["prev_roe"]),
-            "배당금": fmt_dps_prev(fin_info["prev_dps"]), # 👈 직전 연도: 배당금만 출력
+            "배당금": fmt_dps_prev(fin_info["prev_dps"]),
             "매출액": fmt_val(fin_info["prev_rev"], "억"),
             "영업익": fmt_val(fin_info["prev_op"], "억"),
             "당기순이익": fmt_val(fin_info["prev_np"], "억")
@@ -228,7 +222,7 @@ def fetch_watchlist_item(code: str):
             "PER": fmt_multi(fin_info["cur_per"]),
             "PBR": fmt_multi(fin_info["cur_pbr"]),
             "ROE": fmt_rate(fin_info["cur_roe"]),
-            "배당금": fmt_dps_latest(fin_info["cur_dps"]), # 👈 최근 연도: 배당금(배당수익률) 형식 출력
+            "배당금": fmt_dps_latest(fin_info["cur_dps"], fin_info["prev_dps"]),
             "매출액": fmt_val(fin_info["cur_rev"], "억"),
             "영업익": fmt_val(fin_info["cur_op"], "억"),
             "당기순이익": fmt_val(fin_info["cur_np"], "억")
@@ -278,7 +272,6 @@ def render_tab_watchlist(full_csv_records_map=None):
     if rows:
         df_watch = pd.DataFrame(rows)
         
-        # 현재시세 탭과 동일하게 tab_basic ID를 사용하여 styles.py의 자바스크립트 엔진과 완벽 연동
         render_multi_header_table(
             df_watch,
             tab_name="tab_watchlist",
