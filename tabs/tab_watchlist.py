@@ -233,7 +233,7 @@ def render_tab_watchlist(full_csv_records_map=None):
         # 현재시세 탭과 동일하게 tab_basic ID를 사용하여 styles.py의 자바스크립트 엔진과 완벽 연동
         render_multi_header_table(
             df_watch,
-            tab_name="tab_basic",
+            tab_name="tab_watchlist",
             has_checkbox=True,
             has_naver_link=True
         )
