@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from api import fetch_all, extract_row_list, to_num
-from styles import Html
+from styles import html
 
 YEAR_RE = re.compile(r"(20\d{2})")
 FIELDS = ("rev", "op", "np", "eps", "bps", "dps", "roe", "per", "pbr")
