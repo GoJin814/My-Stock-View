@@ -4,9 +4,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 
+# from styles import html 대신 직접 정의
 class Html(str):
     """이미 HTML로 만들어진 셀 값 (이스케이프하지 않음)."""
+    pass
 
+html = Html  # 만약 하단에서 소문자 html(...) 형태로 쓰고 있다면 추가
 
 def apply_custom_styles():
     st.markdown("""
