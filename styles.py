@@ -1,293 +1,747 @@
-import html as _html
-
 import streamlit as st
+import pandas as pd
 import streamlit.components.v1 as components
-
-
-# from styles import html 대신 직접 정의
-class Html(str):
-    """이미 HTML로 만들어진 셀 값 (이스케이프하지 않음)."""
-    pass
-
-html = Html  # 만약 하단에서 소문자 html(...) 형태로 쓰고 있다면 추가
 
 def apply_custom_styles():
     st.markdown("""
         <meta name="color-scheme" content="dark">
+        <meta name="supported-color-schemes" content="dark">
+
         <style>
-        :root { color-scheme: dark !important; }
+        :root {
+            color-scheme: dark !important;
+        }
+
         html, body {
             color-scheme: dark !important;
             background-color: #0e1117 !important;
             overscroll-behavior-y: auto !important;
             touch-action: pan-x pan-y pinch-zoom !important;
-        }
-        .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main {
-            background-color: #0e1117 !important;
-            -webkit-overflow-scrolling: touch !important;
-        }
-        .block-container { padding-top: 1.8rem; padding-bottom: 3rem; max-width: 100% !important; }
-        div[data-testid="stToggle"] { margin-bottom: 0.5rem !important; }
-        div[data-testid="stToggle"] label p { font-size: 0.92rem !important; font-weight: 500 !important; color: #fafafa !important; }
-        .filter-container-box {
-            background-color: rgba(255,255,255,0.02) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
-            border-radius: 8px !important; padding: 12px 14px !important; margin-bottom: 1.2rem !important;
-        }
-        div[data-testid="stButton"] > button[kind="primary"] {
-            background-color: #262730 !important; border-color: #464855 !important; color: #ffffff !important;
-        }
-        div[data-testid="stButton"] > button[kind="primary"]:hover {
-            background-color: #31333F !important; border-color: #5b5e71 !important;
+            height: auto !important;
+            min-height: 100% !important;
         }
 
-        /* ---- 범용 표 (render_table) ---- */
-        .gw {
-            overflow: auto; max-height: 70vh; border: 1px solid #334155; border-radius: 4px;
-            background: #0e1117; margin-bottom: 1.2rem; position: relative;
+        .stApp, 
+        [data-testid="stAppViewContainer"], 
+        [data-testid="stMain"],
+        section.main {
+            background-color: #0e1117 !important;
+            overscroll-behavior-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+
+        .block-container {
+            padding-top: 1.8rem;
+            padding-bottom: 3rem;
+            max-width: 100% !important;
+        }
+
+        div[data-testid="stToggle"] {
+            margin-bottom: 0.5rem !important;
+        }
+
+        div[data-testid="stToggle"] label p {
+            font-size: 0.92rem !important;
+            font-weight: 500 !important;
+            color: #fafafa !important;
+        }
+
+        .filter-container-box {
+            background-color: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 8px !important;
+            padding: 12px 14px !important;
+            margin-bottom: 1.2rem !important;
+        }
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            padding-left: 14px;
+            padding-right: 14px;
+            white-space: nowrap;
+            font-size: 0.92rem !important;
+        }
+
+        .custom-grid-wrapper {
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+            max-height: 70vh !important;
+            margin-bottom: 1.2rem;
+            border-radius: 4px;
+            border: 1px solid #334155;
+            background-color: #0e1117;
+            width: 100%;
             -webkit-overflow-scrolling: touch;
+            position: relative;
         }
-        table.grid {
-            border-collapse: separate !important; border-spacing: 0 !important;
-            width: max-content; min-width: 100%; font-size: 0.82rem; color: #f3f4f6; background: #0e1117;
+
+        .custom-grid-table {
+            width: max-content !important;
+            min-width: 100% !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            font-size: 0.82rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #f3f4f6;
+            background-color: #0e1117;
         }
-        table.grid th {
-            position: sticky; top: 0; z-index: 10;
-            background: #161a22; color: #9ca3af; font-weight: 500; font-size: 0.81rem;
-            padding: 6px 10px; border-bottom: 2px solid #334155; border-right: 1px solid #262c36;
-            text-align: center; white-space: normal; word-break: keep-all; line-height: 1.2; vertical-align: middle;
+
+        .custom-grid-table thead {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 10 !important;
         }
-        table.grid th.sub { top: 2.15rem; }
-        table.grid td {
-            background: #0e1117; padding: 8px 10px;
-            border-bottom: 1px solid #1e242c; border-right: 1px solid #1e242c;
-            white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums;
+
+        .custom-grid-table th {
+            background-color: #161a22 !important;
+            color: #9ca3af !important;
+            font-weight: 500 !important;
+            font-size: 0.81rem !important;
+            padding: 6px 10px !important;
+            border-bottom: 2px solid #334155 !important;
+            border-right: 1px solid #262c36 !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: keep-all !important;
+            line-height: 1.2 !important;
+            user-select: none !important;
+            box-sizing: border-box !important;
+            vertical-align: middle !important;
         }
-        table.grid.grouped tbody tr:last-child td { border-bottom: 2px solid #64748b; }
-        table.grid .c-chk {
-            position: sticky; left: 0; width: 40px; min-width: 40px; max-width: 40px;
-            padding: 6px 0; text-align: center; z-index: 5; background: #0e1117;
+
+        .custom-grid-table thead tr:first-child th {
+            top: 0 !important;
+            z-index: 10 !important;
         }
-        table.grid th.c-chk { z-index: 101; background: #161a22; }
-        table.grid .c-name {
-            position: sticky; left: 0; width: 120px; min-width: 120px; max-width: 120px;
-            text-align: left; padding-left: 12px; padding-right: 8px;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 5; background: #0e1117;
+
+        .custom-grid-table thead tr:nth-child(2) th {
+            top: 2.15rem !important;
+            z-index: 10 !important;
         }
-        table.grid th.c-name { z-index: 100; background: #161a22; }
-        table.grid.has-chk .c-name { left: 40px; }
-        table.grid .div { border-right: 2.5px solid #ffffff !important; }
-        table.grid tbody tr:hover td:not(.c-name):not(.c-chk) { background: rgba(255,255,255,0.03); }
-        .up { color: #f87171 !important; font-weight: 500; }
-        .down { color: #60a5fa !important; font-weight: 500; }
-        .hl { color: #ff4b4b !important; font-weight: 700; }
-        .naver-link { color: #58a6ff !important; text-decoration: none !important; }
-        .naver-link:hover { text-decoration: underline !important; }
-        .row-chk, .hdr-all { cursor: pointer; width: 16px; height: 16px; accent-color: #3b82f6; vertical-align: middle; }
+
+        .custom-grid-table th.col-chk-th,
+        .custom-grid-table td.col-chk {
+            position: sticky !important;
+            left: 0 !important;
+            width: 40px !important;
+            min-width: 40px !important;
+            max-width: 40px !important;
+            text-align: center !important;
+            background-color: #161a22 !important;
+            border-right: 1px solid #262c36 !important;
+            padding: 6px 0 !important;
+        }
+        .custom-grid-table th.col-chk-th {
+            top: 0 !important;
+            z-index: 100 !important;
+        }
+        .custom-grid-table td.col-chk {
+            z-index: 5 !important;
+            background-color: #0e1117 !important;
+        }
+
+        .custom-grid-table th.col-name-th {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
+            background-color: #161a22 !important;
+            width: 120px !important;
+            min-width: 120px !important;
+            max-width: 120px !important;
+            text-align: left !important;
+            padding-left: 12px !important;
+            border-right: none !important;
+            vertical-align: middle !important;
+        }
+
+        .custom-grid-table td.col-name {
+            position: sticky !important;
+            z-index: 5 !important;
+            background-color: #0e1117 !important;
+            width: 120px !important;
+            min-width: 120px !important;
+            max-width: 120px !important;
+            text-align: left !important;
+            padding-left: 12px !important;
+            padding-right: 8px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            border-right: none !important;
+        }
+
+        .table-has-chk th.col-name-th,
+        .table-has-chk td.col-name {
+            left: 40px !important;
+        }
+        .table-no-chk th.col-name-th,
+        .table-no-chk td.col-name {
+            left: 0 !important;
+        }
+
+        .custom-grid-table th.col-name-th::after,
+        .custom-grid-table td.col-name::after {
+            content: "" !important;
+            position: absolute !important;
+            top: 0 !important;
+            right: 0 !important;
+            width: 2.5px !important;
+            height: 100% !important;
+            background-color: #ffffff !important;
+            pointer-events: none !important;
+            z-index: 101 !important;
+        }
+
+        .custom-grid-table th.year-divider,
+        .custom-grid-table td.year-divider {
+            border-right: 2.5px solid #ffffff !important;
+        }
+
+        .custom-grid-table td {
+            background-color: #0e1117 !important;
+            color: #f3f4f6 !important;
+            padding: 8px 10px !important;
+            border-bottom: 1px solid #1e242c !important; /* 기본 행은 얇은 선 */
+            border-right: 1px solid #1e242c !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+            font-variant-numeric: tabular-nums !important;
+            position: relative;
+        }
+
+        /* 💡 종목별로 묶이는 2줄마다(짝수 번째 행) 굵은 구분선 적용 */
+        #table_tab_watchlist tr:nth-child(even) td {
+            border-bottom: 2px solid #64748b !important;
+        }
+
+        .custom-grid-table th.sortable-th {
+            cursor: pointer !important;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        .custom-grid-table th.sortable-th:hover {
+            background-color: #1f242e !important;
+            color: #60a5fa !important;
+        }
+
+        .sort-indicator {
+            display: inline-block;
+            margin-left: 2px;
+            font-size: 0.72rem;
+            color: #60a5fa;
+            vertical-align: middle;
+        }
+
+        .custom-grid-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.03) !important;
+        }
+        .custom-grid-table tr:hover td.col-name,
+        .custom-grid-table tr:hover td.col-chk {
+            background-color: #161a22 !important;
+        }
+
+        .naver-pc-link {
+            color: #58a6ff !important;
+            text-decoration: none !important;
+        }
+        .naver-pc-link:hover {
+            text-decoration: underline !important;
+            color: #79b8ff !important;
+        }
+
+        .stock-checkbox,
+        .header-select-all {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+            accent-color: #3b82f6;
+            vertical-align: middle;
+        }
         </style>
     """, unsafe_allow_html=True)
 
-
-def _esc(v):
-    if isinstance(v, Html):
-        return str(v)
-    if v is None:
-        return "-"
-    if isinstance(v, float) and v != v:
-        return "-"
-    s = str(v).strip()
-    if s in ("", "nan", "None", "NaN"):
-        return "-"
-    return _html.escape(s)
-
-
-def _cls(c):
-    out = []
-    if c.get("name"):
-        out.append("c-name")
-    if c.get("divider"):
-        out.append("div")
-    return " ".join(out)
-
-
-def render_table(df, cols, tab_name, key_col="종목코드", *, has_checkbox=False, sel_param=None,
-                 selected=(), merge_cols=(), cell_style=None,
-                 empty_msg="표시할 데이터가 없습니다."):
-    """
-    cols: [{"key", "label", "group"?, "divider"?, "name"?, "link"?}, ...]
-    group 이 하나라도 있으면 2단 헤더가 만들어진다 (group 없는 열은 rowspan=2).
-    merge_cols: 같은 key(종목코드)끼리 세로 병합할 열. 체크박스도 함께 병합된다.
-    sel_param: 체크 상태를 URL 쿼리파라미터에 저장할 이름 (예: sel_price).
-    """
-    if df is None or df.empty:
-        st.info(empty_msg)
+def render_multi_header_table(df, *args, **kwargs):
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        st.info("표시할 데이터가 없습니다.")
         return
 
-    has_group = any(c.get("group") for c in cols)
-    merge = set(merge_cols) if merge_cols else set()
-    sel = set(selected)
-    rs2 = ' rowspan="2"' if has_group else ""
+    code_series = None
+    if "종목코드" in df.columns:
+        code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
+        tab_name = kwargs.get("tab_name", "tab")
+        if tab_name != "tab_basic":
+            df = df.drop(columns=["종목코드"])
 
-    # ---- 헤더 ----
-    top, sub = [], []
-    if has_checkbox:
-        top.append(f'<th{rs2} class="c-chk"><input type="checkbox" class="hdr-all" title="전체 선택"></th>')
+    header_rows = kwargs.get("header_rows", None)
+    if not header_rows and args and isinstance(args[0], list):
+        header_rows = args[0]
 
-    i = 0
-    while i < len(cols):
-        c = cols[i]
-        if not c.get("group"):
-            top.append(f'<th{rs2} class="{_cls(c)}">{c["label"]}</th>')
-            i += 1
-            continue
-        g = c["group"]
-        j = i
-        while j < len(cols) and cols[j].get("group") == g:
-            j += 1
-        gdiv = " div" if cols[j - 1].get("divider") else ""
-        top.append(f'<th colspan="{j - i}" class="grp{gdiv}">{g}</th>')
-        for k in range(i, j):
-            sub.append(f'<th class="sub {_cls(cols[k])}">{cols[k]["label"]}</th>')
-        i = j
+    divider_indices = kwargs.get("divider_indices", None)
+    if not divider_indices and len(args) >= 2 and isinstance(args[1], list):
+        divider_indices = args[1]
+    div_set = set(divider_indices) if divider_indices else set()
 
-    thead = "<thead><tr>" + "".join(top) + "</tr>"
-    if has_group:
-        thead += "<tr>" + "".join(sub) + "</tr>"
-    thead += "</thead>"
+    has_naver_link = kwargs.get("has_naver_link", True)
+    tab_name = kwargs.get("tab_name", "tab")
+    table_id = f"table_{tab_name}"
+    has_checkbox = kwargs.get("has_checkbox", False)
 
-    # ---- 본문 ----
-    recs = df.to_dict("records")
-    if merge:
-        groups = {}
-        for r in recs:
-            groups.setdefault(str(r.get(key_col, "")), []).append(r)
-        blocks = list(groups.items())
+    table_chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
+    chk_header_html = '<input type="checkbox" class="header-select-all" title="전체 선택">'
+
+    thead_parts = ["<thead>"]
+    if header_rows:
+        num_header_rows = len(header_rows)
+        for r_idx, row in enumerate(header_rows):
+            thead_parts.append("<tr>")
+            cur_col_pos = 0
+            multi_leaf_idx = 1 if not has_checkbox else 2
+
+            for c_cell_idx, cell in enumerate(row):
+                r_span_val = cell.get("rowspan", 1)
+                c_span_val = cell.get("colspan", 1)
+                r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
+                c_span = f' colspan="{c_span_val}"' if c_span_val > 1 else ""
+                txt = cell.get("text", "")
+
+                th_classes = []
+                th_attrs = ""
+
+                if txt == "선택":
+                    th_classes.append("col-chk-th")
+                    display_txt = chk_header_html
+                elif txt == "종목명":
+                    th_classes.append("col-name-th")
+                    display_txt = txt
+                else:
+                    display_txt = txt
+
+                is_leaf = (r_idx + r_span_val == num_header_rows)
+                if txt != "선택" and is_leaf:
+                    th_classes.append("sortable-th")
+                    if num_header_rows == 1:
+                        assigned_idx = c_cell_idx
+                    elif txt == "종목명":
+                        assigned_idx = 0 if not has_checkbox else 1
+                    else:
+                        assigned_idx = multi_leaf_idx
+                        multi_leaf_idx += 1
+                    th_attrs = f' data-col-idx="{assigned_idx}"'
+
+                is_divider = False
+                if r_idx == 0:
+                    end_col = cur_col_pos + c_span_val - 1
+                    if (end_col in div_set and end_col != len(df.columns) - 1) or cell.get("border_right", False):
+                        is_divider = True
+                    cur_col_pos += c_span_val
+                else:
+                    target_div_idx = multi_leaf_idx - 1
+                    if target_div_idx in div_set or cell.get("border_right", False):
+                        is_divider = True
+
+                if is_divider:
+                    th_classes.append("year-divider")
+
+                class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
+                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{display_txt}</th>')
+            thead_parts.append("</tr>")
     else:
-        blocks = [(str(r.get(key_col, "")), [r]) for r in recs]
+        thead_parts.append("<tr>")
+        for idx, c in enumerate(df.columns):
+            th_classes = []
+            th_attrs = ""
+            display_txt = c
+            if c == "선택":
+                th_classes.append("col-chk-th")
+                display_txt = chk_header_html
+            elif c == "종목명":
+                th_classes.append("col-name-th")
 
-    body = []
-    for key, rows in blocks:
-        n = len(rows)
-        body.append("<tbody>")
-        for j, rec in enumerate(rows):
-            body.append("<tr>")
-            if has_checkbox and not (merge and j > 0):
-                rs = f' rowspan="{n}"' if merge and n > 1 else ""
-                ck = " checked" if key in sel else ""
-                body.append(
-                    f'<td{rs} class="c-chk"><input type="checkbox" class="row-chk" '
-                    f'data-key="{_html.escape(key)}"{ck}></td>'
-                )
-            for c in cols:
-                col = c["key"]
-                if merge and col in merge and j > 0:
-                    continue
-                rs = f' rowspan="{n}"' if merge and col in merge and n > 1 else ""
-                text = _esc(rec.get(col))
-                if c.get("link") and key.isdigit() and len(key) == 6:
-                    text = (f'<a class="naver-link" target="_blank" '
-                            f'href="https://finance.naver.com/item/main.naver?code={key}">{text}</a>')
-                extra = cell_style(rec, col) if cell_style else ""
-                raw = str(rec.get(col, ""))
-                if "%" in raw:
-                    if raw.startswith("+"):
-                        extra += " up"
-                    elif raw.startswith("-"):
-                        extra += " down"
-                classes = " ".join(x for x in (_cls(c), extra.strip()) if x)
-                cattr = f' class="{classes}"' if classes else ""
-                body.append(f"<td{rs}{cattr}>{text}</td>")
-            body.append("</tr>")
-        body.append("</tbody>")
+            if c != "선택":
+                th_classes.append("sortable-th")
+                th_attrs = f' data-col-idx="{idx}"'
+            if idx in div_set and idx != len(df.columns) - 1:
+                th_classes.append("year-divider")
 
-    table_cls = "grid" + (" has-chk" if has_checkbox else "") + (" grouped" if merge else "")
-    sel_attr = f' data-sel="{sel_param}"' if sel_param else ""
-    html_code = (f'<div class="gw"><table id="tbl_{tab_name}" class="{table_cls}"{sel_attr}>'
-                 f'{thead}{"".join(body)}</table></div>')
+            class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
+            thead_parts.append(f'<th{class_str}{th_attrs}>{display_txt}</th>')
+        thead_parts.append("</tr>")
+    thead_parts.append("</thead>")
+
+    tbody_parts = ["<tbody>"]
+    for row_i, (_, row) in enumerate(df.iterrows()):
+        code_val = ""
+        if code_series is not None and row_i < len(code_series):
+            code_val = code_series.iloc[row_i]
+        elif "종목코드" in row:
+            code_val = str(row["종목코드"]).strip().zfill(6)
+
+        if not code_val and "일시" in row:
+            code_val = str(row["일시"]).replace("/", "-").strip()
+
+        tbody_parts.append(f'<tr data-code="{code_val}">')
+
+        for col_idx, col_name in enumerate(df.columns):
+            raw_val = str(row[col_name])
+            val = "-" if raw_val in ["nan", "None", ""] else raw_val
+            
+            td_classes = []
+            if col_idx in div_set and col_idx != len(df.columns) - 1:
+                td_classes.append("year-divider")
+
+            if col_name == "선택":
+                td_classes.append("col-chk")
+                class_str = f' class="{" ".join(td_classes)}"'
+                tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
+                continue
+
+            if col_name == "종목명":
+                td_classes.append("col-name")
+                if has_naver_link and code_val:
+                    pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
+                    content = f'<a href="{pc_url}" target="_blank" class="naver-pc-link">{val}</a>'
+                else:
+                    content = val
+
+                class_str = f' class="{" ".join(td_classes)}"'
+                tbody_parts.append(f'<td{class_str}>{content}</td>')
+                continue
+
+            color_css = ""
+            if "%" in val and val != "-":
+                if val.startswith("+"):
+                    color_css = "color: #f87171 !important; font-weight: 500;"
+                elif val.startswith("-"):
+                    color_css = "color: #60a5fa !important; font-weight: 500;"
+
+            style_attr = f' style="{color_css}"' if color_css else ""
+            class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
+
+            tbody_parts.append(f'<td{class_str}{style_attr}>{val}</td>')
+
+        tbody_parts.append("</tr>")
+    tbody_parts.append("</tbody>")
+
+    html_code = f"""
+    <div class="custom-grid-wrapper">
+        <table id="{table_id}" class="custom-grid-table {table_chk_class}">
+            {"".join(thead_parts)}
+            {"".join(tbody_parts)}
+        </table>
+    </div>
+    """
     st.markdown(html_code, unsafe_allow_html=True)
 
-
 def inject_client_sort_sync_engine():
-    """당겨서 새로고침 + 체크박스 선택을 URL 쿼리파라미터(data-sel)에 동기화."""
     components.html("""
     <script>
-    (function () {
+    (function initEngine() {
         const doc = window.parent.document;
         const win = window.parent;
         if (!doc || !win) return;
 
-        // 당겨서 새로고침 표시기
-        let ptr = doc.getElementById('native_ptr_box');
-        if (!ptr) {
-            ptr = doc.createElement('div');
-            ptr.id = 'native_ptr_box';
-            ptr.style.cssText = 'position:fixed;top:-65px;left:50%;transform:translateX(-50%);width:42px;height:42px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:99999999;transition:top .15s ease,opacity .15s ease;opacity:0;pointer-events:none;';
-            ptr.innerHTML = '<svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/><path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/></svg>';
-            doc.body.appendChild(ptr);
+        let ptrBox = doc.getElementById('native_ptr_box');
+        if (!ptrBox) {
+            ptrBox = doc.createElement('div');
+            ptrBox.id = 'native_ptr_box';
+            ptrBox.style.cssText = `
+                position: fixed;
+                top: -65px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 42px;
+                height: 42px;
+                background: #ffffff;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+                z-index: 99999999;
+                transition: top 0.15s ease, opacity 0.15s ease;
+                opacity: 0;
+                pointer-events: none;
+            `;
+            ptrBox.innerHTML = `
+                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
+                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+            `;
+            doc.body.appendChild(ptrBox);
         }
-        let startY = 0, startX = 0, canPull = false;
-        function scrollTopNow() {
+
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let canPull = false;
+
+        function getRealScrollTop() {
+            const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
+            const bodyEl = doc.body ? doc.body.scrollTop : 0;
+            const winY = win.scrollY || win.pageYOffset || 0;
             const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
             const c2 = doc.querySelector('[data-testid="stMain"]');
-            return Math.max(win.scrollY || 0, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0);
+            const c3 = doc.querySelector('section.main');
+            const c4 = doc.querySelector('.main');
+            return Math.max(winY, docEl, bodyEl, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0, c3 ? c3.scrollTop : 0, c4 ? c4.scrollTop : 0);
         }
-        win.ontouchstart = function (e) {
-            canPull = e.touches.length === 1 && scrollTopNow() <= 1;
-            if (canPull) { startY = e.touches[0].clientY; startX = e.touches[0].clientX; }
-        };
-        win.ontouchmove = function (e) {
-            if (!canPull) return;
-            const dy = e.touches[0].clientY - startY;
-            const dx = Math.abs(e.touches[0].clientX - startX);
-            if (dy <= 40 || dx > dy || scrollTopNow() > 1) {
-                ptr.style.top = '-65px'; ptr.style.opacity = '0'; return;
+
+        win.ontouchstart = function(e) {
+            if (e.touches.length === 1 && getRealScrollTop() <= 1) {
+                touchStartY = e.touches[0].clientY;
+                touchStartX = e.touches[0].clientX;
+                canPull = true;
+            } else {
+                canPull = false;
             }
-            const pull = Math.min((dy - 40) * 0.45, 80);
-            ptr.style.top = (pull - 45) + 'px';
-            ptr.style.opacity = Math.min((dy - 40) / 80, 1);
         };
-        win.ontouchend = function (e) {
+
+        win.ontouchmove = function(e) {
+            if (!canPull) return;
+            if (getRealScrollTop() > 1) {
+                canPull = false;
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+                return;
+            }
+            const distY = e.touches[0].clientY - touchStartY;
+            const distX = Math.abs(e.touches[0].clientX - touchStartX);
+            if (distY <= 0 || distX > distY) {
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
+                return;
+            }
+            if (distY > 40) {
+                const pullY = Math.min((distY - 40) * 0.45, 80);
+                ptrBox.style.top = (pullY - 45) + 'px';
+                ptrBox.style.opacity = Math.min((distY - 40) / 80, 1);
+                const svg = ptrBox.querySelector('#ptr_svg');
+                if (svg) svg.style.transform = 'rotate(' + (distY * 2.5) + 'deg)';
+            }
+        };
+
+        win.ontouchend = function(e) {
             if (!canPull) return;
             canPull = false;
-            const dy = e.changedTouches[0].clientY - startY;
-            if (dy >= 180 && scrollTopNow() <= 1) {
-                ptr.style.top = '20px'; ptr.style.opacity = '1';
-                setTimeout(function () { win.location.reload(); }, 120);
+            const distY = e.changedTouches[0].clientY - touchStartY;
+            if (distY >= 180 && getRealScrollTop() <= 1) {
+                ptrBox.style.top = '20px';
+                ptrBox.style.opacity = '1';
+                setTimeout(function() { win.location.reload(); }, 120);
             } else {
-                ptr.style.top = '-65px'; ptr.style.opacity = '0';
+                ptrBox.style.top = '-65px';
+                ptrBox.style.opacity = '0';
             }
         };
 
-        // 체크박스 선택 -> URL 쿼리파라미터 (data-sel 로 지정된 이름)
-        function syncSel(table) {
-            if (!table) return;
-            const param = table.getAttribute('data-sel');
-            if (!param) return;
-            const keys = Array.from(table.querySelectorAll('.row-chk:checked'))
-                .map(c => c.getAttribute('data-key'));
-            const url = new URL(win.location.href);
-            if (keys.length) url.searchParams.set(param, keys.join(','));
-            else url.searchParams.delete(param);
-            win.history.replaceState(null, '', url.toString());
+        function restoreActiveTab() {
+            const urlParams = new URLSearchParams(win.location.search);
+            let targetIdx = urlParams.get('active_tab');
+            if (targetIdx === null) {
+                targetIdx = win.sessionStorage.getItem('active_tab_idx');
+            }
+            if (targetIdx !== null) {
+                targetIdx = parseInt(targetIdx, 10);
+                let attempts = 0;
+                const interval = setInterval(() => {
+                    const tabs = doc.querySelectorAll('.stTabs [data-baseweb="tab"]');
+                    if (tabs.length > targetIdx) {
+                        clearInterval(interval);
+                        if (tabs[targetIdx] && tabs[targetIdx].getAttribute('aria-selected') !== 'true') {
+                            tabs[targetIdx].click();
+                        }
+                    }
+                    attempts++;
+                    if (attempts > 50) {
+                        clearInterval(interval);
+                    }
+                }, 50);
+            }
         }
 
-        // 이전 실행의 리스너를 제거한 뒤 다시 등록 (rerun마다 iframe이 새로 만들어짐)
-        const prev = win.__scanSync;
-        if (prev) doc.removeEventListener('change', prev.onChange);
-        const onChange = function (e) {
-            const t = e.target;
-            if (!t) return;
-            if (t.classList.contains('hdr-all')) {
-                const tbl = t.closest('table');
-                if (tbl) tbl.querySelectorAll('.row-chk').forEach(c => { c.checked = t.checked; });
-                syncSel(tbl);
-            } else if (t.classList.contains('row-chk')) {
-                syncSel(t.closest('table'));
+        doc.addEventListener('click', function(e) {
+            const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
+            if (tabBtn) {
+                const tabs = Array.from(doc.querySelectorAll('.stTabs [data-baseweb="tab"]'));
+                const idx = tabs.indexOf(tabBtn);
+                if (idx !== -1) {
+                    win.sessionStorage.setItem('active_tab_idx', idx);
+                    try {
+                        const url = new URL(win.location.href);
+                        url.searchParams.set('active_tab', idx);
+                        win.history.replaceState(null, '', url.toString());
+                    } catch(err) {}
+                }
+                setTimeout(applySavedOrderToAll, 40);
+                return;
             }
-        };
-        doc.addEventListener('change', onChange);
-        win.__scanSync = { onChange: onChange };
+
+            if (e.target && e.target.classList.contains('header-select-all')) return;
+
+            const th = e.target.closest('th.sortable-th');
+            if (!th) return;
+
+            const table = th.closest('table.custom-grid-table');
+            if (!table) return;
+
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
+            if (isNaN(colIdx)) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            let isAsc = th.getAttribute('data-sort-asc') === 'true';
+            let nextAsc = !isAsc;
+
+            table.querySelectorAll('th.sortable-th').forEach(otherTh => {
+                otherTh.removeAttribute('data-sort-asc');
+                const ind = otherTh.querySelector('.sort-indicator');
+                if (ind) ind.remove();
+            });
+
+            th.setAttribute('data-sort-asc', nextAsc);
+            const indicator = doc.createElement('span');
+            indicator.className = 'sort-indicator';
+            indicator.textContent = nextAsc ? ' ▲' : ' ▼';
+            th.appendChild(indicator);
+
+            rows.sort((a, b) => {
+                let cellA = a.children[colIdx];
+                let cellB = b.children[colIdx];
+                let valA = cellA ? cellA.innerText.trim() : '';
+                let valB = cellB ? cellB.innerText.trim() : '';
+
+                let pA = parseFin(valA);
+                let pB = parseFin(valB);
+
+                if (typeof pA === 'number' && typeof pB === 'number') {
+                    return nextAsc ? (pA - pB) : (pB - pA);
+                }
+                return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+
+            if (table.id !== 'table_tab_market') {
+                const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+                win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
+
+                try {
+                    const url = new URL(win.location.href);
+                    url.searchParams.set('sort_codes', sortedCodes.join(','));
+                    win.history.replaceState(null, '', url.toString());
+                } catch (err) {}
+
+                doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
+                    if (otherTable !== table) {
+                        sortTableByCodeList(otherTable, sortedCodes);
+                    }
+                });
+            }
+        });
+
+        function updateDelParam() {
+            const checkedCodes = [];
+            doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
+                const c = cb.getAttribute('data-code');
+                if (c && c.length === 6) checkedCodes.push(c);
+            });
+            try {
+                const url = new URL(win.location.href);
+                if (checkedCodes.length > 0) {
+                    url.searchParams.set('del_codes', checkedCodes.join(','));
+                } else {
+                    url.searchParams.delete('del_codes');
+                }
+                win.history.replaceState(null, '', url.toString());
+            } catch(e) {}
+        }
+
+        doc.addEventListener('change', function(e) {
+            if (e.target && e.target.classList.contains('header-select-all')) {
+                const isChecked = e.target.checked;
+                const tbl = e.target.closest('table');
+                if (tbl) {
+                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => {
+                        cb.checked = isChecked;
+                    });
+                }
+                updateDelParam();
+            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
+                updateDelParam();
+            }
+        });
+
+        doc.addEventListener('click', function(e) {
+            const btn = e.target.closest('button');
+            if (btn && btn.innerText.includes('선택 종목 삭제')) {
+                updateDelParam();
+            }
+        }, true);
+
+        function parseFin(str) {
+            if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
+            let clean = str.replace(/[,%원배\s]/g, '').trim();
+
+            if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(clean)) {
+                let parts = clean.split(/[\/\-]/);
+                let y = parts[0];
+                let m = parts[1].padStart(2, '0');
+                let d = parts[2].padStart(2, '0');
+                return parseInt(y + m + d, 10);
+            }
+
+            if (clean.includes('조')) {
+                let parts = clean.split('조');
+                let jo = parseFloat(parts[0]) || 0;
+                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
+                return (jo * 10000) + rest;
+            } else if (clean.includes('억')) {
+                clean = clean.replace(/억/g, '');
+                return parseFloat(clean) || 0;
+            }
+            let num = parseFloat(clean);
+            return isNaN(num) ? str.trim() : num;
+        }
+
+        function sortTableByCodeList(table, codeOrder) {
+            if (!table || !codeOrder || codeOrder.length === 0) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                let cA = a.getAttribute('data-code');
+                let cB = b.getAttribute('data-code');
+                let iA = codeOrder.indexOf(cA);
+                let iB = codeOrder.indexOf(cB);
+                if (iA === -1) iA = 9999;
+                if (iB === -1) iB = 9999;
+                return iA - iB;
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        function getActiveCodeOrder() {
+            const urlParams = new URLSearchParams(win.location.search);
+            const urlCodes = urlParams.get('sort_codes');
+            if (urlCodes) return urlCodes.split(',');
+            const saved = win.sessionStorage.getItem('stock_sync_order');
+            return saved ? JSON.parse(saved) : null;
+        }
+
+        function applySavedOrderToAll() {
+            const codeOrder = getActiveCodeOrder();
+            if (!codeOrder) return;
+            doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
+                sortTableByCodeList(tbl, codeOrder);
+            });
+        }
+
+        applySavedOrderToAll();
+        restoreActiveTab();
     })();
     </script>
     """, height=0, width=0)
