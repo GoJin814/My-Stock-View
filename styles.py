@@ -388,7 +388,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 tbody_rows += f'<td class="col-chk"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
 
             val_name = str(row.get("종목명", "-"))
-            link_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_name}</a>' if (has_naver_link and code) else val_name
+            link_html = f'<a href="https://finance.naver.com/item/main.naver?code={code}" target="_blank" class="naver-pc-link">{val_name}</a>' if (has_naver_link and code) else val_name
             tbody_rows += f'<td class="col-name">{link_html}</td>'
 
             for col in render_cols:
@@ -430,7 +430,7 @@ def render_multi_header_table(df, *args, **kwargs):
                 align = "left" if str(col) in ["종목명", "종목코드"] else "right"
 
                 if str(col) == "종목명":
-                    link_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_str}</a>' if (has_naver_link and code) else val_str
+                    link_html = f'<a href="https://finance.naver.com/item/main.naver?code={code}" target="_blank" class="naver-pc-link">{val_str}</a>' if (has_naver_link and code) else val_str
                     tbody_rows += f'<td class="col-name" style="text-align:{align};">{link_html}</td>'
                 elif str(col) == "종목코드":
                     tbody_rows += f'<td style="text-align:{align}; color:#94a3b8; font-family:monospace;">{val_str}</td>'
@@ -451,13 +451,15 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(table_html, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """정렬 시 Firebase 직접 동기화 + 화면 우측 쏠림 원천 차단"""
+    """정렬 시 Firebase 직접 동기화 + 탭 전환 시 즉시 순서 복원 + 화면 우측 쏠림 원천 차단"""
     components.html("""
     <script>
     (function initEngine() {
         const doc = window.parent.document;
         const win = window.parent;
         if (!doc || !win) return;
+
+        const FIREBASE_URL = "https://my-stock-view-default-rtdb.firebaseio.com/my_stock_view/sort_order.json";
 
         // 1. 화면이 우측으로 밀리는 포커스 강제 스크롤 차단
         function lockHorizontalScroll() {
@@ -478,18 +480,53 @@ def inject_client_sort_sync_engine():
         win.addEventListener('scroll', lockHorizontalScroll, { passive: true });
         doc.addEventListener('scroll', lockHorizontalScroll, { passive: true });
 
+        // 2. 표 재정렬 유틸리티 함수
+        function sortTableByCodeList(table, codeOrder) {
+            if (!table || !codeOrder || codeOrder.length === 0) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                let cA = a.getAttribute('data-code');
+                let cB = b.getAttribute('data-code');
+                let iA = codeOrder.indexOf(cA);
+                let iB = codeOrder.indexOf(cB);
+                if (iA === -1) iA = 9999;
+                if (iB === -1) iB = 9999;
+                return iA - iB;
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        // Firebase 순서를 읽어와 현재 화면의 모든 테이블 정렬
+        function applyFirebaseSortOrder() {
+            fetch(FIREBASE_URL)
+                .then(res => res.json())
+                .then(order => {
+                    if (Array.isArray(order) && order.length > 0) {
+                        doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
+                            sortTableByCodeList(tbl, order);
+                        });
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // ★ 탭 메뉴 클릭 시: 스크롤 잠금 + Firebase 최신 정렬 즉시 재적용
         doc.addEventListener('click', function(e) {
             const isTab = e.target.closest('div[data-testid="stRadio"]');
             if (isTab) {
                 setTimeout(lockHorizontalScroll, 10);
                 setTimeout(lockHorizontalScroll, 50);
-                setTimeout(lockHorizontalScroll, 150);
+                // Streamlit이 탭 내용을 바꿀 때까지 대기 후 정렬 적용
+                setTimeout(applyFirebaseSortOrder, 100);
+                setTimeout(applyFirebaseSortOrder, 300);
+                setTimeout(applyFirebaseSortOrder, 600);
             }
         }, true);
 
-        // 2. Firebase 실시간 REST 정렬 동기화
-        const FIREBASE_URL = "https://my-stock-view-default-rtdb.firebaseio.com/my_stock_view/sort_order.json";
-
+        // 3. 헤더 클릭 정렬 및 Firebase 실시간 PUT 전송
         doc.addEventListener('click', function(e) {
             if (e.target && e.target.classList.contains('header-select-all')) return;
 
@@ -541,14 +578,13 @@ def inject_client_sort_sync_engine():
             if (table.id !== 'table_tab_market') {
                 const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
                 
-                // 타 탭 테이블 동기화
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
                         sortTableByCodeList(otherTable, sortedCodes);
                     }
                 });
 
-                // Firebase 실시간 PUT 전송
+                // Firebase Realtime DB에 PUT
                 try {
                     fetch(FIREBASE_URL, {
                         method: 'PUT',
@@ -617,23 +653,8 @@ def inject_client_sort_sync_engine():
             return isNaN(num) ? str.trim() : num;
         }
 
-        function sortTableByCodeList(table, codeOrder) {
-            if (!table || !codeOrder || codeOrder.length === 0) return;
-            const tbody = table.querySelector('tbody');
-            if (!tbody) return;
-
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort((a, b) => {
-                let cA = a.getAttribute('data-code');
-                let cB = b.getAttribute('data-code');
-                let iA = codeOrder.indexOf(cA);
-                let iB = codeOrder.indexOf(cB);
-                if (iA === -1) iA = 9999;
-                if (iB === -1) iB = 9999;
-                return iA - iB;
-            });
-            rows.forEach(r => tbody.appendChild(r));
-        }
+        // 페이지 최초 로드 시 적용
+        applyFirebaseSortOrder();
     })();
     </script>
     """, height=0, width=0)
