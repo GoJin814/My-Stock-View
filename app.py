@@ -333,11 +333,11 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-        # -------------------------------------------------------------
+    # -------------------------------------------------------------
     # 4. 상태 기억 탭 (디자인은 순정 st.tabs와 동일)
     # -------------------------------------------------------------
     TAB_OPTIONS = [
-        "★ 관심종목",
+        "⭐ 관심종목",
         "📊 현재시세", 
         "💰 주당가치",
         "📈 실적", 
@@ -349,12 +349,12 @@ if current_codes:
     ]
 
     if "current_active_tab" not in st.session_state:
-        st.session_state.current_active_tab = "★ 관심종목"
+        st.session_state.current_active_tab = "⭐ 관심종목"
 
     current_tab = st.radio(
         "탭 네비게이션",
         TAB_OPTIONS,
-        index=TAB_OPTIONS.index(st.session_state.current_active_tab),
+        index=TAB_OPTIONS.index(st.session_state.current_active_tab) if st.session_state.current_active_tab in TAB_OPTIONS else 0,
         horizontal=True,
         label_visibility="collapsed",
         key="nav_tab_radio"
@@ -363,45 +363,13 @@ if current_codes:
 
     st.write("")
 
-    # 선택된 탭만 렌더링 (필터 변경 시에도 current_tab이 그대로 유지됨)
-    if current_tab == "★ 관심종목":
+    # -------------------------------------------------------------
+    # 5. 각 탭 분기 렌더링 (with tab1: 대신 if/elif 사용)
+    # -------------------------------------------------------------
+    if current_tab == "⭐ 관심종목":
         render_tab_watchlist()
 
     elif current_tab == "📊 현재시세":
-        # (기존 tab2 내부 코드 유지)
-        ...
-
-    elif current_tab == "💰 주당가치":
-        render_tab_share(df_share, most_prev_yr, most_latest_yr)
-
-    elif current_tab == "📈 실적":
-        render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
-
-    elif current_tab == "🌐 국내지수":
-        edited_market_df = render_tab_market()
-        st.write("")
-        render_market_inputs()
-
-    elif current_tab == "📈 수익률-생활비":
-        render_tab_returns_living()
-
-    elif current_tab == "📈 수익률-연금":
-        render_tab_returns_pension()
-
-    elif current_tab == "📈 수익률-roun":
-        render_tab_returns_roun()
-
-    elif current_tab == "📈 수익률-진우":
-        render_tab_returns_jinwoo()
-
-    inject_client_sort_sync_engine()
-
-    # 1. 관심종목 탭
-    with tab1:
-        render_tab_watchlist()
-
-    # 2. 현재 시세 탭
-    with tab2:
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
@@ -461,7 +429,7 @@ if current_codes:
                                 st.query_params.clear()
                             except Exception:
                                 pass
-                            st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다!")
+                            st.success(f"🎉 총 {added_count}개 종목이 관심종목(Firebase)에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
                             st.rerun()
                         else:
                             st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
@@ -602,37 +570,29 @@ if current_codes:
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
-    # 3. 주당 가치 탭
-    with tab3:
+    elif current_tab == "💰 주당가치":
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
-    # 4. 실적 탭
-    with tab4:
+    elif current_tab == "📈 실적":
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
-    # 5. 국내지수 탭
-    with tab5:
+    elif current_tab == "🌐 국내지수":
         edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
 
-    # 6. 생활비 수익률 탭
-    with tab6:
+    elif current_tab == "📈 수익률-생활비":
         render_tab_returns_living()
 
-    # 7. 연금 수익률 탭
-    with tab7:
+    elif current_tab == "📈 수익률-연금":
         render_tab_returns_pension()
 
-    # 8. roun 수익률 탭
-    with tab8:
+    elif current_tab == "📈 수익률-roun":
         render_tab_returns_roun()
 
-    # 9. 진우 수익률 탭
-    with tab9:
+    elif current_tab == "📈 수익률-진우":
         render_tab_returns_jinwoo()
 
-    # 정렬 엔진 유지
     inject_client_sort_sync_engine()
 
     # -------------------------------------------------------------
