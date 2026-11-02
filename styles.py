@@ -326,74 +326,72 @@ def apply_custom_styles():
     """, unsafe_allow_html=True)
 
 
-def render_multi_header_table(*args, **kwargs):
+def render_multi_header_table(df, *args, **kwargs):
     """
-    모든 탭(현재시세, 주당가치, 실적 등)의 호출 규격을 100% 호환하는 다중/단일 헤더 렌더러
+    현재시세(단일 헤더), 주당가치/실적(상단 연도 + 하단 항목명 2단 헤더) 완벽 복원
     """
-    if not args and "df" not in kwargs:
-        st.info("표시할 데이터가 없습니다.")
-        return
-
-    # 1. 인자 유연 파싱 (어떤 방식으로 전달되어도 충돌 없음)
-    df = args[0] if len(args) > 0 else kwargs.get("df")
-    
-    # tab_name 파싱 (위치 인자 또는 키워드 인자)
-    tab_name = kwargs.get("tab_name", "tab_default")
-    if len(args) >= 4 and "tab_name" not in kwargs:
-        tab_name = args[3]
-    elif len(args) == 2 and "tab_name" not in kwargs and isinstance(args[1], str):
-        tab_name = args[1]
-
-    has_naver_link = kwargs.get("has_naver_link", True)
-    has_checkbox = kwargs.get("has_checkbox", False)
-
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         st.info("표시할 데이터가 없습니다.")
         return
 
+    # 1. 인자 유연 파싱
+    prev_yr = args[0] if len(args) > 0 else kwargs.get("prev_yr", "직전연도")
+    latest_yr = args[1] if len(args) > 1 else kwargs.get("latest_yr", "최근연도")
+    tab_name = kwargs.get("tab_name", args[2] if len(args) > 2 else "tab_default")
+    has_naver_link = kwargs.get("has_naver_link", True)
+    has_checkbox = kwargs.get("has_checkbox", False)
+
     table_id = f"table_{tab_name}"
     chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
-    is_multi = isinstance(df.columns, pd.MultiIndex)
 
-    # 2. 헤더 HTML 조립
-    thead_html = ""
-    if is_multi:
+    # 제외할 컬럼 필터링
+    cols = [c for c in df.columns if not str(c).startswith("_") and str(c) not in ["선택", "종목코드"]]
+
+    # ---------------------------------------------------------
+    # A. 주당가치 (tab_share) / 실적 (tab_perf): 2단 연도 헤더 복원
+    # ---------------------------------------------------------
+    if "share" in tab_name or "perf" in tab_name or any(("_직전" in str(c) or "_최근" in str(c)) for c in cols):
+        cols_prev = [c for c in cols if "_직전" in str(c)]
+        cols_latest = [c for c in cols if "_최근" in str(c)]
+        cols_yoy = [c for c in cols if "_YoY" in str(c)]
+
+        # 1층 헤더 (종목명 rowspan=2, 상단 연도들 colspan)
         tr1 = "<tr>"
         if has_checkbox:
             tr1 += '<th rowspan="2" class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
+        tr1 += '<th rowspan="2" class="col-name-th sortable-th" data-col-idx="0">종목명</th>'
 
-        from itertools import groupby
-        col_cursor = 1 if has_checkbox else 0
-        lvl0 = [c[0] for c in df.columns]
-
-        for key, group in groupby(enumerate(lvl0), key=lambda x: x[1]):
-            g_list = list(group)
-            span = len(g_list)
-            if key == "종목명":
-                tr1 += f'<th rowspan="2" class="col-name-th sortable-th" data-col-idx="{col_cursor}">종목명</th>'
-            else:
-                tr1 += f'<th colspan="{span}">{key}</th>'
-            col_cursor += span
+        if cols_prev:
+            tr1 += f'<th colspan="{len(cols_prev)}" class="year-divider">{prev_yr}</th>'
+        if cols_latest:
+            tr1 += f'<th colspan="{len(cols_latest)}">{latest_yr}</th>'
+        if cols_yoy:
+            tr1 += f'<th colspan="{len(cols_yoy)}">전년 대비 (YoY)</th>'
         tr1 += "</tr>"
 
+        # 2층 헤더 (하단 각 지표명)
         tr2 = "<tr>"
-        sub_idx = (1 if has_checkbox else 0) + (1 if "종목명" in lvl0 else 0)
-        for c0, c1 in df.columns:
-            if c0 == "종목명":
-                continue
-            align = "left" if "코드" in str(c1) else "right"
-            tr2 += f'<th class="sortable-th" data-col-idx="{sub_idx}" style="text-align:{align};">{c1}</th>'
-            sub_idx += 1
+        cur_idx = 1 if not has_checkbox else 2
+        for c in (cols_prev + cols_latest + cols_yoy):
+            label = str(c).replace("_직전", "").replace("_최근", "").replace("_YoY", "")
+            is_div = "year-divider" if (cols_prev and c == cols_prev[-1]) else ""
+            tr2 += f'<th class="sortable-th {is_div}" data-col-idx="{cur_idx}" style="text-align: right;">{label}</th>'
+            cur_idx += 1
         tr2 += "</tr>"
+
         thead_html = f"<thead>{tr1}{tr2}</thead>"
+        render_cols = cols_prev + cols_latest + cols_yoy
+
+    # ---------------------------------------------------------
+    # B. 현재시세 (tab_basic): 단일 헤더
+    # ---------------------------------------------------------
     else:
         tr = "<tr>"
         start_idx = 0
         if has_checkbox:
             tr += '<th class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
             start_idx = 1
-        render_cols = [c for c in df.columns if not str(c).startswith("_")]
-        for i, col in enumerate(render_cols):
+        for i, col in enumerate([c for c in df.columns if not str(c).startswith("_") and str(c) != "선택"]):
             idx = start_idx + i
             if str(col) == "종목명":
                 tr += f'<th class="col-name-th sortable-th" data-col-idx="{idx}">종목명</th>'
@@ -402,43 +400,40 @@ def render_multi_header_table(*args, **kwargs):
                 tr += f'<th class="sortable-th" data-col-idx="{idx}" style="text-align:{align};">{col}</th>'
         tr += "</tr>"
         thead_html = f"<thead>{tr}</thead>"
+        render_cols = [c for c in df.columns if not str(c).startswith("_") and str(c) not in ["선택", "종목명"]]
 
-    # 3. 본문 행(tr) 조립
+    # ---------------------------------------------------------
+    # 행(Row) 조립
+    # ---------------------------------------------------------
     tbody_rows = ""
     for _, row in df.iterrows():
-        code = ""
-        if is_multi:
-            for c in df.columns:
-                if "종목코드" in str(c):
-                    code = str(row.get(c, "")).strip().zfill(6)
-                    break
-        else:
-            code = str(row.get("종목코드", "")).strip().zfill(6)
-
+        code = str(row.get("종목코드", "")).strip().zfill(6)
         tbody_rows += f'<tr data-code="{code}">'
+
         if has_checkbox:
             tbody_rows += f'<td class="col-chk"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
 
-        for col in df.columns:
-            c_label = str(col[1] if is_multi else col)
-            c_top = str(col[0] if is_multi else col)
-            if c_label.startswith("_") or c_top.startswith("_"):
-                continue
+        # 종목명 열
+        val_name = str(row.get("종목명", "-"))
+        if has_naver_link and code:
+            link_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_name}</a>'
+        else:
+            link_html = val_name
+        tbody_rows += f'<td class="col-name">{link_html}</td>'
 
+        # 데이터 셀들
+        for col in render_cols:
             val = row.get(col, "-")
             val_str = "-" if pd.isna(val) else str(val)
-            align = "left" if ("종목명" in c_label or "코드" in c_label) else "right"
+            align = "left" if "코드" in str(col) else "right"
+            
+            # 연도 구분선 적용
+            is_div = "year-divider" if ("cols_prev" in locals() and cols_prev and col == cols_prev[-1]) else ""
 
-            if c_label == "종목명" or c_top == "종목명":
-                if has_naver_link and code:
-                    cell_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_str}</a>'
-                else:
-                    cell_html = val_str
-                tbody_rows += f'<td class="col-name">{cell_html}</td>'
-            elif "코드" in c_label:
-                tbody_rows += f'<td style="text-align:{align}; color:#94a3b8; font-family:monospace;">{val_str}</td>'
+            if "코드" in str(col):
+                tbody_rows += f'<td class="{is_div}" style="text-align:{align}; color:#94a3b8; font-family:monospace;">{val_str}</td>'
             else:
-                tbody_rows += f'<td style="text-align:{align};">{val_str}</td>'
+                tbody_rows += f'<td class="{is_div}" style="text-align:{align};">{val_str}</td>'
 
         tbody_rows += "</tr>"
 
