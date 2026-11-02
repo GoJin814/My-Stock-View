@@ -21,23 +21,27 @@ def apply_custom_styles():
             min-height: 100% !important;
         }
 
-        .stApp, 
+        /* 뷰포트 가로 스크롤 이탈 절대 방지 */
+        html, body, .stApp, 
         [data-testid="stAppViewContainer"], 
-        [data-testid="stMain"],
+        [data-testid="stMain"], 
         section.main {
             background-color: #0e1117 !important;
             overscroll-behavior-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
+            overflow-x: hidden !important;
+            max-width: 100vw !important;
+            position: relative !important;
         }
 
+        /* 상단 툴바(Share 메뉴)에 가려지지 않도록 패딩 확보 */
         .block-container {
-            padding-top: 3.2rem !important; /* 헤더 툴바 직하단에 밀착 */
+            padding-top: 3.2rem !important;
             padding-bottom: 2.0rem !important;
             padding-left: 0.6rem !important;
             padding-right: 0.6rem !important;
             max-width: 100% !important;
         }
-
 
         div[data-testid="stToggle"] {
             margin-bottom: 0.5rem !important;
@@ -58,7 +62,6 @@ def apply_custom_styles():
             margin-bottom: 0.4rem !important;
         }
 
-        /* 슬라이더 라벨 높이 제거 및 마진 축소 */
         .filter-container-box div[data-testid="stSlider"] {
             margin-top: -6px !important;
             margin-bottom: 0 !important;
@@ -66,16 +69,6 @@ def apply_custom_styles():
 
         .filter-container-box div[data-testid="stCheckbox"] {
             margin-top: 4px !important;
-        }
-
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
-        .stTabs [data-baseweb="tab"] {
-            padding-left: 14px;
-            padding-right: 14px;
-            white-space: nowrap;
-            font-size: 0.92rem !important;
         }
 
         .custom-grid-wrapper {
@@ -217,7 +210,7 @@ def apply_custom_styles():
             background-color: #0e1117 !important;
             color: #f3f4f6 !important;
             padding: 8px 10px !important;
-            border-bottom: 1px solid #1e242c !important; /* 기본 행은 얇은 선 */
+            border-bottom: 1px solid #1e242c !important;
             border-right: 1px solid #1e242c !important;
             white-space: nowrap !important;
             text-align: center !important;
@@ -225,7 +218,6 @@ def apply_custom_styles():
             position: relative;
         }
 
-        /* 💡 종목별로 묶이는 2줄마다(짝수 번째 행) 굵은 구분선 적용 */
         #table_tab_watchlist tr:nth-child(even) td {
             border-bottom: 2px solid #64748b !important;
         }
@@ -272,83 +264,15 @@ def apply_custom_styles():
             accent-color: #3b82f6;
             vertical-align: middle;
         }
+
         /* ========================================================= */
         /* ★ 탭 메뉴 무조건 1줄 강제 고정 & 부드러운 가로 스크롤 */
         /* ========================================================= */
-
-        /* 1. 라디오 컨테이너가 화면 너비를 넘지 못하게 잠금 */
         div[data-testid="stRadio"] {
             width: 100% !important;
             max-width: 100% !important;
             overflow: hidden !important;
             margin-bottom: 0.3rem !important;
-        }
-
-        /* 2. radiogroup 및 하위 div의 줄바꿈을 원천 차단하고 1줄 가로스크롤 강제 */
-        div[data-testid="stRadio"] > div,
-        div[data-testid="stRadio"] [role="radiogroup"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important; /* ★ 2줄 줄바꿈 금지 */
-            overflow-x: auto !important; /* ★ 가로 스크롤 활성화 */
-            overflow-y: hidden !important;
-            -webkit-overflow-scrolling: touch !important; /* 모바일 부드러운 터치 스크롤 */
-            scrollbar-width: none !important; /* 파이어폭스 스크롤바 숨김 */
-            gap: 1.2rem !important;
-            padding-bottom: 4px !important;
-            margin: 0 !important;
-            width: 100% !important;
-            white-space: nowrap !important;
-        }
-
-        /* 3. 스크롤바 감추기 (크롬 / 사파리 / 삼성인터넷) */
-        div[data-testid="stRadio"] > div::-webkit-scrollbar,
-        div[data-testid="stRadio"] [role="radiogroup"]::-webkit-scrollbar {
-            display: none !important;
-        }
-
-        /* 4. 개별 탭 버튼이 찌그러지거나 아래로 떨어지지 않도록 설정 */
-        div[data-testid="stRadio"] [role="radiogroup"] label {
-            display: inline-flex !important;
-            align-items: center !important;
-            flex-shrink: 0 !important; /* ★ 화면이 좁아도 찌그러짐 방지 */
-            background: transparent !important;
-            border: none !important;
-            padding: 0.3rem 0.1rem !important;
-            margin: 0 !important;
-            cursor: pointer !important;
-            white-space: nowrap !important;
-        }
-
-        /* 5. 텍스트 글자 크기 및 색상 */
-        div[data-testid="stRadio"] [role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
-            color: #94a3b8 !important;
-            font-size: 0.95rem !important;
-            font-weight: 500 !important;
-            margin: 0 !important;
-            white-space: nowrap !important;
-        }
-
-        /* 6. 선택된 탭 강조 (빨간 밑줄) */
-        div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
-            border-bottom: 2px solid #ff4b4b !important;
-        }
-        div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
-            color: #ffffff !important;
-            font-weight: 700 !important;
-        }
-                /* 뷰포트 가로 스크롤 이탈 절대 방지 */
-        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main {
-            overflow-x: hidden !important;
-            max-width: 100vw !important;
-            position: relative !important;
-        }
-
-        /* 탭 라디오 바 자체만 가로 스크롤 허용 */
-        div[data-testid="stRadio"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            overflow: hidden !important;
         }
 
         div[data-testid="stRadio"] > div,
@@ -362,7 +286,9 @@ def apply_custom_styles():
             scrollbar-width: none !important;
             gap: 1.2rem !important;
             padding-bottom: 4px !important;
+            margin: 0 !important;
             width: 100% !important;
+            white-space: nowrap !important;
         }
         div[data-testid="stRadio"] > div::-webkit-scrollbar,
         div[data-testid="stRadio"] [role="radiogroup"]::-webkit-scrollbar {
@@ -374,74 +300,140 @@ def apply_custom_styles():
             align-items: center !important;
             flex-shrink: 0 !important;
             background: transparent !important;
+            border: none !important;
+            padding: 0.3rem 0.1rem !important;
+            margin: 0 !important;
+            cursor: pointer !important;
             white-space: nowrap !important;
         }
-        
+
+        div[data-testid="stRadio"] [role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+            color: #94a3b8 !important;
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
+            border-bottom: 2px solid #ff4b4b !important;
+        }
+        div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
+
 def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, has_checkbox=False):
+    """기존 다중 헤더 및 단일 헤더 테이블 완벽 호환 렌더러"""
     if df is None or df.empty:
         st.info("표시할 데이터가 없습니다.")
         return
 
-    # 1. 헤더 HTML 구성
-    headers = [col for col in df.columns if not col.startswith("_")]
-    th_html = ""
-    start_idx = 0
+    table_id = f"table_{tab_name}"
+    chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
 
-    if has_checkbox:
-        th_html += '<th style="width: 40px; text-align: center;"><input type="checkbox" class="header-select-all"></th>'
-        start_idx = 1
+    # 다중 레벨 컬럼(MultiIndex) 지원
+    is_multi_header = isinstance(df.columns, pd.MultiIndex)
+    thead_html = ""
 
-    for i, col in enumerate(headers):
-        col_idx = start_idx + i
-        align = "left" if col in ["종목명", "종목코드"] else "right"
-        th_html += f'<th class="sortable-th" data-col-idx="{col_idx}" style="text-align: {align};">{col}</th>'
+    if is_multi_header:
+        # 1행 헤더
+        tr1 = "<tr>"
+        if has_checkbox:
+            tr1 += '<th rowspan="2" class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
+        
+        # 레벨 0 상위 헤더 그룹핑
+        lvl0 = df.columns.get_level_values(0)
+        from itertools import groupby
+        col_start = 1 if has_checkbox else 0
 
-    # 2. 파이썬 DF의 정렬 순서 그대로 HTML 행(tr) 생성
-    rows_html = ""
+        for key, group in groupby(enumerate(lvl0), key=lambda x: x[1]):
+            g_list = list(group)
+            span = len(g_list)
+            if key == "종목명":
+                tr1 += f'<th rowspan="2" class="col-name-th sortable-th" data-col-idx="{col_start}">종목명</th>'
+            else:
+                tr1 += f'<th colspan="{span}">{key}</th>'
+            col_start += span
+        tr1 += "</tr>"
+
+        # 2행 서브 헤더
+        tr2 = "<tr>"
+        cur_idx = (1 if has_checkbox else 0) + (1 if "종목명" in lvl0 else 0)
+        for c0, c1 in df.columns:
+            if c0 == "종목명":
+                continue
+            align = "left" if "코드" in str(c1) else "right"
+            tr2 += f'<th class="sortable-th" data-col-idx="{cur_idx}" style="text-align:{align};">{c1}</th>'
+            cur_idx += 1
+        tr2 += "</tr>"
+        thead_html = f"<thead>{tr1}{tr2}</thead>"
+
+    else:
+        # 단일 헤더
+        tr = "<tr>"
+        start_idx = 0
+        if has_checkbox:
+            tr += '<th class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
+            start_idx = 1
+        for i, col in enumerate([c for c in df.columns if not str(c).startswith("_")]):
+            idx = start_idx + i
+            if col == "종목명":
+                tr += f'<th class="col-name-th sortable-th" data-col-idx="{idx}">종목명</th>'
+            else:
+                align = "left" if "코드" in str(col) else "right"
+                tr += f'<th class="sortable-th" data-col-idx="{idx}" style="text-align:{align};">{col}</th>'
+        tr += "</tr>"
+        thead_html = f"<thead>{tr}</thead>"
+
+    # 행(Row) 조립: 파이썬 df의 순서를 100% 그대로 반영
+    tbody_rows = ""
+    cols_to_render = [c for c in df.columns if not str(c[0] if is_multi_header else c).startswith("_")]
+
     for _, row in df.iterrows():
-        code = str(row.get("종목코드", "")).strip().zfill(6)
-        rows_html += f'<tr data-code="{code}">'
+        code = str(row.get("종목코드", "") if not is_multi_header else row.get(("기본정보", "종목코드"), "")).strip().zfill(6)
+        tbody_rows += f'<tr data-code="{code}">'
         
         if has_checkbox:
-            rows_html += f'<td style="text-align: center;"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
+            tbody_rows += f'<td class="col-chk"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
 
-        for col in headers:
+        for col in cols_to_render:
             val = row.get(col, "-")
             val_str = "-" if pd.isna(val) else str(val)
-            align = "left" if col in ["종목명", "종목코드"] else "right"
+            col_name_str = str(col[1] if is_multi_header else col)
+            align = "left" if col_name_str in ["종목명", "종목코드"] else "right"
 
-            if col == "종목명" and has_naver_link and code:
-                cell_content = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" style="color: inherit; text-decoration: none; font-weight: 600;">{val_str}</a>'
-            elif col == "종목코드":
-                cell_content = f'<span style="color: #94a3b8; font-family: monospace;">{val_str}</span>'
+            if col_name_str == "종목명":
+                if has_naver_link and code:
+                    link_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_str}</a>'
+                else:
+                    link_html = val_str
+                tbody_rows += f'<td class="col-name">{link_html}</td>'
+            elif col_name_str == "종목코드":
+                tbody_rows += f'<td style="text-align:{align}; color:#94a3b8; font-family:monospace;">{val_str}</td>'
             else:
-                cell_content = val_str
-
-            rows_html += f'<td style="text-align: {align};">{cell_content}</td>'
+                tbody_rows += f'<td style="text-align:{align};">{val_str}</td>'
         
-        rows_html += '</tr>'
+        tbody_rows += "</tr>"
 
-    table_id = f"table_{tab_name}"
-    
-    # 3. 테이블 렌더링 (sessionStorage 강제 재정렬 스크립트 제거)
-    html_code = f"""
-    <div class="custom-table-container">
+    table_html = f"""
+    <div class="custom-grid-wrapper {chk_class}">
         <table class="custom-grid-table" id="{table_id}">
-            <thead>
-                <tr>{th_html}</tr>
-            </thead>
+            {thead_html}
             <tbody>
-                {rows_html}
+                {tbody_rows}
             </tbody>
         </table>
     </div>
     """
-    st.markdown(html_code, unsafe_allow_html=True)
+    st.markdown(table_html, unsafe_allow_html=True)
+
 
 def inject_client_sort_sync_engine():
+    """정렬 시 Firebase 직접 동기화 + 화면 우측 쏠림 원천 차단"""
     components.html("""
     <script>
     (function initEngine() {
@@ -449,7 +441,7 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        // 1. 화면이 우측으로 밀리는 포커스 강제 스크롤 차단 엔진
+        // 1. 화면이 우측으로 밀리는 포커스 강제 스크롤 차단
         function lockHorizontalScroll() {
             if (win.scrollX !== 0) win.scrollTo(0, win.scrollY);
             const containers = [
@@ -468,7 +460,6 @@ def inject_client_sort_sync_engine():
         win.addEventListener('scroll', lockHorizontalScroll, { passive: true });
         doc.addEventListener('scroll', lockHorizontalScroll, { passive: true });
 
-        // 탭 터치 시 전역 뷰포트 이동 즉시 차단
         doc.addEventListener('click', function(e) {
             const isTab = e.target.closest('div[data-testid="stRadio"]');
             if (isTab) {
@@ -529,17 +520,17 @@ def inject_client_sort_sync_engine():
 
             rows.forEach(r => tbody.appendChild(r));
 
-            // 모든 탭의 표에 즉시 반영
             if (table.id !== 'table_tab_market') {
                 const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
                 
+                // 타 탭 테이블 동기화
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
                         sortTableByCodeList(otherTable, sortedCodes);
                     }
                 });
 
-                // ★ Firebase DB에 즉시 HTTP PUT으로 저장 (다른 기기 즉시 연동)
+                // Firebase 실시간 PUT 전송
                 try {
                     fetch(FIREBASE_URL, {
                         method: 'PUT',
@@ -625,18 +616,6 @@ def inject_client_sort_sync_engine():
             });
             rows.forEach(r => tbody.appendChild(r));
         }
-
-        // 초기 로드 시 Firebase 정렬 순서 가져와 즉시 적용
-        fetch(FIREBASE_URL)
-            .then(res => res.json())
-            .then(order => {
-                if (Array.isArray(order) && order.length > 0) {
-                    doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
-                        sortTableByCodeList(tbl, order);
-                    });
-                }
-            })
-            .catch(() => {});
     })();
     </script>
     """, height=0, width=0)
