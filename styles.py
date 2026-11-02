@@ -327,61 +327,59 @@ def apply_custom_styles():
 
 
 def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, has_checkbox=False):
-    """기존 다중 헤더 및 단일 헤더 테이블 완벽 호환 렌더러"""
+    """단일 헤더 및 MultiIndex 다중 헤더(주당가치, 실적 탭) 완벽 지원"""
     if df is None or df.empty:
         st.info("표시할 데이터가 없습니다.")
         return
 
     table_id = f"table_{tab_name}"
     chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
+    is_multi = isinstance(df.columns, pd.MultiIndex)
 
-    # 다중 레벨 컬럼(MultiIndex) 지원
-    is_multi_header = isinstance(df.columns, pd.MultiIndex)
+    # 1. 헤더 HTML 조립
     thead_html = ""
-
-    if is_multi_header:
-        # 1행 헤더
+    if is_multi:
         tr1 = "<tr>"
         if has_checkbox:
             tr1 += '<th rowspan="2" class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
-        
-        # 레벨 0 상위 헤더 그룹핑
-        lvl0 = df.columns.get_level_values(0)
+
+        # 상위 헤더 (Level 0) 그룹핑
         from itertools import groupby
-        col_start = 1 if has_checkbox else 0
+        col_cursor = 1 if has_checkbox else 0
+        lvl0 = [c[0] for c in df.columns]
 
         for key, group in groupby(enumerate(lvl0), key=lambda x: x[1]):
             g_list = list(group)
             span = len(g_list)
             if key == "종목명":
-                tr1 += f'<th rowspan="2" class="col-name-th sortable-th" data-col-idx="{col_start}">종목명</th>'
+                tr1 += f'<th rowspan="2" class="col-name-th sortable-th" data-col-idx="{col_cursor}">종목명</th>'
             else:
                 tr1 += f'<th colspan="{span}">{key}</th>'
-            col_start += span
+            col_cursor += span
         tr1 += "</tr>"
 
-        # 2행 서브 헤더
+        # 하위 헤더 (Level 1)
         tr2 = "<tr>"
-        cur_idx = (1 if has_checkbox else 0) + (1 if "종목명" in lvl0 else 0)
+        sub_idx = (1 if has_checkbox else 0) + (1 if "종목명" in lvl0 else 0)
         for c0, c1 in df.columns:
             if c0 == "종목명":
                 continue
             align = "left" if "코드" in str(c1) else "right"
-            tr2 += f'<th class="sortable-th" data-col-idx="{cur_idx}" style="text-align:{align};">{c1}</th>'
-            cur_idx += 1
+            tr2 += f'<th class="sortable-th" data-col-idx="{sub_idx}" style="text-align:{align};">{c1}</th>'
+            sub_idx += 1
         tr2 += "</tr>"
         thead_html = f"<thead>{tr1}{tr2}</thead>"
-
     else:
-        # 단일 헤더
+        # 단일 레벨 헤더 (현재시세 탭)
         tr = "<tr>"
         start_idx = 0
         if has_checkbox:
             tr += '<th class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
             start_idx = 1
-        for i, col in enumerate([c for c in df.columns if not str(c).startswith("_")]):
+        render_cols = [c for c in df.columns if not str(c).startswith("_")]
+        for i, col in enumerate(render_cols):
             idx = start_idx + i
-            if col == "종목명":
+            if str(col) == "종목명":
                 tr += f'<th class="col-name-th sortable-th" data-col-idx="{idx}">종목명</th>'
             else:
                 align = "left" if "코드" in str(col) else "right"
@@ -389,34 +387,45 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
         tr += "</tr>"
         thead_html = f"<thead>{tr}</thead>"
 
-    # 행(Row) 조립: 파이썬 df의 순서를 100% 그대로 반영
+    # 2. 본문 행(tr) 조립
     tbody_rows = ""
-    cols_to_render = [c for c in df.columns if not str(c[0] if is_multi_header else c).startswith("_")]
-
     for _, row in df.iterrows():
-        code = str(row.get("종목코드", "") if not is_multi_header else row.get(("기본정보", "종목코드"), "")).strip().zfill(6)
+        # 종목코드 안전 추출
+        code = ""
+        if is_multi:
+            for c in df.columns:
+                if "종목코드" in str(c):
+                    code = str(row.get(c, "")).strip().zfill(6)
+                    break
+        else:
+            code = str(row.get("종목코드", "")).strip().zfill(6)
+
         tbody_rows += f'<tr data-code="{code}">'
-        
         if has_checkbox:
             tbody_rows += f'<td class="col-chk"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
 
-        for col in cols_to_render:
+        for col in df.columns:
+            # 내부 정렬/연산용 숨김 컬럼 스킵
+            c_label = str(col[1] if is_multi else col)
+            c_top = str(col[0] if is_multi else col)
+            if c_label.startswith("_") or c_top.startswith("_"):
+                continue
+
             val = row.get(col, "-")
             val_str = "-" if pd.isna(val) else str(val)
-            col_name_str = str(col[1] if is_multi_header else col)
-            align = "left" if col_name_str in ["종목명", "종목코드"] else "right"
+            align = "left" if ("종목명" in c_label or "코드" in c_label) else "right"
 
-            if col_name_str == "종목명":
+            if c_label == "종목명" or c_top == "종목명":
                 if has_naver_link and code:
-                    link_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_str}</a>'
+                    cell_html = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" class="naver-pc-link">{val_str}</a>'
                 else:
-                    link_html = val_str
-                tbody_rows += f'<td class="col-name">{link_html}</td>'
-            elif col_name_str == "종목코드":
+                    cell_html = val_str
+                tbody_rows += f'<td class="col-name">{cell_html}</td>'
+            elif "코드" in c_label:
                 tbody_rows += f'<td style="text-align:{align}; color:#94a3b8; font-family:monospace;">{val_str}</td>'
             else:
                 tbody_rows += f'<td style="text-align:{align};">{val_str}</td>'
-        
+
         tbody_rows += "</tr>"
 
     table_html = f"""
@@ -430,7 +439,6 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
     </div>
     """
     st.markdown(table_html, unsafe_allow_html=True)
-
 
 def inject_client_sort_sync_engine():
     """정렬 시 Firebase 직접 동기화 + 화면 우측 쏠림 원천 차단"""
