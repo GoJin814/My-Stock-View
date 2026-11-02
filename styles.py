@@ -293,46 +293,46 @@ def apply_custom_styles():
             gap: 1.2rem !important;
             padding-bottom: 3px !important;
             width: 100% !important;
-    }
-    div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
-        display: none !important;
-    }
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
+            display: none !important;
+        }
 
-    /* 4. 라디오 동그라미 아이콘 및 실제 input 요소 완벽 숨김 */
-    div[data-testid="stRadio"] [role="radiogroup"] label > div:first-child,
-    div[data-testid="stRadio"] [role="radiogroup"] label div[class*="StyledRadio"],
-    div[data-testid="stRadio"] [role="radiogroup"] label div[class*="Radio"],
-    div[data-testid="stRadio"] [role="radiogroup"] label div[class*="radiomark"],
-    div[data-testid="stRadio"] [role="radiogroup"] label svg {
-        display: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-    }
+        /* 4. 라디오 동그라미 아이콘 및 실제 input 요소 완벽 숨김 */
+        div[data-testid="stRadio"] [role="radiogroup"] label > div:first-child,
+        div[data-testid="stRadio"] [role="radiogroup"] label div[class*="StyledRadio"],
+        div[data-testid="stRadio"] [role="radiogroup"] label div[class*="Radio"],
+        div[data-testid="stRadio"] [role="radiogroup"] label div[class*="radiomark"],
+        div[data-testid="stRadio"] [role="radiogroup"] label svg {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+        }
 
-    div[data-testid="stRadio"] input[type="radio"] {
-        display: none !important;
-        position: fixed !important;
-        left: -9999px !important;
-    }
+        div[data-testid="stRadio"] input[type="radio"] {
+            display: none !important;
+            position: fixed !important;
+            left: -9999px !important;
+        }
 
-    /* 5. 탭 버튼(라벨) 터치 최적화 */
-    div[data-testid="stRadio"] > div[role="radiogroup"] label {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background: transparent !important;
-        border: none !important;
-        padding: 0.4rem 0.2rem !important;
-        margin: 0 !important;
-        cursor: pointer !important;
-        white-space: nowrap !important;
-        flex-shrink: 0 !important;
-        scroll-margin: 0 !important;
-    }
+        /* 5. 탭 버튼(라벨) 터치 최적화 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 0.4rem 0.2rem !important;
+            margin: 0 !important;
+            cursor: pointer !important;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+            scroll-margin: 0 !important;
+        }
 
         /* 6. 미선택 탭 글자 색상 */
         div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
