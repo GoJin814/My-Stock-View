@@ -326,42 +326,37 @@ if current_codes:
     df_share = df_share[valid_mask].reset_index(drop=True)
 
     # -------------------------------------------------------------
-    # 4. 세그먼트 컨트롤 탭 (탭 이름과 아래 if 분기를 1:1로 일치)
+    # 4. 라디오 가로 스크롤 탭 (상태 기억 & 필터 조작 시 유지)
     # -------------------------------------------------------------
     TAB_OPTIONS = [
-        "⭐ 관심종목",
+        "★ 관심종목",
         "📊 현재시세", 
         "💰 주당가치",
         "📈 실적", 
         "🌐 국내지수",
-        "📈 생활비",
-        "📈 연금",
-        "📈 roun",
-        "📈 진우"
+        "📈 수익률-생활비",
+        "📈 수익률-연금",
+        "📈 수익률-roun",
+        "📈 수익률-진우"
     ]
 
     if "current_active_tab" not in st.session_state or st.session_state.current_active_tab not in TAB_OPTIONS:
-        st.session_state.current_active_tab = "⭐ 관심종목"
+        st.session_state.current_active_tab = "★ 관심종목"
 
-    current_tab = st.segmented_control(
+    current_tab = st.radio(
         "탭 네비게이션",
         TAB_OPTIONS,
-        default=st.session_state.current_active_tab,
+        index=TAB_OPTIONS.index(st.session_state.current_active_tab),
+        horizontal=True,
         label_visibility="collapsed",
-        key="nav_tab_segmented"
+        key="nav_tab_radio"
     )
-
-    if not current_tab:
-        current_tab = st.session_state.current_active_tab
-    else:
-        st.session_state.current_active_tab = current_tab
-
-    st.write("")
+    st.session_state.current_active_tab = current_tab
 
     # -------------------------------------------------------------
-    # 5. 각 탭 분기 렌더링 (이름 일치 완료)
+    # 5. 각 탭 분기 렌더링
     # -------------------------------------------------------------
-    if current_tab == "⭐ 관심종목":
+    if current_tab == "★ 관심종목":
         render_tab_watchlist()
 
     elif current_tab == "📊 현재시세":
@@ -424,7 +419,7 @@ if current_codes:
                                 st.query_params.clear()
                             except Exception:
                                 pass
-                            st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                            st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다!")
                             st.rerun()
                         else:
                             st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
@@ -449,7 +444,7 @@ if current_codes:
                         st.query_params.clear()
                     except Exception:
                         pass
-                    st.success(f"종목 {len(del_codes)}개 삭제 완료 (실시간 동기화됨)")
+                    st.success(f"종목 {len(del_codes)}개 삭제 완료")
                     st.rerun()
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
@@ -496,7 +491,7 @@ if current_codes:
                                 if formatted not in current_codes:
                                     current_codes.append(formatted)
                                     save_codes(current_codes)
-                                    st.success(f"{formatted} 추가 완료 (Firebase 실시간 저장)")
+                                    st.success(f"{formatted} 추가 완료")
                                     st.rerun()
 
                 with tab_bulk_text:
@@ -576,16 +571,16 @@ if current_codes:
         st.write("")
         render_market_inputs()
 
-    elif current_tab == "📈 생활비":
+    elif current_tab == "📈 수익률-생활비":
         render_tab_returns_living()
 
-    elif current_tab == "📈 연금":
+    elif current_tab == "📈 수익률-연금":
         render_tab_returns_pension()
 
-    elif current_tab == "📈 roun":
+    elif current_tab == "📈 수익률-roun":
         render_tab_returns_roun()
 
-    elif current_tab == "📈 진우":
+    elif current_tab == "📈 수익률-진우":
         render_tab_returns_jinwoo()
 
     inject_client_sort_sync_engine()
