@@ -3,10 +3,12 @@ import pandas as pd
 import numpy as np
 import os
 import re
-import base64
-import json
 import requests
 from concurrent.futures import ThreadPoolExecutor
+
+# Firebase Admin SDK 연동
+import firebase_admin
+from firebase_admin import credentials, db
 
 from styles import apply_custom_styles, inject_client_sort_sync_engine
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
@@ -20,69 +22,62 @@ from tabs.tab_returns_pension import render_tab_returns_pension
 from tabs.tab_returns_roun import render_tab_returns_roun
 from tabs.tab_returns_jinwoo import render_tab_returns_jinwoo
 
-
 st.set_page_config(page_title="Scanning", layout="wide")
 apply_custom_styles()
 
-SAVE_FILE = "saved_codes.txt"
-
-def commit_to_github(filename, content_str, commit_message="Auto-update from Streamlit"):
-    token = st.secrets.get("GITHUB_TOKEN")
-    repo = st.secrets.get("GITHUB_REPO")
-    branch = st.secrets.get("GITHUB_BRANCH", "main")
-    
-    if not token or not repo:
-        st.error("⚠️ Streamlit Secrets에 GITHUB_TOKEN 또는 GITHUB_REPO 설정이 누락되었습니다.")
-        return False
-        
-    url = f"https://api.github.com/repos/{repo}/contents/{filename}"
-    headers = {
-        "Authorization": f"Bearer {token.strip()}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
-    
+# -------------------------------------------------------------
+# 1. Firebase 초기화 및 실시간 데이터베이스 연동
+# -------------------------------------------------------------
+if not firebase_admin._apps:
     try:
-        res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
-        sha = res.json().get("sha") if res.status_code == 200 else None
-            
-        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
-        payload = {
-            "message": commit_message,
-            "content": content_b64,
-            "branch": branch
-        }
-        if sha:
-            payload["sha"] = sha
-            
-        put_res = requests.put(url, headers=headers, json=payload, timeout=7)
-        if put_res.status_code in [200, 201]:
-            return True
-        else:
-            err_data = put_res.json()
-            st.error(f"⚠️ GitHub 커밋 실패 ({put_res.status_code}): {err_data.get('message', '')}")
-            return False
+        cred_dict = dict(st.secrets["firebase"])
+        db_url = cred_dict.pop("databaseURL", "https://my-stock-view-default-rtdb.firebaseio.com")
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred, {"databaseURL": db_url})
     except Exception as e:
-        st.error(f"⚠️ GitHub 통신 에러: {e}")
-        return False
+        st.error(f"⚠️ Firebase 초기화 실패 (Streamlit Secrets 설정을 확인하세요): {e}")
 
 def load_codes():
+    """Firebase Realtime Database에서 실시간 종목코드 목록 불러오기"""
+    try:
+        ref = db.reference("my_stock_view/saved_codes")
+        codes = ref.get()
+        if codes and isinstance(codes, list):
+            cleaned = [str(c).strip().zfill(6) for c in codes if str(c).strip().isdigit()]
+            if cleaned:
+                return list(dict.fromkeys(cleaned))
+    except Exception as e:
+        st.warning(f"DB 로드 실패, 로컬 캐시 확인 중: {e}")
+
+    # DB 실패 시 로컬 파일 폴백
+    SAVE_FILE = "saved_codes.txt"
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
             codes = [line.strip().zfill(6) for line in f.readlines() if line.strip() and line.strip().isdigit()]
             if codes:
                 return list(dict.fromkeys(codes))
-    
+
     default_codes = ["005930"]
     save_codes(default_codes)
     return default_codes
 
 def save_codes(codes):
-    content = "\n".join([f"{c.strip().zfill(6)}" for c in codes]) + "\n"
-    with open(SAVE_FILE, "w", encoding="utf-8") as f:
-        f.write(content)
-    commit_to_github(SAVE_FILE, content, f"Auto-commit saved_codes.txt ({len(codes)} stocks)")
+    """Firebase Realtime Database에 종목코드 목록 저장 (모든 기기 실시간 동기화)"""
+    cleaned = list(dict.fromkeys([str(c).strip().zfill(6) for c in codes if str(c).strip().isdigit()]))
+    try:
+        ref = db.reference("my_stock_view/saved_codes")
+        ref.set(cleaned)
+    except Exception as e:
+        st.error(f"⚠️ Firebase 저장 실패: {e}")
 
+    # 로컬 백업용 파일 쓰기
+    with open("saved_codes.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(cleaned) + "\n")
+
+
+# -------------------------------------------------------------
+# 2. 증권 데이터 수집 엔진
+# -------------------------------------------------------------
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_single_stock(code: str):
     basic = fetch_basic(code)
@@ -131,7 +126,6 @@ def fetch_single_stock(code: str):
             columns = row.get("columns", {})
             if not columns:
                 continue
-            # 연도 문자열에서 숫자(연도)만 추출하여 정확한 오름차순 정렬 수행
             sorted_years = sorted(list(columns.keys()), key=lambda x: re.sub(r'[^0-9]', '', str(x)))
             if not sorted_years:
                 continue
@@ -271,7 +265,10 @@ def get_all_stocks_parallel(codes_list):
 
     return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
-# 상단 헤더
+
+# -------------------------------------------------------------
+# 3. 메인 레이아웃 및 상단 헤더
+# -------------------------------------------------------------
 title_col, sync_col = st.columns([5, 1.2])
 with title_col:
     st.title("Scanning")
@@ -291,7 +288,7 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 1. 밸류에이션 필터링
+    # 밸류에이션 필터링 UI
     show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 범위 조건 필터링", value=False)
     
     filter_year = f"최근 연도 ({most_latest_yr})"
@@ -330,8 +327,10 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
-    # 2. 9개 탭 분기 렌더링
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    # -------------------------------------------------------------
+    # 4. 탭 이동 방지: 세션 스테이트 기반 탭 선택기 (이전 탭 완벽 유지)
+    # -------------------------------------------------------------
+    TAB_OPTIONS = [
         "⭐ 관심종목",
         "📊 현재시세", 
         "💰 주당가치",
@@ -341,14 +340,31 @@ if current_codes:
         "📈 수익률-연금",
         "📈 수익률-roun",
         "📈 수익률-진우"
-    ])
+    ]
 
-    # 1. 관심종목 탭
-    with tab1:
+    if "current_active_tab" not in st.session_state:
+        st.session_state.current_active_tab = "⭐ 관심종목"
+
+    # 가로형 라디오 버튼으로 탭 UI 구현 (필터 조작으로 재실행되어도 탭 선택이 유지됨)
+    current_tab = st.radio(
+        "탭 네비게이션",
+        TAB_OPTIONS,
+        index=TAB_OPTIONS.index(st.session_state.current_active_tab),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="nav_tab_radio"
+    )
+    st.session_state.current_active_tab = current_tab
+
+    st.write("")
+
+    # -------------------------------------------------------------
+    # 5. 각 탭 분기 렌더링
+    # -------------------------------------------------------------
+    if current_tab == "⭐ 관심종목":
         render_tab_watchlist()
 
-    # 2. 현재 시세 탭
-    with tab2:
+    elif current_tab == "📊 현재시세":
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
@@ -363,12 +379,10 @@ if current_codes:
             </style>
         """, unsafe_allow_html=True)
 
-        # 💡 컬럼 비율을 [4.2, 1.8]로 주어 버튼을 오른쪽 끝으로 정렬
         _, b_col0 = st.columns([4.2, 1.8])
         
         with b_col0:
             selected_codes = []
-            
             for param_key, param_val in st.query_params.items():
                 if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
                     codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
@@ -392,65 +406,51 @@ if current_codes:
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 표의 체크박스를 확인해 주세요.")
                 else:
-                    WATCHLIST_FILE = "watchlist_codes.txt"
-                    watchlist_codes = []
-                    
-                    if os.path.exists(WATCHLIST_FILE):
-                        try:
-                            with open(WATCHLIST_FILE, "r", encoding="utf-8") as wf:
-                                watchlist_codes = [line.strip().zfill(6) for line in wf.readlines() if line.strip() and line.strip().isdigit()]
-                        except Exception:
-                            pass
-
-                    added_count = 0
-                    for code in selected_codes:
-                        if code not in watchlist_codes:
-                            watchlist_codes.append(code)
-                            added_count += 1
-
-                    if added_count > 0:
-                        content = "\n".join(watchlist_codes) + ("\n" if watchlist_codes else "")
-                        with open(WATCHLIST_FILE, "w", encoding="utf-8") as wf:
-                            wf.write(content)
+                    # Firebase 관심종목 노드 연동
+                    try:
+                        w_ref = db.reference("my_stock_view/watchlist_codes")
+                        w_codes = w_ref.get() or []
+                        if not isinstance(w_codes, list):
+                            w_codes = []
                         
-                        commit_to_github(
-                            WATCHLIST_FILE, 
-                            content, 
-                            f"Auto-commit watchlist_codes.txt ({len(watchlist_codes)} stocks)"
-                        )
+                        added_count = 0
+                        for code in selected_codes:
+                            if code not in w_codes:
+                                w_codes.append(code)
+                                added_count += 1
 
-                        try:
-                            st.query_params.clear()
-                        except Exception:
-                            pass
+                        if added_count > 0:
+                            w_ref.set(w_codes)
+                            try:
+                                st.query_params.clear()
+                            except Exception:
+                                pass
+                            st.success(f"🎉 총 {added_count}개 종목이 관심종목(Firebase)에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                            st.rerun()
+                        else:
+                            st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
+                    except Exception as e:
+                        st.error(f"관심종목 저장 실패: {e}")
 
-                        st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
-                        st.rerun()
-                    else:
-                        st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
-
-        # 테이블 렌더링 및 에디터 수정 결과값(체크 상태 포함) 받기
         edited_basic_df = render_tab_basic(df_basic)
-
         st.write("")
 
-        # 💡 3개의 버튼을 하나의 행에 나란히 배치 ([삭제, CSV 다운로드, TXT 백업])
         col_del, col_csv, col_bak = st.columns([1.6, 2.2, 1.8])
 
         with col_del:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
                 raw_del = st.query_params.get("del_codes", "")
-                selected_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
+                del_codes = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
 
-                if selected_codes:
-                    remaining_codes = [c for c in current_codes if c not in selected_codes]
+                if del_codes:
+                    remaining_codes = [c for c in current_codes if c not in del_codes]
                     save_codes(remaining_codes)
                     fetch_single_stock.clear()
                     try:
                         st.query_params.clear()
                     except Exception:
                         pass
-                    st.success(f"종목 {len(selected_codes)}개 삭제 및 GitHub 저장 완료")
+                    st.success(f"종목 {len(del_codes)}개 삭제 완료 (실시간 동기화됨)")
                     st.rerun()
                 else:
                     st.warning("삭제할 종목의 체크박스를 먼저 선택해 주세요.")
@@ -497,7 +497,7 @@ if current_codes:
                                 if formatted not in current_codes:
                                     current_codes.append(formatted)
                                     save_codes(current_codes)
-                                    st.success(f"{formatted} 추가 및 GitHub 커밋 완료")
+                                    st.success(f"{formatted} 추가 완료 (Firebase 실시간 저장)")
                                     st.rerun()
 
                 with tab_bulk_text:
@@ -562,41 +562,34 @@ if current_codes:
                                         st.success(f"파일에서 {len(new_unique)}개 종목이 정상 등록되었습니다.")
                                         st.rerun()
                                 else:
-                                    st.warning("파일 내에서 유효한 종목코드를 추출하지 못했습니다. 파일 형식을 확인해 주세요.")
+                                    st.warning("파일 내에서 유효한 종목코드를 추출하지 못했습니다.")
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
-    # 3. 주당 가치 탭
-    with tab3:
+    elif current_tab == "💰 주당가치":
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
-    # 4. 실적 탭
-    with tab4:
+    elif current_tab == "📈 실적":
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
-    # 5. 국내지수 탭
-    with tab5:
+    elif current_tab == "🌐 국내지수":
         edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
 
-    # 6. 생활비 수익률 탭
-    with tab6:
+    elif current_tab == "📈 수익률-생활비":
         render_tab_returns_living()
 
-    # 7. 연금 수익률 탭
-    with tab7:
+    elif current_tab == "📈 수익률-연금":
         render_tab_returns_pension()
 
-    # 8. roun 수익률 탭
-    with tab8:
+    elif current_tab == "📈 수익률-roun":
         render_tab_returns_roun()
 
-    # 9. 진우 수익률 탭
-    with tab9:
+    elif current_tab == "📈 수익률-진우":
         render_tab_returns_jinwoo()
 
-    # 무새로고침 클라이언트 정렬 및 탭 간 동기화 엔진 마운트
+    # 정렬 엔진 유지
     inject_client_sort_sync_engine()
 
 else:
