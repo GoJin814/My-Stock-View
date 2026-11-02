@@ -258,6 +258,47 @@ def apply_custom_styles():
             accent-color: #3b82f6;
             vertical-align: middle;
         }
+
+        /* ========================================================= */
+        /* ★ 세그먼트 컨트롤 1줄 고정 & 좌우 가로 스크롤 (공간 극대화) */
+        /* ========================================================= */
+
+        /* 1. 상위 래퍼가 화면 밖으로 넘치지 않도록 너비 제한 */
+        div[data-testid="stSegmentedControl"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+            margin-bottom: 0.4rem !important;
+        }
+
+        /* 2. 버튼들을 강제로 1줄(nowrap)로 묶고 가로 스크롤 활성화 */
+        div[data-testid="stSegmentedControl"] > div {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important; /* 파이어폭스 스크롤바 숨김 */
+            gap: 6px !important;
+            padding: 2px 0 6px 0 !important;
+            width: 100% !important;
+        }
+
+        /* 3. 크롬 / 사파리 / 삼성인터넷 스크롤바 숨겨서 높이 최소화 */
+        div[data-testid="stSegmentedControl"] > div::-webkit-scrollbar {
+            display: none !important;
+        }
+
+        /* 4. 버튼들이 화면 폭에 눌려 찌그러지거나 줄바꿈되지 않도록 고정 */
+        div[data-testid="stSegmentedControl"] button {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+            padding: 4px 10px !important;
+            font-size: 0.85rem !important;
+            height: auto !important;
+            min-height: 32px !important;
+        }
         
         </style>
     """, unsafe_allow_html=True)
