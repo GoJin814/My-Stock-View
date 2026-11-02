@@ -258,6 +258,52 @@ def apply_custom_styles():
             accent-color: #3b82f6;
             vertical-align: middle;
         }
+
+        /* 가로 라디오를 순정 st.tabs 디자인(가로 스크롤 + 밑줄)으로 완벽 변환 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
+            display: flex !important;
+            flex-direction: row !important;   
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            border-bottom: 1px solid #333 !important;
+            gap: 1.5rem !important;
+            padding-bottom: 2px !important;
+        }
+
+        /* 동그란 라디오 버튼 동그라미 숨기기 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label > div:first-child {
+            display: none !important;
+        }
+
+        /* 탭 텍스트 스타일 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label {    
+            background: transparent !important;
+            border: none !important;
+            padding: 0.5rem 0.2rem !important;
+            margin: 0 !important;
+            cursor: pointer !important;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+        }
+
+        /* 탭 텍스트 폰트 기본 색상 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+            color: #888888 !important;
+            font-size: 1rem !important;
+            font-weight: 500 !important;
+            transition: color 0.2s ease !important;
+        }
+
+        /* 선택된 탭: 빨간 밑줄 및 밝은 텍스트 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
+            border-bottom: 2px solid #ff4b4b !important;
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
+
         </style>
     """, unsafe_allow_html=True)
 
