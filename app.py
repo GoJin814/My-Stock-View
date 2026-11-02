@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import json
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,7 +27,7 @@ st.set_page_config(page_title="Scanning", layout="wide")
 apply_custom_styles()
 
 # -------------------------------------------------------------
-# 1. Firebase 초기화 및 실시간 동기화
+# 1. Firebase 초기화 및 동기화 함수
 # -------------------------------------------------------------
 if not firebase_admin._apps:
     try:
@@ -40,6 +41,7 @@ if not firebase_admin._apps:
         st.error(f"⚠️ Firebase 초기화 실패: {e}")
 
 def load_codes():
+    """등록된 종목코드 목록 가져오기"""
     try:
         ref = db.reference("my_stock_view/saved_codes")
         codes = ref.get()
@@ -62,6 +64,7 @@ def load_codes():
     return default_codes
 
 def save_codes(codes):
+    """종목코드 목록 저장"""
     cleaned = list(dict.fromkeys([str(c).strip().zfill(6) for c in codes if str(c).strip().isdigit()]))
     try:
         ref = db.reference("my_stock_view/saved_codes")
@@ -71,6 +74,26 @@ def save_codes(codes):
 
     with open("saved_codes.txt", "w", encoding="utf-8") as f:
         f.write("\n".join(cleaned) + "\n")
+
+def get_synced_sort_order():
+    """모든 기기 간 실시간 공유되는 종목 정렬 순서 가져오기"""
+    try:
+        ref = db.reference("my_stock_view/sort_order")
+        order = ref.get()
+        if order and isinstance(order, list):
+            return [str(c).zfill(6) for c in order if str(c).strip()]
+    except Exception:
+        pass
+    return None
+
+def save_synced_sort_order(order_list):
+    """현재 기기에서 정렬한 종목 순서를 Firebase에 동기화 저장"""
+    try:
+        cleaned = [str(c).zfill(6) for c in order_list if str(c).strip()]
+        if cleaned:
+            db.reference("my_stock_view/sort_order").set(cleaned)
+    except Exception:
+        pass
 
 
 # -------------------------------------------------------------
@@ -265,30 +288,85 @@ def get_all_stocks_parallel(codes_list):
 
 
 # -------------------------------------------------------------
-# 3. 상단 헤더 (타이틀 + 실시간 동기화 버튼)
+# 3. 최상단 타이틀 & 동기화 버튼 (공간 최적화)
 # -------------------------------------------------------------
 title_col, sync_col = st.columns([3.8, 1.4])
 with title_col:
-    st.title("Scanning")
+    st.markdown('<h2 style="margin:0; padding:0; font-size:1.6rem; font-weight:800;">Scanning</h2>', unsafe_allow_html=True)
 with sync_col:
-    st.write("")
-    if st.button("🔄 실시간 시세 동기화", use_container_width=True, key="btn_sync_top"):
+    if st.button("🔄 시세 동기화", use_container_width=True, key="btn_sync_top"):
         fetch_single_stock.clear()
         st.rerun()
 
 current_codes = load_codes()
 
 if current_codes:
-    with st.spinner(f"종목 {len(current_codes)}개 데이터를 동기화하는 중입니다..."):
+    # URL 쿼리 파라미터로 들어온 정렬 순서가 있다면 Firebase에 저장
+    if "sort_codes" in st.query_params and st.query_params["sort_codes"]:
+        new_order = [c.strip().zfill(6) for c in st.query_params["sort_codes"].split(",") if c.strip()]
+        if new_order:
+            save_synced_sort_order(new_order)
+
+    # Firebase에 저장된 정렬 순서 불러와서 current_codes 순서 재배열
+    synced_order = get_synced_sort_order()
+    if synced_order:
+        ordered_codes = [c for c in synced_order if c in current_codes]
+        remaining = [c for c in current_codes if c not in ordered_codes]
+        current_codes = ordered_codes + remaining
+
+    with st.spinner("데이터 로딩 중..."):
         scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = get_all_stocks_parallel(current_codes)
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 밸류에이션 필터링
-    show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 범위 조건 필터링", value=False)
+    # -------------------------------------------------------------
+    # ★ 1번 요청: 밸류에이션 필터(좌)와 관심종목 추가 버튼(우)을 1줄로 결합
+    # -------------------------------------------------------------
+    filter_col, add_btn_col = st.columns([3.2, 2.0])
+    with filter_col:
+        show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 필터", value=False)
     
+    with add_btn_col:
+        selected_codes = []
+        for param_key, param_val in st.query_params.items():
+            if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
+                codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
+                if codes:
+                    selected_codes.extend(codes)
+        selected_codes = list(dict.fromkeys(selected_codes))
+
+        if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_top"):
+            if not selected_codes:
+                st.warning("⚠️ 표에서 체크박스를 먼저 선택해 주세요.")
+            else:
+                try:
+                    w_ref = db.reference("my_stock_view/watchlist_codes")
+                    w_codes = w_ref.get() or []
+                    if not isinstance(w_codes, list):
+                        w_codes = []
+                    
+                    added = 0
+                    for c in selected_codes:
+                        if c not in w_codes:
+                            w_codes.append(c)
+                            added += 1
+
+                    if added > 0:
+                        w_ref.set(w_codes)
+                        try:
+                            st.query_params.clear()
+                        except Exception:
+                            pass
+                        st.success(f"🎉 {added}개 종목 관심종목 등록 완료!")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ 이미 등록되어 있는 종목입니다.")
+                except Exception as e:
+                    st.error(f"저장 실패: {e}")
+
+    # 필터 상세 옵션 (토글 열렸을 때만 표시)
     filter_year = f"최근 연도 ({most_latest_yr})"
     use_per_filter = False
     use_pbr_filter = False
@@ -300,15 +378,15 @@ if current_codes:
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
             f_c1, f_c2, f_c3 = st.columns(3)
             with f_c1:
-                filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
+                filter_year = st.selectbox("기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
             with f_c2:
-                use_per_filter = st.checkbox("PER 범위 필터 적용")
-                per_min = st.number_input("PER 최소값", value=0.0, step=1.0, disabled=not use_per_filter)
-                per_max = st.number_input("PER 최대값", value=30.0, step=1.0, disabled=not use_per_filter)
+                use_per_filter = st.checkbox("PER 필터")
+                per_min = st.number_input("PER 최소", value=0.0, step=1.0, disabled=not use_per_filter)
+                per_max = st.number_input("PER 최대", value=30.0, step=1.0, disabled=not use_per_filter)
             with f_c3:
-                use_pbr_filter = st.checkbox("PBR 범위 필터 적용")
-                pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
-                pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
+                use_pbr_filter = st.checkbox("PBR 필터")
+                pbr_min = st.number_input("PBR 최소", value=0.0, step=0.1, disabled=not use_pbr_filter)
+                pbr_max = st.number_input("PBR 최대", value=3.0, step=0.1, disabled=not use_pbr_filter)
             st.markdown('</div>', unsafe_allow_html=True)
 
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
@@ -326,10 +404,10 @@ if current_codes:
     df_share = df_share[valid_mask].reset_index(drop=True)
 
     # -------------------------------------------------------------
-    # 4. 라디오 가로 스크롤 탭 (상태 기억 & 필터 조작 시 유지)
+    # 4. 라디오 가로 탭 바 (1줄 고정)
     # -------------------------------------------------------------
     TAB_OPTIONS = [
-        "★ 관심종목",
+        "⭐ 관심종목",
         "📊 현재시세", 
         "💰 주당가치",
         "📈 실적", 
@@ -341,7 +419,7 @@ if current_codes:
     ]
 
     if "current_active_tab" not in st.session_state or st.session_state.current_active_tab not in TAB_OPTIONS:
-        st.session_state.current_active_tab = "★ 관심종목"
+        st.session_state.current_active_tab = "⭐ 관심종목"
 
     current_tab = st.radio(
         "탭 네비게이션",
@@ -356,81 +434,14 @@ if current_codes:
     # -------------------------------------------------------------
     # 5. 각 탭 분기 렌더링
     # -------------------------------------------------------------
-    if current_tab == "★ 관심종목":
+    if current_tab == "⭐ 관심종목":
         render_tab_watchlist()
 
     elif current_tab == "📊 현재시세":
-        st.markdown("""
-            <style>
-            div[data-testid="stButton"] > button[kind="primary"] {
-                background-color: #262730 !important;
-                border-color: #464855 !important;
-                color: #ffffff !important;
-            }
-            div[data-testid="stButton"] > button[kind="primary"]:hover {
-                background-color: #31333F !important;
-                border-color: #5b5e71 !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-        _, b_col0 = st.columns([4.2, 1.8])
-        
-        with b_col0:
-            selected_codes = []
-            for param_key, param_val in st.query_params.items():
-                if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
-                    codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
-                    if codes:
-                        selected_codes.extend(codes)
-            
-            if not selected_codes and 'edited_basic_df' in locals() and edited_basic_df is not None:
-                if "선택" in edited_basic_df.columns and "종목코드" in edited_basic_df.columns:
-                    checked_rows = edited_basic_df[edited_basic_df["선택"] == True]
-                    if not checked_rows.empty:
-                        selected_codes = checked_rows["종목코드"].dropna().astype(str).str.zfill(6).tolist()
-
-            if not selected_codes and "선택" in df_basic.columns and "종목코드" in df_basic.columns:
-                checked_sub = df_basic[df_basic["선택"] == True]
-                if not checked_sub.empty:
-                    selected_codes = checked_sub["종목코드"].dropna().astype(str).str.zfill(6).tolist()
-
-            selected_codes = list(dict.fromkeys([c.zfill(6) for c in selected_codes if str(c).strip().isdigit() and len(str(c).strip()) <= 6]))
-
-            if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_market"):
-                if not selected_codes:
-                    st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 표의 체크박스를 확인해 주세요.")
-                else:
-                    try:
-                        w_ref = db.reference("my_stock_view/watchlist_codes")
-                        w_codes = w_ref.get() or []
-                        if not isinstance(w_codes, list):
-                            w_codes = []
-                        
-                        added_count = 0
-                        for code in selected_codes:
-                            if code not in w_codes:
-                                w_codes.append(code)
-                                added_count += 1
-
-                        if added_count > 0:
-                            w_ref.set(w_codes)
-                            try:
-                                st.query_params.clear()
-                            except Exception:
-                                pass
-                            st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다!")
-                            st.rerun()
-                        else:
-                            st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
-                    except Exception as e:
-                        st.error(f"관심종목 저장 실패: {e}")
-
         edited_basic_df = render_tab_basic(df_basic)
         st.write("")
 
         col_del, col_csv, col_bak = st.columns([1.6, 2.2, 1.8])
-
         with col_del:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
                 raw_del = st.query_params.get("del_codes", "")
@@ -587,18 +598,3 @@ if current_codes:
 
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
-    with st.container(border=True):
-        st.markdown("##### ➕ 종목코드 추가 및 일괄 등록")
-        c_code, c_btn = st.columns([3, 1])
-        with c_code:
-            init_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930", max_chars=6, key="init_single_code")
-        with c_btn:
-            st.write("")
-            if st.button("종목 추가", use_container_width=True, key="btn_init_add"):
-                if init_code.strip():
-                    formatted = init_code.strip().zfill(6)
-                    save_codes([formatted])
-                    st.success(f"{formatted} 등록 완료")
-                    st.rerun()
-
-st.caption("네이버 증권 공식 모바일 API (/basic, /integration, /finance/annual) 실시간 연동")
