@@ -27,7 +27,7 @@ st.set_page_config(page_title="Scanning", layout="wide")
 apply_custom_styles()
 
 # -------------------------------------------------------------
-# 1. Firebase 초기화 및 동기화 함수
+# 1. Firebase 초기화 및 동기화 함수`
 # -------------------------------------------------------------
 if not firebase_admin._apps:
     try:
@@ -85,6 +85,24 @@ def get_synced_sort_order():
     except Exception:
         pass
     return None
+
+def load_filter_settings():
+    """Firebase에서 동기화된 필터 설정 가져오기"""
+    try:
+        ref = db.reference("my_stock_view/filter_settings")
+        data = ref.get()
+        if data and isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {"show_filter": False, "filter_year_idx": 0, "use_per": False, "per_range": [0.0, 30.0], "use_pbr": False, "pbr_range": [0.0, 3.0]}
+
+def save_filter_settings(settings):
+    """필터 변경 시 Firebase에 즉시 저장"""
+    try:
+        db.reference("my_stock_view/filter_settings").set(settings)
+    except Exception:
+        pass
 
 def save_synced_sort_order(order_list):
     """현재 기기에서 정렬한 종목 순서를 Firebase에 동기화 저장"""
@@ -312,6 +330,18 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
+    # ★ 여기 9줄 추가: 파이썬 데이터프레임 자체를 최신 순서로 미리 정렬
+    if synced_order and "종목코드" in df_basic.columns:
+        order_map = {code: i for i, code in enumerate(synced_order)}
+        for df_target in [df_basic, df_perf, df_share]:
+            if "종목코드" in df_target.columns:
+                df_target["_sort_rank"] = df_target["종목코드"].astype(str).str.zfill(6).map(lambda c: order_map.get(c, 9999))
+                df_target.sort_values(by="_sort_rank", inplace=True)
+                df_target.drop(columns=["_sort_rank"], inplace=True)
+                df_target.reset_index(drop=True, inplace=True)
+
+    fb_filter = load_filter_settings()
+
     # 한 줄 3분할 배치: [필터 토글] (비율 4) / [⭐ 관심종목] (비율 1.5) / [🔄 동기화] (비율 1.5)
     c_toggle, c_add, c_sync = st.columns([4.0, 1.6, 1.6])
 
@@ -381,23 +411,48 @@ if current_codes:
                 label_visibility="collapsed"
             )
 
-            # 2행: PER 필터 (체크박스 + 듀얼 슬라이더 1줄 결합)
+            # 1행: 기준 연도 선택 (동기화 인덱스 반영)
+            filter_year_opts = [f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"]
+            cur_yr_idx = min(fb_filter.get("filter_year_idx", 0), len(filter_year_opts) - 1)
+            filter_year = st.selectbox(
+                "필터 기준 연도", 
+                options=filter_year_opts,
+                index=cur_yr_idx,
+                label_visibility="collapsed"
+            )
+            new_yr_idx = filter_year_opts.index(filter_year)
+
+            # 2행: PER 필터 (Firebase 동기화 값 사용)
             c_per_chk, c_per_sld = st.columns([1.5, 4.5])
             with c_per_chk:
-                use_per_filter = st.checkbox("PER", value=False)
+                use_per_filter = st.checkbox("PER", value=fb_filter.get("use_per", False))
             with c_per_sld:
-                per_range = st.slider("PER 범위", 0.0, 50.0, (0.0, 30.0), step=0.5, disabled=not use_per_filter, label_visibility="collapsed")
+                p_init = fb_filter.get("per_range", [0.0, 30.0])
+                per_range = st.slider("PER 범위", 0.0, 50.0, (float(p_init[0]), float(p_init[1])), step=0.5, disabled=not use_per_filter, label_visibility="collapsed")
                 per_min, per_max = per_range
 
-            # 3행: PBR 필터 (체크박스 + 듀얼 슬라이더 1줄 결합)
+            # 3행: PBR 필터 (Firebase 동기화 값 사용)
             c_pbr_chk, c_pbr_sld = st.columns([1.5, 4.5])
             with c_pbr_chk:
-                use_pbr_filter = st.checkbox("PBR", value=False)
+                use_pbr_filter = st.checkbox("PBR", value=fb_filter.get("use_pbr", False))
             with c_pbr_sld:
-                pbr_range = st.slider("PBR 범위", 0.0, 5.0, (0.0, 3.0), step=0.05, disabled=not use_pbr_filter, label_visibility="collapsed")
+                b_init = fb_filter.get("pbr_range", [0.0, 3.0])
+                pbr_range = st.slider("PBR 범위", 0.0, 5.0, (float(b_init[0]), float(b_init[1])), step=0.05, disabled=not use_pbr_filter, label_visibility="collapsed")
                 pbr_min, pbr_max = pbr_range
 
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # 변경된 필터 설정을 Firebase에 실시간 저장
+            current_settings = {
+                "show_filter": True,
+                "filter_year_idx": new_yr_idx,
+                "use_per": use_per_filter,
+                "per_range": [per_min, per_max],
+                "use_pbr": use_pbr_filter,
+                "pbr_range": [pbr_min, pbr_max]
+            }
+            if current_settings != fb_filter:
+                save_filter_settings(current_settings)
 
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
     target_per_col = f"_num_PER{filter_prefix}"
