@@ -286,18 +286,9 @@ def get_all_stocks_parallel(codes_list):
 
     return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
-
 # -------------------------------------------------------------
-# 3. 최상단 타이틀 & 동기화 버튼 (공간 최적화)
+# 3. 최상단 컴팩트 컨트롤 바 (제목 삭제, 필터 + 관심종목 추가 + 시세 동기화 한 줄 배치)
 # -------------------------------------------------------------
-title_col, sync_col = st.columns([3.8, 1.4])
-with title_col:
-    st.markdown('<h2 style="margin:0; padding:0; font-size:1.6rem; font-weight:800;">Scanning</h2>', unsafe_allow_html=True)
-with sync_col:
-    if st.button("🔄 시세 동기화", use_container_width=True, key="btn_sync_top"):
-        fetch_single_stock.clear()
-        st.rerun()
-
 current_codes = load_codes()
 
 if current_codes:
@@ -321,14 +312,13 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # -------------------------------------------------------------
-    # ★ 1번 요청: 밸류에이션 필터(좌)와 관심종목 추가 버튼(우)을 1줄로 결합
-    # -------------------------------------------------------------
-    filter_col, add_btn_col = st.columns([3.2, 2.0])
-    with filter_col:
-        show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 필터", value=False)
-    
-    with add_btn_col:
+    # 한 줄 3분할 배치: [필터 토글] (비율 4) / [⭐ 관심종목] (비율 1.5) / [🔄 동기화] (비율 1.5)
+    c_toggle, c_add, c_sync = st.columns([4.0, 1.6, 1.6])
+
+    with c_toggle:
+        show_filter = st.toggle("🎯 밸류에이션 필터", value=False)
+
+    with c_add:
         selected_codes = []
         for param_key, param_val in st.query_params.items():
             if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
@@ -337,7 +327,7 @@ if current_codes:
                     selected_codes.extend(codes)
         selected_codes = list(dict.fromkeys(selected_codes))
 
-        if st.button("⭐ 관심종목 추가", type="primary", use_container_width=True, key="btn_add_watchlist_top"):
+        if st.button("⭐ 관심추가", type="primary", use_container_width=True, key="btn_add_watchlist_top"):
             if not selected_codes:
                 st.warning("⚠️ 표에서 체크박스를 먼저 선택해 주세요.")
             else:
@@ -359,14 +349,19 @@ if current_codes:
                             st.query_params.clear()
                         except Exception:
                             pass
-                        st.success(f"🎉 {added}개 종목 관심종목 등록 완료!")
+                        st.success(f"🎉 {added}개 등록 완료!")
                         st.rerun()
                     else:
-                        st.info("ℹ️ 이미 등록되어 있는 종목입니다.")
+                        st.info("ℹ️ 이미 등록되어 있습니다.")
                 except Exception as e:
                     st.error(f"저장 실패: {e}")
 
-    # 필터 상세 옵션 (토글 열렸을 때만 표시)
+    with c_sync:
+        if st.button("🔄 시세동기화", use_container_width=True, key="btn_sync_top"):
+            fetch_single_stock.clear()
+            st.rerun()
+
+    # 밸류에이션 필터 상세 옵션 (토글 켰을 때만 노출)
     filter_year = f"최근 연도 ({most_latest_yr})"
     use_per_filter = False
     use_pbr_filter = False
