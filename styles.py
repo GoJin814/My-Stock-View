@@ -259,74 +259,81 @@ def apply_custom_styles():
             vertical-align: middle;
         }
 
-/* 1. 상위 래퍼 컨테이너가 페이지 너비를 벗어나지 않도록 강제 제한 */
-div[data-testid="stRadio"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow: hidden !important;
-}
+        /* ========================================================= */
+        /* ★ 모바일/태블릿 화면 우측 쏠림 방지 및 탭 가로스크롤 고정 */
+        /* ========================================================= */
 
-/* 2. 가로 탭 바 영역만 부드럽게 자체 스크롤되도록 고정 */
-div[data-testid="stRadio"] > div[role="radiogroup"] {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important; /* 파이어폭스 스크롤바 숨김 */
-    border-bottom: 1px solid #333 !important;
-    gap: 1.5rem !important;
-    padding-bottom: 4px !important;
-    margin-bottom: 0.5rem !important;
-}
-div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
-    display: none !important; /* 크롬/사파리 스크롤바 숨김 */
-}
+        /* 1. 전체 페이지 가로 이탈 완벽 차단 */
+        .stApp, 
+        [data-testid="stAppViewContainer"], 
+        [data-testid="stMain"],
+        .main .block-container {
+            overflow-x: clip !important;
+            max-width: 100vw !important;
+        }
 
-/* 3. ★ 핵심: 모바일 브라우저가 화면을 오른쪽으로 밀어버리는 원인(input 포커스) 원천 차단 */
-div[data-testid="stRadio"] input[type="radio"] {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    width: 0 !important;
-    height: 0 !important;
-    margin: 0 !important;
-}
+        /* 2. 라디오 상위 컨테이너를 가로 100% 뷰포트에 고정 */
+        div[data-testid="stRadio"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+            margin-bottom: 0.5rem !important;
+        }
 
-/* 4. 기존 동그라미 라디오 아이콘 숨김 */
-div[data-testid="stRadio"] > div[role="radiogroup"] label > div:first-child {
-    display: none !important;
-}
+        /* 3. 탭 바 영역만 부드럽게 가로 스크롤 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            border-bottom: 1px solid #334155 !important;
+            gap: 1.2rem !important;
+            padding-bottom: 3px !important;
+            width: 100% !important;
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
+            display: none !important;
+        }
 
-/* 5. 탭 버튼 모양 및 터치 영역 최적화 */
-div[data-testid="stRadio"] > div[role="radiogroup"] label {
-    background: transparent !important;
-    border: none !important;
-    padding: 0.5rem 0.2rem !important;
-    margin: 0 !important;
-    cursor: pointer !important;
-    white-space: nowrap !important;
-    flex-shrink: 0 !important;
-}
+        /* 4. 라디오 동그라미 아이콘 및 실제 input 요소 숨김 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label > div:first-child {
+            display: none !important;
+        }
+        div[data-testid="stRadio"] input[type="radio"] {
+            display: none !important;
+        }
 
-/* 6. 선택 전 탭 글자 색상 */
-div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
-    color: #888888 !important;
-    font-size: 0.98rem !important;
-    font-weight: 500 !important;
-}
+        /* 5. 탭 버튼(라벨) 터치 최적화 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label {
+            background: transparent !important;
+            border: none !important;
+            padding: 0.4rem 0.2rem !important;
+            margin: 0 !important;
+            cursor: pointer !important;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+            scroll-margin: 0 !important;
+        }
 
-/* 7. 선택된 탭: 빨간색 언더라인 & 흰색 강조 */
-div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
-    border-bottom: 2px solid #ff4b4b !important;
-}
-div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
-    color: #ffffff !important;
-    font-weight: 700 !important;
-}
+        /* 6. 미선택 탭 글자 색상 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+            color: #94a3b8 !important;
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+            margin: 0 !important;
+        }
+
+        /* 7. 선택된 탭: 빨간 밑줄 및 밝은 텍스트 강조 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
+            border-bottom: 2px solid #ff4b4b !important;
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
 
         </style>
     """, unsafe_allow_html=True)
@@ -605,31 +612,6 @@ def inject_client_sort_sync_engine():
             }
         };
 
-        function restoreActiveTab() {
-            const urlParams = new URLSearchParams(win.location.search);
-            let targetIdx = urlParams.get('active_tab');
-            if (targetIdx === null) {
-                targetIdx = win.sessionStorage.getItem('active_tab_idx');
-            }
-            if (targetIdx !== null) {
-                targetIdx = parseInt(targetIdx, 10);
-                let attempts = 0;
-                const interval = setInterval(() => {
-                    const tabs = doc.querySelectorAll('.stTabs [data-baseweb="tab"]');
-                    if (tabs.length > targetIdx) {
-                        clearInterval(interval);
-                        if (tabs[targetIdx] && tabs[targetIdx].getAttribute('aria-selected') !== 'true') {
-                            tabs[targetIdx].click();
-                        }
-                    }
-                    attempts++;
-                    if (attempts > 50) {
-                        clearInterval(interval);
-                    }
-                }, 50);
-            }
-        }
-
         doc.addEventListener('click', function(e) {
             const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
             if (tabBtn) {
@@ -811,7 +793,6 @@ def inject_client_sort_sync_engine():
         }
 
         applySavedOrderToAll();
-        restoreActiveTab();
     })();
     </script>
     """, height=0, width=0)
