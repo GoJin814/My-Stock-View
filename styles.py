@@ -323,6 +323,45 @@ def apply_custom_styles():
             color: #ffffff !important;
             font-weight: 700 !important;
         }
+                /* 뷰포트 가로 스크롤 이탈 절대 방지 */
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main {
+            overflow-x: hidden !important;
+            max-width: 100vw !important;
+            position: relative !important;
+        }
+
+        /* 탭 라디오 바 자체만 가로 스크롤 허용 */
+        div[data-testid="stRadio"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+        }
+
+        div[data-testid="stRadio"] > div,
+        div[data-testid="stRadio"] [role="radiogroup"] {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            gap: 1.2rem !important;
+            padding-bottom: 4px !important;
+            width: 100% !important;
+        }
+        div[data-testid="stRadio"] > div::-webkit-scrollbar,
+        div[data-testid="stRadio"] [role="radiogroup"]::-webkit-scrollbar {
+            display: none !important;
+        }
+
+        div[data-testid="stRadio"] [role="radiogroup"] label {
+            display: inline-flex !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
+            background: transparent !important;
+            white-space: nowrap !important;
+        }
         
         </style>
     """, unsafe_allow_html=True)
@@ -507,117 +546,39 @@ def inject_client_sort_sync_engine():
         const win = window.parent;
         if (!doc || !win) return;
 
-        let ptrBox = doc.getElementById('native_ptr_box');
-        if (!ptrBox) {
-            ptrBox = doc.createElement('div');
-            ptrBox.id = 'native_ptr_box';
-            ptrBox.style.cssText = `
-                position: fixed;
-                top: -65px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 42px;
-                height: 42px;
-                background: #ffffff;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-                z-index: 99999999;
-                transition: top 0.15s ease, opacity 0.15s ease;
-                opacity: 0;
-                pointer-events: none;
-            `;
-            ptrBox.innerHTML = `
-                <svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
-                    <path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
-                </svg>
-            `;
-            doc.body.appendChild(ptrBox);
+        // 1. 화면이 우측으로 밀리는 포커스 강제 스크롤 차단 엔진
+        function lockHorizontalScroll() {
+            if (win.scrollX !== 0) win.scrollTo(0, win.scrollY);
+            const containers = [
+                doc.documentElement,
+                doc.body,
+                doc.querySelector('.stApp'),
+                doc.querySelector('[data-testid="stAppViewContainer"]'),
+                doc.querySelector('[data-testid="stMain"]'),
+                doc.querySelector('section.main')
+            ];
+            containers.forEach(el => {
+                if (el && el.scrollLeft !== 0) el.scrollLeft = 0;
+            });
         }
 
-        let touchStartY = 0;
-        let touchStartX = 0;
-        let canPull = false;
+        win.addEventListener('scroll', lockHorizontalScroll, { passive: true });
+        doc.addEventListener('scroll', lockHorizontalScroll, { passive: true });
 
-        function getRealScrollTop() {
-            const docEl = doc.documentElement ? doc.documentElement.scrollTop : 0;
-            const bodyEl = doc.body ? doc.body.scrollTop : 0;
-            const winY = win.scrollY || win.pageYOffset || 0;
-            const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
-            const c2 = doc.querySelector('[data-testid="stMain"]');
-            const c3 = doc.querySelector('section.main');
-            const c4 = doc.querySelector('.main');
-            return Math.max(winY, docEl, bodyEl, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0, c3 ? c3.scrollTop : 0, c4 ? c4.scrollTop : 0);
-        }
+        // 탭 터치 시 전역 뷰포트 이동 즉시 차단
+        doc.addEventListener('click', function(e) {
+            const isTab = e.target.closest('div[data-testid="stRadio"]');
+            if (isTab) {
+                setTimeout(lockHorizontalScroll, 10);
+                setTimeout(lockHorizontalScroll, 50);
+                setTimeout(lockHorizontalScroll, 150);
+            }
+        }, true);
 
-        win.ontouchstart = function(e) {
-            if (e.touches.length === 1 && getRealScrollTop() <= 1) {
-                touchStartY = e.touches[0].clientY;
-                touchStartX = e.touches[0].clientX;
-                canPull = true;
-            } else {
-                canPull = false;
-            }
-        };
-
-        win.ontouchmove = function(e) {
-            if (!canPull) return;
-            if (getRealScrollTop() > 1) {
-                canPull = false;
-                ptrBox.style.top = '-65px';
-                ptrBox.style.opacity = '0';
-                return;
-            }
-            const distY = e.touches[0].clientY - touchStartY;
-            const distX = Math.abs(e.touches[0].clientX - touchStartX);
-            if (distY <= 0 || distX > distY) {
-                ptrBox.style.top = '-65px';
-                ptrBox.style.opacity = '0';
-                return;
-            }
-            if (distY > 40) {
-                const pullY = Math.min((distY - 40) * 0.45, 80);
-                ptrBox.style.top = (pullY - 45) + 'px';
-                ptrBox.style.opacity = Math.min((distY - 40) / 80, 1);
-                const svg = ptrBox.querySelector('#ptr_svg');
-                if (svg) svg.style.transform = 'rotate(' + (distY * 2.5) + 'deg)';
-            }
-        };
-
-        win.ontouchend = function(e) {
-            if (!canPull) return;
-            canPull = false;
-            const distY = e.changedTouches[0].clientY - touchStartY;
-            if (distY >= 180 && getRealScrollTop() <= 1) {
-                ptrBox.style.top = '20px';
-                ptrBox.style.opacity = '1';
-                setTimeout(function() { win.location.reload(); }, 120);
-            } else {
-                ptrBox.style.top = '-65px';
-                ptrBox.style.opacity = '0';
-            }
-        };
+        // 2. Firebase 실시간 REST 정렬 동기화
+        const FIREBASE_URL = "https://my-stock-view-default-rtdb.firebaseio.com/my_stock_view/sort_order.json";
 
         doc.addEventListener('click', function(e) {
-            const tabBtn = e.target.closest('.stTabs [data-baseweb="tab"]');
-            if (tabBtn) {
-                const tabs = Array.from(doc.querySelectorAll('.stTabs [data-baseweb="tab"]'));
-                const idx = tabs.indexOf(tabBtn);
-                if (idx !== -1) {
-                    win.sessionStorage.setItem('active_tab_idx', idx);
-                    try {
-                        const url = new URL(win.location.href);
-                        url.searchParams.set('active_tab', idx);
-                        win.history.replaceState(null, '', url.toString());
-                    } catch(err) {}
-                }
-                setTimeout(applySavedOrderToAll, 40);
-                return;
-            }
-
             if (e.target && e.target.classList.contains('header-select-all')) return;
 
             const th = e.target.closest('th.sortable-th');
@@ -665,27 +626,31 @@ def inject_client_sort_sync_engine():
 
             rows.forEach(r => tbody.appendChild(r));
 
+            // 모든 탭의 표에 즉시 반영
             if (table.id !== 'table_tab_market') {
                 const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
-                win.sessionStorage.setItem('stock_sync_order', JSON.stringify(sortedCodes));
-
-                try {
-                    const url = new URL(win.location.href);
-                    url.searchParams.set('sort_codes', sortedCodes.join(','));
-                    win.history.replaceState(null, '', url.toString());
-                } catch (err) {}
-
+                
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
                         sortTableByCodeList(otherTable, sortedCodes);
                     }
                 });
+
+                // ★ Firebase DB에 즉시 HTTP PUT으로 저장 (다른 기기 즉시 연동)
+                try {
+                    fetch(FIREBASE_URL, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sortedCodes)
+                    }).catch(err => console.log('Firebase sync error:', err));
+                } catch(e) {}
             }
         });
 
+        // 체크박스 삭제 파라미터 관리
         function updateDelParam() {
             const checkedCodes = [];
-            doc.querySelectorAll('#table_tab_basic .stock-checkbox:checked').forEach(cb => {
+            doc.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
                 const c = cb.getAttribute('data-code');
                 if (c && c.length === 6) checkedCodes.push(c);
             });
@@ -714,13 +679,6 @@ def inject_client_sort_sync_engine():
                 updateDelParam();
             }
         });
-
-        doc.addEventListener('click', function(e) {
-            const btn = e.target.closest('button');
-            if (btn && btn.innerText.includes('선택 종목 삭제')) {
-                updateDelParam();
-            }
-        }, true);
 
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
@@ -765,23 +723,17 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
         }
 
-        function getActiveCodeOrder() {
-            const urlParams = new URLSearchParams(win.location.search);
-            const urlCodes = urlParams.get('sort_codes');
-            if (urlCodes) return urlCodes.split(',');
-            const saved = win.sessionStorage.getItem('stock_sync_order');
-            return saved ? JSON.parse(saved) : null;
-        }
-
-        function applySavedOrderToAll() {
-            const codeOrder = getActiveCodeOrder();
-            if (!codeOrder) return;
-            doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
-                sortTableByCodeList(tbl, codeOrder);
-            });
-        }
-
-        applySavedOrderToAll();
+        // 초기 로드 시 Firebase 정렬 순서 가져와 즉시 적용
+        fetch(FIREBASE_URL)
+            .then(res => res.json())
+            .then(order => {
+                if (Array.isArray(order) && order.length > 0) {
+                    doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(tbl => {
+                        sortTableByCodeList(tbl, order);
+                    });
+                }
+            })
+            .catch(() => {});
     })();
     </script>
     """, height=0, width=0)
