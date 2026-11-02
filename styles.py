@@ -258,83 +258,70 @@ def apply_custom_styles():
             accent-color: #3b82f6;
             vertical-align: middle;
         }
+        /* ========================================================= */
+        /* ★ 탭 메뉴 무조건 1줄 강제 고정 & 부드러운 가로 스크롤 */
+        /* ========================================================= */
 
-        /* 1. 상단 최상위 여백 최소화 (화면 위로 바짝 끌어올림) */
-        .block-container {
-            padding-top: 1.8rem !important;
-            padding-bottom: 2rem !important;
-            padding-left: 0.8rem !important;
-            padding-right: 0.8rem !important;
-            max-width: 100% !important;
-        }
-
-        /* 2. 전체 페이지 가로 스크롤 이탈 방지 */
-        .stApp, 
-        [data-testid="stAppViewContainer"], 
-        [data-testid="stMain"] {
-            overflow-x: clip !important;
-            max-width: 100vw !important;
-        }
-
-        /* 3. 라디오 탭 영역을 무조건 1줄 가로 스크롤 컨테이너로 고정 */
+        /* 1. 라디오 컨테이너가 화면 너비를 넘지 못하게 잠금 */
         div[data-testid="stRadio"] {
             width: 100% !important;
             max-width: 100% !important;
             overflow: hidden !important;
-            margin-bottom: 0.2rem !important;
+            margin-bottom: 0.3rem !important;
         }
 
-        div[data-testid="stRadio"] > div[role="radiogroup"] {
+        /* 2. radiogroup 및 하위 div의 줄바꿈을 원천 차단하고 1줄 가로스크롤 강제 */
+        div[data-testid="stRadio"] > div,
+        div[data-testid="stRadio"] [role="radiogroup"] {
             display: flex !important;
             flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
+            flex-wrap: nowrap !important; /* ★ 2줄 줄바꿈 금지 */
+            overflow-x: auto !important; /* ★ 가로 스크롤 활성화 */
             overflow-y: hidden !important;
-            -webkit-overflow-scrolling: touch !important;
-            scrollbar-width: none !important;
-            border-bottom: 1px solid #334155 !important;
+            -webkit-overflow-scrolling: touch !important; /* 모바일 부드러운 터치 스크롤 */
+            scrollbar-width: none !important; /* 파이어폭스 스크롤바 숨김 */
             gap: 1.2rem !important;
             padding-bottom: 4px !important;
-            margin-bottom: 0 !important;
+            margin: 0 !important;
             width: 100% !important;
+            white-space: nowrap !important;
         }
-        div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
+
+        /* 3. 스크롤바 감추기 (크롬 / 사파리 / 삼성인터넷) */
+        div[data-testid="stRadio"] > div::-webkit-scrollbar,
+        div[data-testid="stRadio"] [role="radiogroup"]::-webkit-scrollbar {
             display: none !important;
         }
 
-        /* 4. 탭 항목 (라벨) 스타일 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label {
+        /* 4. 개별 탭 버튼이 찌그러지거나 아래로 떨어지지 않도록 설정 */
+        div[data-testid="stRadio"] [role="radiogroup"] label {
             display: inline-flex !important;
             align-items: center !important;
+            flex-shrink: 0 !important; /* ★ 화면이 좁아도 찌그러짐 방지 */
             background: transparent !important;
             border: none !important;
             padding: 0.3rem 0.1rem !important;
             margin: 0 !important;
             cursor: pointer !important;
             white-space: nowrap !important;
-            flex-shrink: 0 !important;
         }
 
-        /* 5. 텍스트 글자 색상 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+        /* 5. 텍스트 글자 크기 및 색상 */
+        div[data-testid="stRadio"] [role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
             color: #94a3b8 !important;
             font-size: 0.95rem !important;
             font-weight: 500 !important;
             margin: 0 !important;
+            white-space: nowrap !important;
         }
 
         /* 6. 선택된 탭 강조 (빨간 밑줄) */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
+        div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
             border-bottom: 2px solid #ff4b4b !important;
         }
-        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+        div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
             color: #ffffff !important;
             font-weight: 700 !important;
-        }
-
-        /* 7. 관심종목 추가 버튼 등 간격 최소화 */
-        div[data-testid="stVerticalBlock"] > div {
-            gap: 0.4rem !important;
         }
         
         </style>
