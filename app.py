@@ -330,23 +330,31 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # ★ 여기 9줄 추가: 파이썬 데이터프레임 자체를 최신 순서로 미리 정렬
+    # -------------------------------------------------------------
+    # 1. Firebase 실시간 정렬 순서 강제 적용 (현재시세 즉시 반영 핵심)
+    # -------------------------------------------------------------
+    synced_order = get_synced_sort_order()
     if synced_order and "종목코드" in df_basic.columns:
-        order_map = {code: i for i, code in enumerate(synced_order)}
-        for df_target in [df_basic, df_perf, df_share]:
-            if "종목코드" in df_target.columns:
-                df_target["_sort_rank"] = df_target["종목코드"].astype(str).str.zfill(6).map(lambda c: order_map.get(c, 9999))
-                df_target.sort_values(by="_sort_rank", inplace=True)
-                df_target.drop(columns=["_sort_rank"], inplace=True)
-                df_target.reset_index(drop=True, inplace=True)
+        order_map = {str(code).zfill(6): i for i, code in enumerate(synced_order)}
+        for target_df in [df_basic, df_perf, df_share]:
+            if "종목코드" in target_df.columns:
+                target_df["_rank"] = target_df["종목코드"].astype(str).str.zfill(6).map(lambda c: order_map.get(c, 9999))
+                target_df.sort_values(by="_rank", inplace=True)
+                target_df.drop(columns=["_rank"], inplace=True)
+                target_df.reset_index(drop=True, inplace=True)
 
+    # -------------------------------------------------------------
+    # 2. Firebase 필터 설정 동기화 및 상단 바
+    # -------------------------------------------------------------
     fb_filter = load_filter_settings()
 
-    # 한 줄 3분할 배치: [필터 토글] (비율 4) / [⭐ 관심종목] (비율 1.5) / [🔄 동기화] (비율 1.5)
-    c_toggle, c_add, c_sync = st.columns([4.0, 1.6, 1.6])
+    c_toggle, c_add, c_sync = st.columns([3.5, 1.4, 1.4])
 
     with c_toggle:
-        show_filter = st.toggle("🎯 밸류에이션 필터", value=False)
+        show_filter = st.toggle("🎯 밸류에이션 필터", value=fb_filter.get("show_filter", False), key="flt_toggle_main")
+        if show_filter != fb_filter.get("show_filter", False):
+            fb_filter["show_filter"] = show_filter
+            save_filter_settings(fb_filter)
 
     with c_add:
         selected_codes = []
@@ -392,57 +400,53 @@ if current_codes:
             st.rerun()
 
     # -------------------------------------------------------------
-    # 슬림 컴팩트 밸류에이션 필터 (슬라이더 방식)
+    # 3. 밸류에이션 필터 옵션 (고유 KEY 지정으로 Duplicate ID 에러 완전 해결)
     # -------------------------------------------------------------
-    filter_year = f"최근 연도 ({most_latest_yr})"
-    use_per_filter = False
-    use_pbr_filter = False
-    per_min, per_max = 0.0, 30.0
-    pbr_min, pbr_max = 0.0, 3.0
+    filter_year_opts = [f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"]
+    cur_yr_idx = min(fb_filter.get("filter_year_idx", 0), len(filter_year_opts) - 1)
+    
+    use_per_filter = fb_filter.get("use_per", False)
+    per_min, per_max = fb_filter.get("per_range", [0.0, 30.0])
+    
+    use_pbr_filter = fb_filter.get("use_pbr", False)
+    pbr_min, pbr_max = fb_filter.get("pbr_range", [0.0, 3.0])
+    new_yr_idx = cur_yr_idx
 
     if show_filter:
         with st.container():
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
             
-            # 1행: 기준 연도 선택 (컴팩트 셀렉트박스)
-            filter_year = st.selectbox(
-                "필터 기준 연도", 
-                options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"],
-                label_visibility="collapsed"
-            )
-
-            # 1행: 기준 연도 선택 (동기화 인덱스 반영)
-            filter_year_opts = [f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"]
-            cur_yr_idx = min(fb_filter.get("filter_year_idx", 0), len(filter_year_opts) - 1)
+            # 연도 선택
             filter_year = st.selectbox(
                 "필터 기준 연도", 
                 options=filter_year_opts,
                 index=cur_yr_idx,
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                key="flt_selectbox_year"
             )
             new_yr_idx = filter_year_opts.index(filter_year)
 
-            # 2행: PER 필터 (Firebase 동기화 값 사용)
+            # PER
             c_per_chk, c_per_sld = st.columns([1.5, 4.5])
             with c_per_chk:
-                use_per_filter = st.checkbox("PER", value=fb_filter.get("use_per", False))
+                use_per_filter = st.checkbox("PER", value=use_per_filter, key="flt_chk_per")
             with c_per_sld:
                 p_init = fb_filter.get("per_range", [0.0, 30.0])
-                per_range = st.slider("PER 범위", 0.0, 50.0, (float(p_init[0]), float(p_init[1])), step=0.5, disabled=not use_per_filter, label_visibility="collapsed")
+                per_range = st.slider("PER 범위", 0.0, 50.0, (float(p_init[0]), float(p_init[1])), step=0.5, disabled=not use_per_filter, label_visibility="collapsed", key="flt_sld_per")
                 per_min, per_max = per_range
 
-            # 3행: PBR 필터 (Firebase 동기화 값 사용)
+            # PBR
             c_pbr_chk, c_pbr_sld = st.columns([1.5, 4.5])
             with c_pbr_chk:
-                use_pbr_filter = st.checkbox("PBR", value=fb_filter.get("use_pbr", False))
+                use_pbr_filter = st.checkbox("PBR", value=use_pbr_filter, key="flt_chk_pbr")
             with c_pbr_sld:
                 b_init = fb_filter.get("pbr_range", [0.0, 3.0])
-                pbr_range = st.slider("PBR 범위", 0.0, 5.0, (float(b_init[0]), float(b_init[1])), step=0.05, disabled=not use_pbr_filter, label_visibility="collapsed")
+                pbr_range = st.slider("PBR 범위", 0.0, 5.0, (float(b_init[0]), float(b_init[1])), step=0.05, disabled=not use_pbr_filter, label_visibility="collapsed", key="flt_sld_pbr")
                 pbr_min, pbr_max = pbr_range
 
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # 변경된 필터 설정을 Firebase에 실시간 저장
+            # 변경된 설정 실시간 저장
             current_settings = {
                 "show_filter": True,
                 "filter_year_idx": new_yr_idx,
@@ -454,7 +458,7 @@ if current_codes:
             if current_settings != fb_filter:
                 save_filter_settings(current_settings)
 
-    filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
+    filter_prefix = "_최근" if new_yr_idx == 0 else "_직전"
     target_per_col = f"_num_PER{filter_prefix}"
     target_pbr_col = f"_num_PBR{filter_prefix}"
 
