@@ -259,80 +259,32 @@ def apply_custom_styles():
             vertical-align: middle;
         }
 
-        /* ========================================================= */
-        /* ★ 세그먼트 컨트롤 1줄 고정 & 좌우 가로 스크롤 (공간 극대화) */
-        /* ========================================================= */
-
-        /* 1. 상위 래퍼가 화면 밖으로 넘치지 않도록 너비 제한 */
-        div[data-testid="stSegmentedControl"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            overflow: hidden !important;
-            margin-bottom: 0.4rem !important;
-        }
-
-        /* 2. 버튼들을 강제로 1줄(nowrap)로 묶고 가로 스크롤 활성화 */
-        div[data-testid="stSegmentedControl"] > div {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            overflow-y: hidden !important;
-            -webkit-overflow-scrolling: touch !important;
-            scrollbar-width: none !important; /* 파이어폭스 스크롤바 숨김 */
-            gap: 6px !important;
-            padding: 2px 0 6px 0 !important;
-            width: 100% !important;
-        }
-
-        /* 3. 크롬 / 사파리 / 삼성인터넷 스크롤바 숨겨서 높이 최소화 */
-        div[data-testid="stSegmentedControl"] > div::-webkit-scrollbar {
-            display: none !important;
-        }
-
-        /* 4. 버튼들이 화면 폭에 눌려 찌그러지거나 줄바꿈되지 않도록 고정 */
-        div[data-testid="stSegmentedControl"] button {
-            flex-shrink: 0 !important;
-            white-space: nowrap !important;
-            padding: 4px 10px !important;
-            font-size: 0.85rem !important;
-            height: auto !important;
-            min-height: 32px !important;
-        }
-
-                /* 1. 상단 최상위 여백 최소화 (화면 위로 바짝 끌어올림) */
+        /* 1. 상단 최상위 여백 최소화 (화면 위로 바짝 끌어올림) */
         .block-container {
-            padding-top: 0.6rem !important;
-            padding-bottom: 1.5rem !important;
-            padding-left: 0.6rem !important;
-            padding-right: 0.6rem !important;
+            padding-top: 1.8rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 0.8rem !important;
+            padding-right: 0.8rem !important;
             max-width: 100% !important;
         }
 
-        /* 2. Streamlit 기본 요소 간격(마진) 축소 */
-        div[data-testid="stVerticalBlock"] > div {
-            gap: 0.35rem !important;
+        /* 2. 전체 페이지 가로 스크롤 이탈 방지 */
+        .stApp, 
+        [data-testid="stAppViewContainer"], 
+        [data-testid="stMain"] {
+            overflow-x: clip !important;
+            max-width: 100vw !important;
         }
 
-        /* 3. 토글 스위치 높이 축소 */
-        div[data-testid="stToggle"] {
-            margin-top: 0 !important;
-            margin-bottom: 0.2rem !important;
-            min-height: auto !important;
-        }
-        div[data-testid="stToggle"] label p {
-            font-size: 0.85rem !important;
-        }
-
-        /* 4. ★ 세그먼트 탭: 무조건 1줄(nowrap) + 모바일 부드러운 가로 스와이프 */
-        div[data-testid="stSegmentedControl"] {
+        /* 3. 라디오 탭 영역을 무조건 1줄 가로 스크롤 컨테이너로 고정 */
+        div[data-testid="stRadio"] {
             width: 100% !important;
             max-width: 100% !important;
             overflow: hidden !important;
-            margin: 0.2rem 0 !important;
+            margin-bottom: 0.2rem !important;
         }
 
-        div[data-testid="stSegmentedControl"] > div {
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
@@ -340,31 +292,49 @@ def apply_custom_styles():
             overflow-y: hidden !important;
             -webkit-overflow-scrolling: touch !important;
             scrollbar-width: none !important;
-            gap: 4px !important;
-            padding: 2px 0 !important;
+            border-bottom: 1px solid #334155 !important;
+            gap: 1.2rem !important;
+            padding-bottom: 4px !important;
+            margin-bottom: 0 !important;
             width: 100% !important;
         }
-        div[data-testid="stSegmentedControl"] > div::-webkit-scrollbar {
+        div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
             display: none !important;
         }
 
-        /* 5. 탭 버튼 크기 컴팩트화 (줄바꿈 방지) */
-        div[data-testid="stSegmentedControl"] button {
-            flex-shrink: 0 !important;
+        /* 4. 탭 항목 (라벨) 스타일 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label {
+            display: inline-flex !important;
+            align-items: center !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 0.3rem 0.1rem !important;
+            margin: 0 !important;
+            cursor: pointer !important;
             white-space: nowrap !important;
-            padding: 4px 10px !important;
-            font-size: 0.82rem !important;
-            line-height: 1.1 !important;
-            min-height: 28px !important;
-            height: 28px !important;
-            border-radius: 4px !important;
+            flex-shrink: 0 !important;
         }
 
-        /* 6. 현재시세 탭의 '관심종목 추가' 버튼 상단 여백 축소 */
-        div[data-testid="stButton"] > button {
-            padding: 3px 8px !important;
-            font-size: 0.82rem !important;
-            min-height: 30px !important;
+        /* 5. 텍스트 글자 색상 */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+            color: #94a3b8 !important;
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+            margin: 0 !important;
+        }
+
+        /* 6. 선택된 탭 강조 (빨간 밑줄) */
+        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
+            border-bottom: 2px solid #ff4b4b !important;
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
+
+        /* 7. 관심종목 추가 버튼 등 간격 최소화 */
+        div[data-testid="stVerticalBlock"] > div {
+            gap: 0.4rem !important;
         }
         
         </style>
