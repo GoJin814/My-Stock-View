@@ -480,6 +480,19 @@ if current_codes:
     df_basic = df_basic[valid_mask].reset_index(drop=True)
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
+    
+    # -------------------------------------------------------------
+    # 탭 렌더링 직전: 최신 Firebase sort_order 재조회 및 강제 정렬 확정
+    # -------------------------------------------------------------
+    latest_order = get_synced_sort_order()
+    if latest_order:
+        order_map = {str(c).zfill(6): i for i, c in enumerate(latest_order)}
+        for target_df in [df_basic, df_perf, df_share]:
+            if "종목코드" in target_df.columns:
+                target_df["_rank"] = target_df["종목코드"].astype(str).str.zfill(6).map(lambda c: order_map.get(c, 9999))
+                target_df.sort_values(by="_rank", inplace=True)
+                target_df.drop(columns=["_rank"], inplace=True)
+                target_df.reset_index(drop=True, inplace=True)
 
     # -------------------------------------------------------------
     # 4. 라디오 가로 탭 바 (1줄 고정)
