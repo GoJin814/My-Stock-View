@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import os
@@ -26,16 +27,21 @@ st.set_page_config(page_title="Scanning", layout="wide")
 apply_custom_styles()
 
 # -------------------------------------------------------------
-# 1. Firebase 초기화 및 실시간 데이터베이스 연동
+# 1. Firebase 초기화 및 실시간 동기화 연동
 # -------------------------------------------------------------
 if not firebase_admin._apps:
     try:
         cred_dict = dict(st.secrets["firebase"])
         db_url = cred_dict.pop("databaseURL", "https://my-stock-view-default-rtdb.firebaseio.com")
+        
+        # 줄바꿈 문자열(\n)이 있을 경우 실제 개행으로 치환 처리
+        if "private_key" in cred_dict and isinstance(cred_dict["private_key"], str):
+            cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
+            
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred, {"databaseURL": db_url})
     except Exception as e:
-        st.error(f"⚠️ Firebase 초기화 실패 (Streamlit Secrets 설정을 확인하세요): {e}")
+        st.error(f"⚠️ Firebase 초기화 실패 (Secrets 설정을 확인하세요): {e}")
 
 def load_codes():
     """Firebase Realtime Database에서 실시간 종목코드 목록 불러오기"""
@@ -46,10 +52,10 @@ def load_codes():
             cleaned = [str(c).strip().zfill(6) for c in codes if str(c).strip().isdigit()]
             if cleaned:
                 return list(dict.fromkeys(cleaned))
-    except Exception as e:
-        st.warning(f"DB 로드 실패, 로컬 캐시 확인 중: {e}")
+    except Exception:
+        pass
 
-    # DB 실패 시 로컬 파일 폴백
+    # DB 미연결 시 로컬 파일 폴백
     SAVE_FILE = "saved_codes.txt"
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
@@ -70,7 +76,7 @@ def save_codes(codes):
     except Exception as e:
         st.error(f"⚠️ Firebase 저장 실패: {e}")
 
-    # 로컬 백업용 파일 쓰기
+    # 로컬 백업 파일 유지
     with open("saved_codes.txt", "w", encoding="utf-8") as f:
         f.write("\n".join(cleaned) + "\n")
 
@@ -328,9 +334,9 @@ if current_codes:
     df_share = df_share[valid_mask].reset_index(drop=True)
 
     # -------------------------------------------------------------
-    # 4. 탭 이동 방지: 세션 스테이트 기반 탭 선택기 (이전 탭 완벽 유지)
+    # 4. 순정 st.tabs 렌더링 (가로 스크롤 및 밑줄 UI 유지)
     # -------------------------------------------------------------
-    TAB_OPTIONS = [
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "⭐ 관심종목",
         "📊 현재시세", 
         "💰 주당가치",
@@ -340,31 +346,14 @@ if current_codes:
         "📈 수익률-연금",
         "📈 수익률-roun",
         "📈 수익률-진우"
-    ]
+    ])
 
-    if "current_active_tab" not in st.session_state:
-        st.session_state.current_active_tab = "⭐ 관심종목"
-
-    # 가로형 라디오 버튼으로 탭 UI 구현 (필터 조작으로 재실행되어도 탭 선택이 유지됨)
-    current_tab = st.radio(
-        "탭 네비게이션",
-        TAB_OPTIONS,
-        index=TAB_OPTIONS.index(st.session_state.current_active_tab),
-        horizontal=True,
-        label_visibility="collapsed",
-        key="nav_tab_radio"
-    )
-    st.session_state.current_active_tab = current_tab
-
-    st.write("")
-
-    # -------------------------------------------------------------
-    # 5. 각 탭 분기 렌더링
-    # -------------------------------------------------------------
-    if current_tab == "⭐ 관심종목":
+    # 1. 관심종목 탭
+    with tab1:
         render_tab_watchlist()
 
-    elif current_tab == "📊 현재시세":
+    # 2. 현재 시세 탭
+    with tab2:
         st.markdown("""
             <style>
             div[data-testid="stButton"] > button[kind="primary"] {
@@ -406,7 +395,6 @@ if current_codes:
                 if not selected_codes:
                     st.warning("⚠️ 체크박스로 선택된 종목이 없습니다. 표의 체크박스를 확인해 주세요.")
                 else:
-                    # Firebase 관심종목 노드 연동
                     try:
                         w_ref = db.reference("my_stock_view/watchlist_codes")
                         w_codes = w_ref.get() or []
@@ -425,7 +413,7 @@ if current_codes:
                                 st.query_params.clear()
                             except Exception:
                                 pass
-                            st.success(f"🎉 총 {added_count}개 종목이 관심종목(Firebase)에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                            st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다!")
                             st.rerun()
                         else:
                             st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
@@ -566,31 +554,70 @@ if current_codes:
                             except Exception as e:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
-    elif current_tab == "💰 주당가치":
+    # 3. 주당 가치 탭
+    with tab3:
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
-    elif current_tab == "📈 실적":
+    # 4. 실적 탭
+    with tab4:
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
-    elif current_tab == "🌐 국내지수":
+    # 5. 국내지수 탭
+    with tab5:
         edited_market_df = render_tab_market()
         st.write("")
         render_market_inputs()
 
-    elif current_tab == "📈 수익률-생활비":
+    # 6. 생활비 수익률 탭
+    with tab6:
         render_tab_returns_living()
 
-    elif current_tab == "📈 수익률-연금":
+    # 7. 연금 수익률 탭
+    with tab7:
         render_tab_returns_pension()
 
-    elif current_tab == "📈 수익률-roun":
+    # 8. roun 수익률 탭
+    with tab8:
         render_tab_returns_roun()
 
-    elif current_tab == "📈 수익률-진우":
+    # 9. 진우 수익률 탭
+    with tab9:
         render_tab_returns_jinwoo()
 
     # 정렬 엔진 유지
     inject_client_sort_sync_engine()
+
+    # -------------------------------------------------------------
+    # 5. 탭 위치 자동 복원 스크립트 (필터 조작 시 이전 탭 유지)
+    # -------------------------------------------------------------
+    components.html("""
+    <script>
+    const parentDoc = window.parent.document;
+    function syncAndRestoreTabs() {
+        const tabs = parentDoc.querySelectorAll('button[data-testid="stTab"]');
+        if (!tabs || tabs.length === 0) return;
+
+        const savedIndex = sessionStorage.getItem('scanning_active_tab_index');
+        if (savedIndex !== null) {
+            const target = tabs[parseInt(savedIndex, 10)];
+            if (target && target.getAttribute('aria-selected') !== 'true') {
+                target.click();
+            }
+        }
+
+        tabs.forEach((tab, idx) => {
+            if (!tab.dataset.hasTabListener) {
+                tab.dataset.hasTabListener = "true";
+                tab.addEventListener('click', () => {
+                    sessionStorage.setItem('scanning_active_tab_index', idx);
+                });
+            }
+        });
+    }
+    syncAndRestoreTabs();
+    setTimeout(syncAndRestoreTabs, 300);
+    </script>
+    """, height=0)
 
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
