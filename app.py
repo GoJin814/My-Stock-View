@@ -41,8 +41,17 @@ if not firebase_admin._apps:
         st.error(f"⚠️ Firebase 초기화 실패: {e}")
 
 def load_codes():
-    """등록된 종목코드 목록 가져오기"""
+    """Firebase에서 최신 정렬 순서(sort_order)를 최우선으로 불러옴"""
     try:
+        # 1. 정렬된 순서가 있으면 이 순서를 그대로 로드
+        sort_ref = db.reference("my_stock_view/sort_order")
+        synced_order = sort_ref.get()
+        if synced_order and isinstance(synced_order, list):
+            cleaned_order = [str(c).strip().zfill(6) for c in synced_order if str(c).strip().isdigit()]
+            if cleaned_order:
+                return list(dict.fromkeys(cleaned_order))
+        
+        # 2. 정렬 순서가 아직 없을 때만 기본 saved_codes 로드
         ref = db.reference("my_stock_view/saved_codes")
         codes = ref.get()
         if codes and isinstance(codes, list):
