@@ -49,12 +49,23 @@ def apply_custom_styles():
             color: #fafafa !important;
         }
 
+        /* 필터 컨테이너 초슬림 패딩 */
         .filter-container-box {
             background-color: rgba(255, 255, 255, 0.02) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 8px !important;
-            padding: 12px 14px !important;
-            margin-bottom: 1.2rem !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 6px !important;
+            padding: 6px 10px !important;
+            margin-bottom: 0.4rem !important;
+        }
+
+        /* 슬라이더 라벨 높이 제거 및 마진 축소 */
+        .filter-container-box div[data-testid="stSlider"] {
+            margin-top: -6px !important;
+            margin-bottom: 0 !important;
+        }
+
+        .filter-container-box div[data-testid="stCheckbox"] {
+            margin-top: 4px !important;
         }
 
         .stTabs [data-baseweb="tab-list"] {
