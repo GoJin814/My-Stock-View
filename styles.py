@@ -31,10 +31,13 @@ def apply_custom_styles():
         }
 
         .block-container {
-            padding-top: 1.8rem;
-            padding-bottom: 3rem;
+            padding-top: 1.0rem !important; /* 헤더 툴바 직하단에 밀착 */
+            padding-bottom: 2.0rem !important;
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
             max-width: 100% !important;
         }
+
 
         div[data-testid="stToggle"] {
             margin-bottom: 0.5rem !important;
