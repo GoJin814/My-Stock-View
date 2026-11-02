@@ -339,9 +339,9 @@ if current_codes:
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # -------------------------------------------------------------
-    # 1. Firebase 실시간 정렬 순서 강제 적용 (현재시세 즉시 반영 핵심)
-    # -------------------------------------------------------------
+    # =========================================================
+    # ★ 필수 적용: Firebase sort_order 기준으로 데이터프레임 행 강제 정렬
+    # =========================================================
     synced_order = get_synced_sort_order()
     if synced_order and "종목코드" in df_basic.columns:
         order_map = {str(code).zfill(6): i for i, code in enumerate(synced_order)}
