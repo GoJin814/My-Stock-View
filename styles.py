@@ -299,6 +299,73 @@ def apply_custom_styles():
             height: auto !important;
             min-height: 32px !important;
         }
+
+                /* 1. 상단 최상위 여백 최소화 (화면 위로 바짝 끌어올림) */
+        .block-container {
+            padding-top: 0.6rem !important;
+            padding-bottom: 1.5rem !important;
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
+            max-width: 100% !important;
+        }
+
+        /* 2. Streamlit 기본 요소 간격(마진) 축소 */
+        div[data-testid="stVerticalBlock"] > div {
+            gap: 0.35rem !important;
+        }
+
+        /* 3. 토글 스위치 높이 축소 */
+        div[data-testid="stToggle"] {
+            margin-top: 0 !important;
+            margin-bottom: 0.2rem !important;
+            min-height: auto !important;
+        }
+        div[data-testid="stToggle"] label p {
+            font-size: 0.85rem !important;
+        }
+
+        /* 4. ★ 세그먼트 탭: 무조건 1줄(nowrap) + 모바일 부드러운 가로 스와이프 */
+        div[data-testid="stSegmentedControl"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+            margin: 0.2rem 0 !important;
+        }
+
+        div[data-testid="stSegmentedControl"] > div {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            gap: 4px !important;
+            padding: 2px 0 !important;
+            width: 100% !important;
+        }
+        div[data-testid="stSegmentedControl"] > div::-webkit-scrollbar {
+            display: none !important;
+        }
+
+        /* 5. 탭 버튼 크기 컴팩트화 (줄바꿈 방지) */
+        div[data-testid="stSegmentedControl"] button {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+            padding: 4px 10px !important;
+            font-size: 0.82rem !important;
+            line-height: 1.1 !important;
+            min-height: 28px !important;
+            height: 28px !important;
+            border-radius: 4px !important;
+        }
+
+        /* 6. 현재시세 탭의 '관심종목 추가' 버튼 상단 여백 축소 */
+        div[data-testid="stButton"] > button {
+            padding: 3px 8px !important;
+            font-size: 0.82rem !important;
+            min-height: 30px !important;
+        }
         
         </style>
     """, unsafe_allow_html=True)
