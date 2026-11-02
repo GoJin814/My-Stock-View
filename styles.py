@@ -259,50 +259,74 @@ def apply_custom_styles():
             vertical-align: middle;
         }
 
-        /* 가로 라디오를 순정 st.tabs 디자인(가로 스크롤 + 밑줄)으로 완벽 변환 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] {
-            display: flex !important;
-            flex-direction: row !important;   
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            border-bottom: 1px solid #333 !important;
-            gap: 1.5rem !important;
-            padding-bottom: 2px !important;
-        }
+/* 1. 상위 래퍼 컨테이너가 페이지 너비를 벗어나지 않도록 강제 제한 */
+div[data-testid="stRadio"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
 
-        /* 동그란 라디오 버튼 동그라미 숨기기 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label > div:first-child {
-            display: none !important;
-        }
+/* 2. 가로 탭 바 영역만 부드럽게 자체 스크롤되도록 고정 */
+div[data-testid="stRadio"] > div[role="radiogroup"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important; /* 파이어폭스 스크롤바 숨김 */
+    border-bottom: 1px solid #333 !important;
+    gap: 1.5rem !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 0.5rem !important;
+}
+div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
+    display: none !important; /* 크롬/사파리 스크롤바 숨김 */
+}
 
-        /* 탭 텍스트 스타일 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label {    
-            background: transparent !important;
-            border: none !important;
-            padding: 0.5rem 0.2rem !important;
-            margin: 0 !important;
-            cursor: pointer !important;
-            white-space: nowrap !important;
-            flex-shrink: 0 !important;
-        }
+/* 3. ★ 핵심: 모바일 브라우저가 화면을 오른쪽으로 밀어버리는 원인(input 포커스) 원천 차단 */
+div[data-testid="stRadio"] input[type="radio"] {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+}
 
-        /* 탭 텍스트 폰트 기본 색상 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
-            color: #888888 !important;
-            font-size: 1rem !important;
-            font-weight: 500 !important;
-            transition: color 0.2s ease !important;
-        }
+/* 4. 기존 동그라미 라디오 아이콘 숨김 */
+div[data-testid="stRadio"] > div[role="radiogroup"] label > div:first-child {
+    display: none !important;
+}
 
-        /* 선택된 탭: 빨간 밑줄 및 밝은 텍스트 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
-            border-bottom: 2px solid #ff4b4b !important;
-        }
-        div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
-            color: #ffffff !important;
-            font-weight: 700 !important;
-        }
+/* 5. 탭 버튼 모양 및 터치 영역 최적화 */
+div[data-testid="stRadio"] > div[role="radiogroup"] label {
+    background: transparent !important;
+    border: none !important;
+    padding: 0.5rem 0.2rem !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+/* 6. 선택 전 탭 글자 색상 */
+div[data-testid="stRadio"] > div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+    color: #888888 !important;
+    font-size: 0.98rem !important;
+    font-weight: 500 !important;
+}
+
+/* 7. 선택된 탭: 빨간색 언더라인 & 흰색 강조 */
+div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
+    border-bottom: 2px solid #ff4b4b !important;
+}
+div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
 
         </style>
     """, unsafe_allow_html=True)
