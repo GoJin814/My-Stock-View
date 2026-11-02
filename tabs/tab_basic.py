@@ -7,7 +7,7 @@ def render_tab_basic(df: pd.DataFrame):
         st.info("표시할 종목 데이터가 없습니다.")
         return df
 
-    df_display = df.copy()
+    df_display = df.drop(columns=["선택"], errors="ignore")
 
     # HTML 렌더링 (전체 탭 실시간 정렬 연동 + 네이버 링크 + 좌측 체크박스)
     render_multi_header_table(
