@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import os
@@ -27,24 +26,20 @@ st.set_page_config(page_title="Scanning", layout="wide")
 apply_custom_styles()
 
 # -------------------------------------------------------------
-# 1. Firebase 초기화 및 실시간 동기화 연동
+# 1. Firebase 초기화 및 실시간 동기화
 # -------------------------------------------------------------
 if not firebase_admin._apps:
     try:
         cred_dict = dict(st.secrets["firebase"])
         db_url = cred_dict.pop("databaseURL", "https://my-stock-view-default-rtdb.firebaseio.com")
-        
-        # 줄바꿈 문자열(\n)이 있을 경우 실제 개행으로 치환 처리
         if "private_key" in cred_dict and isinstance(cred_dict["private_key"], str):
             cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
-            
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred, {"databaseURL": db_url})
     except Exception as e:
-        st.error(f"⚠️ Firebase 초기화 실패 (Secrets 설정을 확인하세요): {e}")
+        st.error(f"⚠️ Firebase 초기화 실패: {e}")
 
 def load_codes():
-    """Firebase Realtime Database에서 실시간 종목코드 목록 불러오기"""
     try:
         ref = db.reference("my_stock_view/saved_codes")
         codes = ref.get()
@@ -55,7 +50,6 @@ def load_codes():
     except Exception:
         pass
 
-    # DB 미연결 시 로컬 파일 폴백
     SAVE_FILE = "saved_codes.txt"
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
@@ -68,7 +62,6 @@ def load_codes():
     return default_codes
 
 def save_codes(codes):
-    """Firebase Realtime Database에 종목코드 목록 저장 (모든 기기 실시간 동기화)"""
     cleaned = list(dict.fromkeys([str(c).strip().zfill(6) for c in codes if str(c).strip().isdigit()]))
     try:
         ref = db.reference("my_stock_view/saved_codes")
@@ -76,7 +69,6 @@ def save_codes(codes):
     except Exception as e:
         st.error(f"⚠️ Firebase 저장 실패: {e}")
 
-    # 로컬 백업 파일 유지
     with open("saved_codes.txt", "w", encoding="utf-8") as f:
         f.write("\n".join(cleaned) + "\n")
 
@@ -273,28 +265,29 @@ def get_all_stocks_parallel(codes_list):
 
 
 # -------------------------------------------------------------
-# 상단 컴팩트 헤더 (타이틀 + 동기화 + 필터 토글을 1개 행으로 결합)
+# 3. 상단 헤더 (타이틀 + 실시간 동기화 버튼)
 # -------------------------------------------------------------
-h_col1, h_col2 = st.columns([3.5, 1.5])
-with h_col1:
-    st.markdown('<h2 style="margin:0; padding:0; font-size:1.45rem; font-weight:800; line-height:1.2;">Scanning</h2>', unsafe_allow_html=True)
-with h_col2:
-    if st.button("🔄 시세 동기화", use_container_width=True, key="btn_sync_top"):
+title_col, sync_col = st.columns([3.8, 1.4])
+with title_col:
+    st.title("Scanning")
+with sync_col:
+    st.write("")
+    if st.button("🔄 실시간 시세 동기화", use_container_width=True, key="btn_sync_top"):
         fetch_single_stock.clear()
         st.rerun()
 
 current_codes = load_codes()
 
 if current_codes:
-    with st.spinner("데이터 동기화 중..."):
+    with st.spinner(f"종목 {len(current_codes)}개 데이터를 동기화하는 중입니다..."):
         scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = get_all_stocks_parallel(current_codes)
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 필터 토글을 슬림하게 배치
-    show_filter = st.toggle("🎯 밸류에이션 필터", value=False)
+    # 밸류에이션 필터링
+    show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 범위 조건 필터링", value=False)
     
     filter_year = f"최근 연도 ({most_latest_yr})"
     use_per_filter = False
@@ -307,15 +300,15 @@ if current_codes:
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
             f_c1, f_c2, f_c3 = st.columns(3)
             with f_c1:
-                filter_year = st.selectbox("기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
+                filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
             with f_c2:
-                use_per_filter = st.checkbox("PER 범위")
-                per_min = st.number_input("PER 최소", value=0.0, step=1.0, disabled=not use_per_filter)
-                per_max = st.number_input("PER 최대", value=30.0, step=1.0, disabled=not use_per_filter)
+                use_per_filter = st.checkbox("PER 범위 필터 적용")
+                per_min = st.number_input("PER 최소값", value=0.0, step=1.0, disabled=not use_per_filter)
+                per_max = st.number_input("PER 최대값", value=30.0, step=1.0, disabled=not use_per_filter)
             with f_c3:
-                use_pbr_filter = st.checkbox("PBR 범위")
-                pbr_min = st.number_input("PBR 최소", value=0.0, step=0.1, disabled=not use_pbr_filter)
-                pbr_max = st.number_input("PBR 최대", value=3.0, step=0.1, disabled=not use_pbr_filter)
+                use_pbr_filter = st.checkbox("PBR 범위 필터 적용")
+                pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
+                pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
             st.markdown('</div>', unsafe_allow_html=True)
 
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
@@ -333,22 +326,31 @@ if current_codes:
     df_share = df_share[valid_mask].reset_index(drop=True)
 
     # -------------------------------------------------------------
-    # 탭 메뉴 (세그먼트 컨트롤)
+    # 4. 세그먼트 컨트롤 탭 (탭 이름과 아래 if 분기를 1:1로 일치)
     # -------------------------------------------------------------
     TAB_OPTIONS = [
-        "★ 관심종목", "📊 현재시세", "💰 주당가치", "📈 실적", 
-        "🌐 국내지수", "📈 생활비", "📈 연금", "📈 roun", "📈 진우"
+        "⭐ 관심종목",
+        "📊 현재시세", 
+        "💰 주당가치",
+        "📈 실적", 
+        "🌐 국내지수",
+        "📈 생활비",
+        "📈 연금",
+        "📈 roun",
+        "📈 진우"
     ]
-    if "current_active_tab" not in st.session_state:
-        st.session_state.current_active_tab = "★ 관심종목"
+
+    if "current_active_tab" not in st.session_state or st.session_state.current_active_tab not in TAB_OPTIONS:
+        st.session_state.current_active_tab = "⭐ 관심종목"
 
     current_tab = st.segmented_control(
-        "탭",
+        "탭 네비게이션",
         TAB_OPTIONS,
         default=st.session_state.current_active_tab,
         label_visibility="collapsed",
         key="nav_tab_segmented"
     )
+
     if not current_tab:
         current_tab = st.session_state.current_active_tab
     else:
@@ -357,7 +359,7 @@ if current_codes:
     st.write("")
 
     # -------------------------------------------------------------
-    # 5. 각 탭 분기 렌더링 (with tab1: 대신 if/elif 사용)
+    # 5. 각 탭 분기 렌더링 (이름 일치 완료)
     # -------------------------------------------------------------
     if current_tab == "⭐ 관심종목":
         render_tab_watchlist()
@@ -422,7 +424,7 @@ if current_codes:
                                 st.query_params.clear()
                             except Exception:
                                 pass
-                            st.success(f"🎉 총 {added_count}개 종목이 관심종목(Firebase)에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
+                            st.success(f"🎉 총 {added_count}개 종목이 관심종목에 추가되었습니다! (상단 '⭐ 관심종목' 탭에서 확인)")
                             st.rerun()
                         else:
                             st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
@@ -574,51 +576,19 @@ if current_codes:
         st.write("")
         render_market_inputs()
 
-    elif current_tab == "📈 수익률-생활비":
+    elif current_tab == "📈 생활비":
         render_tab_returns_living()
 
-    elif current_tab == "📈 수익률-연금":
+    elif current_tab == "📈 연금":
         render_tab_returns_pension()
 
-    elif current_tab == "📈 수익률-roun":
+    elif current_tab == "📈 roun":
         render_tab_returns_roun()
 
-    elif current_tab == "📈 수익률-진우":
+    elif current_tab == "📈 진우":
         render_tab_returns_jinwoo()
 
     inject_client_sort_sync_engine()
-
-    # -------------------------------------------------------------
-    # 5. 탭 위치 자동 복원 스크립트 (필터 조작 시 이전 탭 유지)
-    # -------------------------------------------------------------
-    components.html("""
-    <script>
-    const parentDoc = window.parent.document;
-    function syncAndRestoreTabs() {
-        const tabs = parentDoc.querySelectorAll('button[data-testid="stTab"]');
-        if (!tabs || tabs.length === 0) return;
-
-        const savedIndex = sessionStorage.getItem('scanning_active_tab_index');
-        if (savedIndex !== null) {
-            const target = tabs[parseInt(savedIndex, 10)];
-            if (target && target.getAttribute('aria-selected') !== 'true') {
-                target.click();
-            }
-        }
-
-        tabs.forEach((tab, idx) => {
-            if (!tab.dataset.hasTabListener) {
-                tab.dataset.hasTabListener = "true";
-                tab.addEventListener('click', () => {
-                    sessionStorage.setItem('scanning_active_tab_index', idx);
-                });
-            }
-        });
-    }
-    syncAndRestoreTabs();
-    setTimeout(syncAndRestoreTabs, 300);
-    </script>
-    """, height=0)
 
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
