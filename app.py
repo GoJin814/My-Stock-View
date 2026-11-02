@@ -273,29 +273,28 @@ def get_all_stocks_parallel(codes_list):
 
 
 # -------------------------------------------------------------
-# 3. 메인 레이아웃 및 상단 헤더
+# 상단 컴팩트 헤더 (타이틀 + 동기화 + 필터 토글을 1개 행으로 결합)
 # -------------------------------------------------------------
-title_col, sync_col = st.columns([5, 1.2])
-with title_col:
-    st.title("Scanning")
-with sync_col:
-    st.write("")
-    if st.button("🔄 실시간 시세 동기화", use_container_width=True):
+h_col1, h_col2 = st.columns([3.5, 1.5])
+with h_col1:
+    st.markdown('<h2 style="margin:0; padding:0; font-size:1.45rem; font-weight:800; line-height:1.2;">Scanning</h2>', unsafe_allow_html=True)
+with h_col2:
+    if st.button("🔄 시세 동기화", use_container_width=True, key="btn_sync_top"):
         fetch_single_stock.clear()
         st.rerun()
 
 current_codes = load_codes()
 
 if current_codes:
-    with st.spinner(f"종목 {len(current_codes)}개 데이터를 동기화하는 중입니다..."):
+    with st.spinner("데이터 동기화 중..."):
         scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr = get_all_stocks_parallel(current_codes)
 
     df_basic = pd.DataFrame(scan_basic)
     df_perf = pd.DataFrame(scan_perf)
     df_share = pd.DataFrame(scan_share)
 
-    # 밸류에이션 필터링 UI
-    show_filter = st.toggle("🎯 밸류에이션 (PER / PBR) 범위 조건 필터링", value=False)
+    # 필터 토글을 슬림하게 배치
+    show_filter = st.toggle("🎯 밸류에이션 필터", value=False)
     
     filter_year = f"최근 연도 ({most_latest_yr})"
     use_per_filter = False
@@ -308,15 +307,15 @@ if current_codes:
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
             f_c1, f_c2, f_c3 = st.columns(3)
             with f_c1:
-                filter_year = st.selectbox("필터 기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
+                filter_year = st.selectbox("기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
             with f_c2:
-                use_per_filter = st.checkbox("PER 범위 필터 적용")
-                per_min = st.number_input("PER 최소값", value=0.0, step=1.0, disabled=not use_per_filter)
-                per_max = st.number_input("PER 최대값", value=30.0, step=1.0, disabled=not use_per_filter)
+                use_per_filter = st.checkbox("PER 범위")
+                per_min = st.number_input("PER 최소", value=0.0, step=1.0, disabled=not use_per_filter)
+                per_max = st.number_input("PER 최대", value=30.0, step=1.0, disabled=not use_per_filter)
             with f_c3:
-                use_pbr_filter = st.checkbox("PBR 범위 필터 적용")
-                pbr_min = st.number_input("PBR 최소값", value=0.0, step=0.1, disabled=not use_pbr_filter)
-                pbr_max = st.number_input("PBR 최대값", value=3.0, step=0.1, disabled=not use_pbr_filter)
+                use_pbr_filter = st.checkbox("PBR 범위")
+                pbr_min = st.number_input("PBR 최소", value=0.0, step=0.1, disabled=not use_pbr_filter)
+                pbr_max = st.number_input("PBR 최대", value=3.0, step=0.1, disabled=not use_pbr_filter)
             st.markdown('</div>', unsafe_allow_html=True)
 
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
@@ -334,38 +333,26 @@ if current_codes:
     df_share = df_share[valid_mask].reset_index(drop=True)
 
     # -------------------------------------------------------------
-    # 4. 상태 기억 탭 (디자인은 순정 st.tabs와 동일)
+    # 탭 메뉴 (세그먼트 컨트롤)
     # -------------------------------------------------------------
     TAB_OPTIONS = [
-        "⭐ 관심종목",
-        "📊 현재시세", 
-        "💰 주당가치",
-        "📈 실적", 
-        "🌐 국내지수",
-        "📈 수익률-생활비",
-        "📈 수익률-연금",
-        "📈 수익률-roun",
-        "📈 수익률-진우"
+        "★ 관심종목", "📊 현재시세", "💰 주당가치", "📈 실적", 
+        "🌐 국내지수", "📈 생활비", "📈 연금", "📈 roun", "📈 진우"
     ]
-
     if "current_active_tab" not in st.session_state:
-        st.session_state.current_active_tab = "⭐ 관심종목"
+        st.session_state.current_active_tab = "★ 관심종목"
 
-    # 라디오 대신 Streamlit 공식 세그먼트 컨트롤 사용 (동그라미 없음, 순정 탭 스타일)
     current_tab = st.segmented_control(
-        "탭 네비게이션",
+        "탭",
         TAB_OPTIONS,
         default=st.session_state.current_active_tab,
         label_visibility="collapsed",
         key="nav_tab_segmented"
     )
-    
-    # 클릭이 해제되었을 경우 기본값 유지
     if not current_tab:
         current_tab = st.session_state.current_active_tab
     else:
         st.session_state.current_active_tab = current_tab
-
 
     st.write("")
 
