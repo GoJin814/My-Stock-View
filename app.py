@@ -361,7 +361,9 @@ if current_codes:
             fetch_single_stock.clear()
             st.rerun()
 
-    # 밸류에이션 필터 상세 옵션 (토글 켰을 때만 노출)
+    # -------------------------------------------------------------
+    # 슬림 컴팩트 밸류에이션 필터 (슬라이더 방식)
+    # -------------------------------------------------------------
     filter_year = f"최근 연도 ({most_latest_yr})"
     use_per_filter = False
     use_pbr_filter = False
@@ -371,17 +373,30 @@ if current_codes:
     if show_filter:
         with st.container():
             st.markdown('<div class="filter-container-box">', unsafe_allow_html=True)
-            f_c1, f_c2, f_c3 = st.columns(3)
-            with f_c1:
-                filter_year = st.selectbox("기준 연도", options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"])
-            with f_c2:
-                use_per_filter = st.checkbox("PER 필터")
-                per_min = st.number_input("PER 최소", value=0.0, step=1.0, disabled=not use_per_filter)
-                per_max = st.number_input("PER 최대", value=30.0, step=1.0, disabled=not use_per_filter)
-            with f_c3:
-                use_pbr_filter = st.checkbox("PBR 필터")
-                pbr_min = st.number_input("PBR 최소", value=0.0, step=0.1, disabled=not use_pbr_filter)
-                pbr_max = st.number_input("PBR 최대", value=3.0, step=0.1, disabled=not use_pbr_filter)
+            
+            # 1행: 기준 연도 선택 (컴팩트 셀렉트박스)
+            filter_year = st.selectbox(
+                "필터 기준 연도", 
+                options=[f"최근 연도 ({most_latest_yr})", f"직전 연도 ({most_prev_yr})"],
+                label_visibility="collapsed"
+            )
+
+            # 2행: PER 필터 (체크박스 + 듀얼 슬라이더 1줄 결합)
+            c_per_chk, c_per_sld = st.columns([1.5, 4.5])
+            with c_per_chk:
+                use_per_filter = st.checkbox("PER", value=False)
+            with c_per_sld:
+                per_range = st.slider("PER 범위", 0.0, 50.0, (0.0, 30.0), step=0.5, disabled=not use_per_filter, label_visibility="collapsed")
+                per_min, per_max = per_range
+
+            # 3행: PBR 필터 (체크박스 + 듀얼 슬라이더 1줄 결합)
+            c_pbr_chk, c_pbr_sld = st.columns([1.5, 4.5])
+            with c_pbr_chk:
+                use_pbr_filter = st.checkbox("PBR", value=False)
+            with c_pbr_sld:
+                pbr_range = st.slider("PBR 범위", 0.0, 5.0, (0.0, 3.0), step=0.05, disabled=not use_pbr_filter, label_visibility="collapsed")
+                pbr_min, pbr_max = pbr_range
+
             st.markdown('</div>', unsafe_allow_html=True)
 
     filter_prefix = "_최근" if f"최근 연도 ({most_latest_yr})" in filter_year else "_직전"
