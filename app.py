@@ -333,11 +333,11 @@ if current_codes:
     df_perf = df_perf[valid_mask].reset_index(drop=True)
     df_share = df_share[valid_mask].reset_index(drop=True)
 
+        # -------------------------------------------------------------
+    # 4. 상태 기억 탭 (디자인은 순정 st.tabs와 동일)
     # -------------------------------------------------------------
-    # 4. 순정 st.tabs 렌더링 (가로 스크롤 및 밑줄 UI 유지)
-    # -------------------------------------------------------------
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-        "⭐ 관심종목",
+    TAB_OPTIONS = [
+        "★ 관심종목",
         "📊 현재시세", 
         "💰 주당가치",
         "📈 실적", 
@@ -346,7 +346,55 @@ if current_codes:
         "📈 수익률-연금",
         "📈 수익률-roun",
         "📈 수익률-진우"
-    ])
+    ]
+
+    if "current_active_tab" not in st.session_state:
+        st.session_state.current_active_tab = "★ 관심종목"
+
+    current_tab = st.radio(
+        "탭 네비게이션",
+        TAB_OPTIONS,
+        index=TAB_OPTIONS.index(st.session_state.current_active_tab),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="nav_tab_radio"
+    )
+    st.session_state.current_active_tab = current_tab
+
+    st.write("")
+
+    # 선택된 탭만 렌더링 (필터 변경 시에도 current_tab이 그대로 유지됨)
+    if current_tab == "★ 관심종목":
+        render_tab_watchlist()
+
+    elif current_tab == "📊 현재시세":
+        # (기존 tab2 내부 코드 유지)
+        ...
+
+    elif current_tab == "💰 주당가치":
+        render_tab_share(df_share, most_prev_yr, most_latest_yr)
+
+    elif current_tab == "📈 실적":
+        render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
+
+    elif current_tab == "🌐 국내지수":
+        edited_market_df = render_tab_market()
+        st.write("")
+        render_market_inputs()
+
+    elif current_tab == "📈 수익률-생활비":
+        render_tab_returns_living()
+
+    elif current_tab == "📈 수익률-연금":
+        render_tab_returns_pension()
+
+    elif current_tab == "📈 수익률-roun":
+        render_tab_returns_roun()
+
+    elif current_tab == "📈 수익률-진우":
+        render_tab_returns_jinwoo()
+
+    inject_client_sort_sync_engine()
 
     # 1. 관심종목 탭
     with tab1:
