@@ -351,15 +351,21 @@ if current_codes:
     if "current_active_tab" not in st.session_state:
         st.session_state.current_active_tab = "⭐ 관심종목"
 
-    current_tab = st.radio(
+    # 라디오 대신 Streamlit 공식 세그먼트 컨트롤 사용 (동그라미 없음, 순정 탭 스타일)
+    current_tab = st.segmented_control(
         "탭 네비게이션",
         TAB_OPTIONS,
-        index=TAB_OPTIONS.index(st.session_state.current_active_tab) if st.session_state.current_active_tab in TAB_OPTIONS else 0,
-        horizontal=True,
+        default=st.session_state.current_active_tab,
         label_visibility="collapsed",
-        key="nav_tab_radio"
+        key="nav_tab_segmented"
     )
-    st.session_state.current_active_tab = current_tab
+    
+    # 클릭이 해제되었을 경우 기본값 유지
+    if not current_tab:
+        current_tab = st.session_state.current_active_tab
+    else:
+        st.session_state.current_active_tab = current_tab
+
 
     st.write("")
 
