@@ -298,12 +298,9 @@ def apply_custom_styles():
             display: none !important;
         }
 
-        /* 4. 라디오 동그라미 아이콘 및 실제 input 요소 완벽 숨김 */
-        div[data-testid="stRadio"] [role="radiogroup"] label > div:first-child,
-        div[data-testid="stRadio"] [role="radiogroup"] label div[class*="StyledRadio"],
-        div[data-testid="stRadio"] [role="radiogroup"] label div[class*="Radio"],
-        div[data-testid="stRadio"] [role="radiogroup"] label div[class*="radiomark"],
-        div[data-testid="stRadio"] [role="radiogroup"] label svg {
+        /* 4. 라디오 동그라미 아이콘 완벽 제거 (텍스트 박스 제외 모두 숨김) */
+        div[data-testid="stRadio"] [role="radiogroup"] label > div:not([data-testid="stMarkdownContainer"]),
+        div[data-testid="stRadio"] [role="radiogroup"] label > div:first-child:not([data-testid="stMarkdownContainer"]) {
             display: none !important;
             width: 0 !important;
             height: 0 !important;
@@ -311,6 +308,7 @@ def apply_custom_styles():
             padding: 0 !important;
             opacity: 0 !important;
             visibility: hidden !important;
+            pointer-events: none !important;
         }
 
         div[data-testid="stRadio"] input[type="radio"] {
@@ -319,8 +317,8 @@ def apply_custom_styles():
             left: -9999px !important;
         }
 
-        /* 5. 탭 버튼(라벨) 터치 최적화 */
-        div[data-testid="stRadio"] > div[role="radiogroup"] label {
+        /* 5. 탭 버튼(라벨) 터치 및 텍스트 정렬 */
+        div[data-testid="stRadio"] [role="radiogroup"] label {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -331,7 +329,11 @@ def apply_custom_styles():
             cursor: pointer !important;
             white-space: nowrap !important;
             flex-shrink: 0 !important;
-            scroll-margin: 0 !important;
+        }
+
+        div[data-testid="stRadio"] [role="radiogroup"] label div[data-testid="stMarkdownContainer"] {
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
         /* 6. 미선택 탭 글자 색상 */
