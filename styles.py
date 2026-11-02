@@ -326,9 +326,28 @@ def apply_custom_styles():
     """, unsafe_allow_html=True)
 
 
-def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, has_checkbox=False):
-    """단일 헤더 및 MultiIndex 다중 헤더(주당가치, 실적 탭) 완벽 지원"""
-    if df is None or df.empty:
+def render_multi_header_table(*args, **kwargs):
+    """
+    모든 탭(현재시세, 주당가치, 실적 등)의 호출 규격을 100% 호환하는 다중/단일 헤더 렌더러
+    """
+    if not args and "df" not in kwargs:
+        st.info("표시할 데이터가 없습니다.")
+        return
+
+    # 1. 인자 유연 파싱 (어떤 방식으로 전달되어도 충돌 없음)
+    df = args[0] if len(args) > 0 else kwargs.get("df")
+    
+    # tab_name 파싱 (위치 인자 또는 키워드 인자)
+    tab_name = kwargs.get("tab_name", "tab_default")
+    if len(args) >= 4 and "tab_name" not in kwargs:
+        tab_name = args[3]
+    elif len(args) == 2 and "tab_name" not in kwargs and isinstance(args[1], str):
+        tab_name = args[1]
+
+    has_naver_link = kwargs.get("has_naver_link", True)
+    has_checkbox = kwargs.get("has_checkbox", False)
+
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         st.info("표시할 데이터가 없습니다.")
         return
 
@@ -336,14 +355,13 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
     chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
     is_multi = isinstance(df.columns, pd.MultiIndex)
 
-    # 1. 헤더 HTML 조립
+    # 2. 헤더 HTML 조립
     thead_html = ""
     if is_multi:
         tr1 = "<tr>"
         if has_checkbox:
             tr1 += '<th rowspan="2" class="col-chk-th"><input type="checkbox" class="header-select-all"></th>'
 
-        # 상위 헤더 (Level 0) 그룹핑
         from itertools import groupby
         col_cursor = 1 if has_checkbox else 0
         lvl0 = [c[0] for c in df.columns]
@@ -358,7 +376,6 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
             col_cursor += span
         tr1 += "</tr>"
 
-        # 하위 헤더 (Level 1)
         tr2 = "<tr>"
         sub_idx = (1 if has_checkbox else 0) + (1 if "종목명" in lvl0 else 0)
         for c0, c1 in df.columns:
@@ -370,7 +387,6 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
         tr2 += "</tr>"
         thead_html = f"<thead>{tr1}{tr2}</thead>"
     else:
-        # 단일 레벨 헤더 (현재시세 탭)
         tr = "<tr>"
         start_idx = 0
         if has_checkbox:
@@ -387,10 +403,9 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
         tr += "</tr>"
         thead_html = f"<thead>{tr}</thead>"
 
-    # 2. 본문 행(tr) 조립
+    # 3. 본문 행(tr) 조립
     tbody_rows = ""
     for _, row in df.iterrows():
-        # 종목코드 안전 추출
         code = ""
         if is_multi:
             for c in df.columns:
@@ -405,7 +420,6 @@ def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, h
             tbody_rows += f'<td class="col-chk"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
 
         for col in df.columns:
-            # 내부 정렬/연산용 숨김 컬럼 스킵
             c_label = str(col[1] if is_multi else col)
             c_top = str(col[0] if is_multi else col)
             if c_label.startswith("_") or c_top.startswith("_"):
