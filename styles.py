@@ -380,173 +380,62 @@ def apply_custom_styles():
         </style>
     """, unsafe_allow_html=True)
 
-def render_multi_header_table(df, *args, **kwargs):
-    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+def render_multi_header_table(df, tab_name="tab_default", has_naver_link=True, has_checkbox=False):
+    if df is None or df.empty:
         st.info("표시할 데이터가 없습니다.")
         return
 
-    code_series = None
-    if "종목코드" in df.columns:
-        code_series = df["종목코드"].astype(str).str.strip().str.zfill(6)
-        tab_name = kwargs.get("tab_name", "tab")
-        if tab_name != "tab_basic":
-            df = df.drop(columns=["종목코드"])
+    # 1. 헤더 HTML 구성
+    headers = [col for col in df.columns if not col.startswith("_")]
+    th_html = ""
+    start_idx = 0
 
-    header_rows = kwargs.get("header_rows", None)
-    if not header_rows and args and isinstance(args[0], list):
-        header_rows = args[0]
+    if has_checkbox:
+        th_html += '<th style="width: 40px; text-align: center;"><input type="checkbox" class="header-select-all"></th>'
+        start_idx = 1
 
-    divider_indices = kwargs.get("divider_indices", None)
-    if not divider_indices and len(args) >= 2 and isinstance(args[1], list):
-        divider_indices = args[1]
-    div_set = set(divider_indices) if divider_indices else set()
+    for i, col in enumerate(headers):
+        col_idx = start_idx + i
+        align = "left" if col in ["종목명", "종목코드"] else "right"
+        th_html += f'<th class="sortable-th" data-col-idx="{col_idx}" style="text-align: {align};">{col}</th>'
 
-    has_naver_link = kwargs.get("has_naver_link", True)
-    tab_name = kwargs.get("tab_name", "tab")
+    # 2. 파이썬 DF의 정렬 순서 그대로 HTML 행(tr) 생성
+    rows_html = ""
+    for _, row in df.iterrows():
+        code = str(row.get("종목코드", "")).strip().zfill(6)
+        rows_html += f'<tr data-code="{code}">'
+        
+        if has_checkbox:
+            rows_html += f'<td style="text-align: center;"><input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
+
+        for col in headers:
+            val = row.get(col, "-")
+            val_str = "-" if pd.isna(val) else str(val)
+            align = "left" if col in ["종목명", "종목코드"] else "right"
+
+            if col == "종목명" and has_naver_link and code:
+                cell_content = f'<a href="https://m.stock.naver.com/item/main/{code}" target="_blank" style="color: inherit; text-decoration: none; font-weight: 600;">{val_str}</a>'
+            elif col == "종목코드":
+                cell_content = f'<span style="color: #94a3b8; font-family: monospace;">{val_str}</span>'
+            else:
+                cell_content = val_str
+
+            rows_html += f'<td style="text-align: {align};">{cell_content}</td>'
+        
+        rows_html += '</tr>'
+
     table_id = f"table_{tab_name}"
-    has_checkbox = kwargs.get("has_checkbox", False)
-
-    table_chk_class = "table-has-chk" if has_checkbox else "table-no-chk"
-    chk_header_html = '<input type="checkbox" class="header-select-all" title="전체 선택">'
-
-    thead_parts = ["<thead>"]
-    if header_rows:
-        num_header_rows = len(header_rows)
-        for r_idx, row in enumerate(header_rows):
-            thead_parts.append("<tr>")
-            cur_col_pos = 0
-            multi_leaf_idx = 1 if not has_checkbox else 2
-
-            for c_cell_idx, cell in enumerate(row):
-                r_span_val = cell.get("rowspan", 1)
-                c_span_val = cell.get("colspan", 1)
-                r_span = f' rowspan="{r_span_val}"' if r_span_val > 1 else ""
-                c_span = f' colspan="{c_span_val}"' if c_span_val > 1 else ""
-                txt = cell.get("text", "")
-
-                th_classes = []
-                th_attrs = ""
-
-                if txt == "선택":
-                    th_classes.append("col-chk-th")
-                    display_txt = chk_header_html
-                elif txt == "종목명":
-                    th_classes.append("col-name-th")
-                    display_txt = txt
-                else:
-                    display_txt = txt
-
-                is_leaf = (r_idx + r_span_val == num_header_rows)
-                if txt != "선택" and is_leaf:
-                    th_classes.append("sortable-th")
-                    if num_header_rows == 1:
-                        assigned_idx = c_cell_idx
-                    elif txt == "종목명":
-                        assigned_idx = 0 if not has_checkbox else 1
-                    else:
-                        assigned_idx = multi_leaf_idx
-                        multi_leaf_idx += 1
-                    th_attrs = f' data-col-idx="{assigned_idx}"'
-
-                is_divider = False
-                if r_idx == 0:
-                    end_col = cur_col_pos + c_span_val - 1
-                    if (end_col in div_set and end_col != len(df.columns) - 1) or cell.get("border_right", False):
-                        is_divider = True
-                    cur_col_pos += c_span_val
-                else:
-                    target_div_idx = multi_leaf_idx - 1
-                    if target_div_idx in div_set or cell.get("border_right", False):
-                        is_divider = True
-
-                if is_divider:
-                    th_classes.append("year-divider")
-
-                class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-                thead_parts.append(f'<th{r_span}{c_span}{class_str}{th_attrs}>{display_txt}</th>')
-            thead_parts.append("</tr>")
-    else:
-        thead_parts.append("<tr>")
-        for idx, c in enumerate(df.columns):
-            th_classes = []
-            th_attrs = ""
-            display_txt = c
-            if c == "선택":
-                th_classes.append("col-chk-th")
-                display_txt = chk_header_html
-            elif c == "종목명":
-                th_classes.append("col-name-th")
-
-            if c != "선택":
-                th_classes.append("sortable-th")
-                th_attrs = f' data-col-idx="{idx}"'
-            if idx in div_set and idx != len(df.columns) - 1:
-                th_classes.append("year-divider")
-
-            class_str = f' class="{" ".join(th_classes)}"' if th_classes else ""
-            thead_parts.append(f'<th{class_str}{th_attrs}>{display_txt}</th>')
-        thead_parts.append("</tr>")
-    thead_parts.append("</thead>")
-
-    tbody_parts = ["<tbody>"]
-    for row_i, (_, row) in enumerate(df.iterrows()):
-        code_val = ""
-        if code_series is not None and row_i < len(code_series):
-            code_val = code_series.iloc[row_i]
-        elif "종목코드" in row:
-            code_val = str(row["종목코드"]).strip().zfill(6)
-
-        if not code_val and "일시" in row:
-            code_val = str(row["일시"]).replace("/", "-").strip()
-
-        tbody_parts.append(f'<tr data-code="{code_val}">')
-
-        for col_idx, col_name in enumerate(df.columns):
-            raw_val = str(row[col_name])
-            val = "-" if raw_val in ["nan", "None", ""] else raw_val
-            
-            td_classes = []
-            if col_idx in div_set and col_idx != len(df.columns) - 1:
-                td_classes.append("year-divider")
-
-            if col_name == "선택":
-                td_classes.append("col-chk")
-                class_str = f' class="{" ".join(td_classes)}"'
-                tbody_parts.append(f'<td{class_str}><input type="checkbox" class="stock-checkbox" data-code="{code_val}"></td>')
-                continue
-
-            if col_name == "종목명":
-                td_classes.append("col-name")
-                if has_naver_link and code_val:
-                    pc_url = f"https://finance.naver.com/item/main.naver?code={code_val}"
-                    content = f'<a href="{pc_url}" target="_blank" class="naver-pc-link">{val}</a>'
-                else:
-                    content = val
-
-                class_str = f' class="{" ".join(td_classes)}"'
-                tbody_parts.append(f'<td{class_str}>{content}</td>')
-                continue
-
-            color_css = ""
-            if "%" in val and val != "-":
-                if val.startswith("+"):
-                    color_css = "color: #f87171 !important; font-weight: 500;"
-                elif val.startswith("-"):
-                    color_css = "color: #60a5fa !important; font-weight: 500;"
-
-            style_attr = f' style="{color_css}"' if color_css else ""
-            class_str = f' class="{" ".join(td_classes)}"' if td_classes else ""
-
-            tbody_parts.append(f'<td{class_str}{style_attr}>{val}</td>')
-
-        tbody_parts.append("</tr>")
-    tbody_parts.append("</tbody>")
-
+    
+    # 3. 테이블 렌더링 (sessionStorage 강제 재정렬 스크립트 제거)
     html_code = f"""
-    <div class="custom-grid-wrapper">
-        <table id="{table_id}" class="custom-grid-table {table_chk_class}">
-            {"".join(thead_parts)}
-            {"".join(tbody_parts)}
+    <div class="custom-table-container">
+        <table class="custom-grid-table" id="{table_id}">
+            <thead>
+                <tr>{th_html}</tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
         </table>
     </div>
     """
