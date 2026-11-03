@@ -15,61 +15,34 @@ from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list,
 WATCHLIST_FILE = "watchlist_codes.txt"
 FB_WATCHLIST_PATH = "my_stock_view/watchlist_codes"
 
+# 종목 1개당 행은 2개(직전/최근). 종목명·현재가·시총·선택박스는 rowspan으로 한 칸만 그린다.
 DATA_COLS = ["적용연도", "PER", "PBR", "ROE", "배당금", "매출액", "영업익", "당기순이익"]
 
-WL_CSS = """
-<style>
-.wl-wrap {
-    overflow: auto; max-height: 70vh; margin-bottom: 1.2rem;
-    border: 1px solid #334155; border-radius: 4px; background: #0e1117;
-    -webkit-overflow-scrolling: touch;
-}
-table.wl-table {
-    border-collapse: separate; border-spacing: 0;
-    width: max-content; min-width: 100%;
-    font-size: 0.82rem; color: #f3f4f6; background: #0e1117;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-table.wl-table th {
-    position: sticky; top: 0; z-index: 10;
-    background: #161a22; color: #9ca3af; font-weight: 500; font-size: 0.81rem;
-    padding: 6px 10px; border-bottom: 2px solid #334155; border-right: 1px solid #262c36;
-    text-align: center; white-space: nowrap; vertical-align: middle;
-}
-table.wl-table td {
-    background: #0e1117; padding: 8px 10px;
-    border-right: 1px solid #1e242c; border-bottom: 1px solid #1e242c;
-    text-align: right; white-space: nowrap; vertical-align: middle;
-    font-variant-numeric: tabular-nums;
-}
-/* 종목 단위 구분선: 각 tbody(종목)의 마지막 행 아래 */
-table.wl-table tbody tr:last-child td { border-bottom: 2px solid #64748b; }
-
-table.wl-table .c-chk {
-    position: sticky; left: 0; z-index: 5;
-    width: 40px; min-width: 40px; max-width: 40px;
-    text-align: center; padding: 6px 0; background: #0e1117;
-}
-table.wl-table th.c-chk { z-index: 100; background: #161a22; }
-
-table.wl-table .c-name {
-    position: sticky; left: 40px; z-index: 5;
-    min-width: 130px; max-width: 150px;
-    text-align: left; padding-left: 12px; white-space: normal; background: #0e1117;
-}
-table.wl-table th.c-name { z-index: 100; background: #161a22; }
-
-table.wl-table .c-mid { text-align: center; }
-table.wl-table .c-code {
-    color: #94a3b8; font-family: monospace; font-size: 0.72rem; margin-top: 2px;
-}
-table.wl-table a.naver-link { color: #58a6ff !important; text-decoration: none !important; }
-table.wl-table a.naver-link:hover { text-decoration: underline !important; }
-table.wl-table input[type="checkbox"] {
-    cursor: pointer; width: 16px; height: 16px; accent-color: #3b82f6; vertical-align: middle;
-}
-</style>
-"""
+WL_CSS = (
+    "<style>"
+    ".wl-wrap{overflow:auto;max-height:70vh;margin-bottom:1.2rem;border:1px solid #334155;"
+    "border-radius:4px;background:#0e1117;-webkit-overflow-scrolling:touch;}"
+    "table.wl-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;"
+    "font-size:0.82rem;color:#f3f4f6;background:#0e1117;"
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;}"
+    "table.wl-table th{position:sticky;top:0;z-index:10;background:#161a22;color:#9ca3af;"
+    "font-weight:500;font-size:0.81rem;padding:6px 10px;border-bottom:2px solid #334155;"
+    "border-right:1px solid #262c36;text-align:center;white-space:nowrap;vertical-align:middle;}"
+    "table.wl-table td{background:#0e1117;padding:8px 10px;border-right:1px solid #1e242c;"
+    "border-bottom:1px solid #1e242c;text-align:center;white-space:nowrap;vertical-align:middle;"
+    "font-variant-numeric:tabular-nums;}"
+    "table.wl-table tbody tr:last-child td{border-bottom:2px solid #64748b;}"
+    "table.wl-table .c-chk{position:sticky;left:0;z-index:5;width:40px;min-width:40px;max-width:40px;"
+    "padding:6px 0;background:#0e1117;}"
+    "table.wl-table th.c-chk{z-index:100;background:#161a22;}"
+    "table.wl-table .c-name{position:sticky;left:40px;z-index:5;min-width:130px;max-width:150px;"
+    "text-align:left;padding-left:12px;white-space:normal;background:#0e1117;}"
+    "table.wl-table th.c-name{z-index:100;background:#161a22;}"
+    "table.wl-table .c-code{color:#94a3b8;font-family:monospace;font-size:0.72rem;margin-top:2px;}"
+    "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}"
+    "table.wl-table input[type=checkbox]{cursor:pointer;width:16px;height:16px;accent-color:#3b82f6;vertical-align:middle;}"
+    "</style>"
+)
 
 
 def _dedupe(codes):
@@ -113,7 +86,7 @@ def commit_to_github(filename, content_str, commit_message="Auto-update watchlis
 
 
 def load_watchlist_codes():
-    """Firebase를 우선으로 읽고, 값이 없으면 로컬 파일을 사용한다."""
+    """Firebase를 우선으로 읽고, 없으면 로컬 파일을 사용한다."""
     try:
         v = db.reference(FB_WATCHLIST_PATH).get()
         if isinstance(v, list):
@@ -145,7 +118,7 @@ def save_watchlist_codes(codes):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_watchlist_item(code: str):
-    """종목 1개에 대해 최근 2개년 행을 반환한다. (직전연도 행, 최근연도 행)"""
+    """종목 1개에 대해 최근 2개년 행을 반환한다. [직전연도행, 최근연도행]"""
     basic = fetch_basic(code)
     integration = fetch_integration(code)
     fin_json = fetch_finance(code)
@@ -251,8 +224,12 @@ def fetch_watchlist_item(code: str):
             s += f"<br>({v / numeric_close * 100:.1f}%)"
         return s + (" (예)" if fallback else "")
 
-    base = {"종목코드": code, "종목명": stock_name or "-",
-            "현재가": curr_price_str or "-", "시총": market_cap or "-"}
+    base = {
+        "종목코드": code,
+        "종목명": stock_name or "-",
+        "현재가": curr_price_str or "-",
+        "시총": market_cap or "-",
+    }
 
     items = []
     if fin_info["prev_yr"]:
@@ -269,11 +246,10 @@ def fetch_watchlist_item(code: str):
         })
 
     if fin_info["latest_yr"]:
-        cur_dps = fin_info["cur_dps"]
-        if pd.isna(cur_dps):
+        if pd.isna(fin_info["cur_dps"]):
             dps_cell = fmt_dps(fin_info["prev_dps"], fallback=True)
         else:
-            dps_cell = fmt_dps(cur_dps)
+            dps_cell = fmt_dps(fin_info["cur_dps"])
         items.append({
             **base,
             "적용연도": fin_info["latest_yr"],
@@ -289,39 +265,28 @@ def fetch_watchlist_item(code: str):
     return items
 
 
-def _esc(v):
-    s = "-" if v is None else str(v)
-    return _html.escape(s)
-
-
-def _group_by_code(rows):
-    groups = {}
-    for r in rows:
-        groups.setdefault(r["종목코드"], []).append(r)
-    return list(groups.values())
-
-
 def _build_table(rows):
+    """종목별로 tbody를 하나씩 만들고, 공통 값은 rowspan으로 병합한다.
+    HTML은 한 줄로 만들어야 st.markdown이 코드블록으로 해석하지 않는다."""
     head = (
         '<th class="c-chk"><input type="checkbox" class="header-select-all" title="전체 선택"></th>'
         '<th class="c-name">종목명</th>'
         '<th>현재가</th>'
         '<th>시총</th>'
-        + "".join(f"<th>{c}</th>" for c in DATA_COLS)
+        + "".join(f"<th>{c}</th>" for c in ["적용연도"] + DATA_COLS[1:])
     )
 
+    groups = {}
+    for r in rows:
+        groups.setdefault(r["종목코드"], []).append(r)
+
     body = []
-    for g in _group_by_code(rows):
+    for code, g in groups.items():
         first = g[0]
-        code = first["종목코드"]
         n = len(g)
         rs = f' rowspan="{n}"' if n > 1 else ""
-        name = _esc(first["종목명"])
-        name_html = (
-            f'<a class="naver-link" target="_blank" '
-            f'href="https://finance.naver.com/item/main.naver?code={code}">{name}</a>'
-            f'<div class="c-code">{code}</div>'
-        )
+        name = _html.escape(str(first["종목명"]))
+        url = f"https://finance.naver.com/item/main.naver?code={code}"
 
         body.append("<tbody>")
         for i, r in enumerate(g):
@@ -331,22 +296,25 @@ def _build_table(rows):
                     f'<td class="c-chk"{rs}>'
                     f'<input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
                 )
-                body.append(f'<td class="c-name{" c-mid" if False else ""}"{rs}>{name_html}</td>')
-                body.append(f'<td class="c-mid"{rs}>{_esc(first["현재가"])}</td>')
-                body.append(f'<td class="c-mid"{rs}>{_esc(first["시총"])}</td>')
+                body.append(
+                    f'<td class="c-name"{rs}>'
+                    f'<a class="naver-link" target="_blank" href="{url}">{name}</a>'
+                    f'<div class="c-code">{code}</div></td>'
+                )
+                body.append(f'<td{rs}>{_html.escape(str(first["현재가"]))}</td>')
+                body.append(f'<td{rs}>{_html.escape(str(first["시총"]))}</td>')
 
-            body.append(f'<td class="c-mid">{_esc(r["적용연도"])}</td>')
+            body.append(f'<td>{_html.escape(str(r["적용연도"]))}</td>')
             for col in DATA_COLS[1:]:
-                if col == "배당금":
-                    # fmt_dps 결과에는 <br>이 포함되어 있으므로 이스케이프하지 않는다
-                    body.append(f'<td>{r[col]}</td>')
-                else:
-                    body.append(f'<td>{_esc(r[col])}</td>')
+                val = r[col]
+                # 배당금 셀만 <br>을 포함하므로 이스케이프하지 않는다
+                cell = val if col == "배당금" else _html.escape(str(val))
+                body.append(f"<td>{cell}</td>")
             body.append("</tr>")
         body.append("</tbody>")
 
     return (
-        f'<div class="wl-wrap"><table class="wl-table" id="table_tab_watchlist">'
+        '<div class="wl-wrap"><table class="wl-table" id="table_tab_watchlist">'
         f'<thead><tr>{head}</tr></thead>{"".join(body)}</table></div>'
     )
 
@@ -391,7 +359,8 @@ def render_tab_watchlist(full_csv_records_map=None):
         return
 
     with st.container(border=True):
-        if st.button("📥 현재시세 탭에서 체크된 종목 가져오기", use_container_width=True, type="secondary", key="btn_wl_import"):
+        if st.button("📥 현재시세 탭에서 체크된 종목 가져오기", use_container_width=True,
+                     type="secondary", key="btn_wl_import"):
             raw = st.query_params.get("sel_price", "") or st.query_params.get("del_codes", "")
             picked = _dedupe(str(raw).split(","))
             if not picked:
@@ -426,7 +395,8 @@ def render_tab_watchlist(full_csv_records_map=None):
         with d_col2:
             uploaded_file = st.file_uploader("백업 파일 업로드 (복구)", type=["txt"],
                                              label_visibility="collapsed", key="wl_restore_upload")
-            if uploaded_file is not None and st.button("📥 업로드 파일로 복구", use_container_width=True, key="btn_wl_restore"):
+            if uploaded_file is not None and st.button("📥 업로드 파일로 복구", use_container_width=True,
+                                                       key="btn_wl_restore"):
                 try:
                     decoded = uploaded_file.getvalue().decode("utf-8")
                     restored = _dedupe(decoded.splitlines())
