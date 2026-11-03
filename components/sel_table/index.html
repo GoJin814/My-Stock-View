@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #0e1117; overflow: hidden; }
-  #root { height: 100%; }
-  /* 표 래퍼가 iframe 높이만큼 차지하고, 그 안에서만 스크롤 */
+  html, body { margin: 0; padding: 0; background: #0e1117; overflow: hidden; }
+  #root { height: 100vh; }
+  /* 표 래퍼: iframe 높이(100vh)를 꽉 채우고, 그 안에서만 스크롤 */
   .wl-wrap, .bs-wrap, .mk-wrap {
-    height: 100% !important; max-height: none !important;
+    height: 100vh !important; max-height: none !important;
     margin: 0 !important; overflow: auto !important; border-radius: 0 !important;
   }
 </style>
@@ -66,8 +66,8 @@ window.addEventListener('message', e => {
   if (!d || d.type !== 'streamlit:render') return;
   const a = d.args || {};
   root.innerHTML = a.html || '';
-  // 높이는 Python에서 준 값으로 고정한다 (내부 스크롤 사용)
-  send('streamlit:setFrameHeight', { height: a.frame_h || 500 });
+  // 최소 600px을 보장해서 행이 충분히 보이도록 한다
+  send('streamlit:setFrameHeight', { height: Math.max(600, a.frame_h || 600) });
 });
 
 send('streamlit:componentReady', { apiVersion: 1 });
