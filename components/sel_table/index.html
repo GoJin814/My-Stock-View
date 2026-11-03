@@ -75,11 +75,6 @@ function sortTable(table, idx, asc) {
   const container = multi ? table : bodies[0];
   const units = multi ? bodies : Array.from(bodies[0].rows);
 
-  // 정렬 대상 열의 헤더 이름
-  const headerName = (table.querySelectorAll('thead tr')[table.querySelectorAll('thead tr').length - 1]
-    .cells[idx] || {}).textContent || '';
-  const isDividend = headerName.trim() === '배당금';
-
   const rowFor = u => {
     if (!multi) return u;
     if (idx >= 4) {
@@ -93,20 +88,16 @@ function sortTable(table, idx, asc) {
     return idx - (u.rows[0].cells.length - row.cells.length);
   };
 
-  // 배당금 셀은 "150원<br>(1.4%)" 형태이므로 괄호 안의 배당수익률로 정렬한다
-  const dividendYield = text => {
-    const m = text.match(/\(([-\d.]+)%\)/);
-    return m ? parseFloat(m[1]) : null;
-  };
-
   const keyOf = u => {
     const row = rowFor(u);
-    const text = cellText(row, cellIndexFor(row, u));
-    if (isDividend) {
-      const y = dividendYield(text);
-      return y === null || isNaN(y) ? null : y;
+    const cell = row.cells[cellIndexFor(row, u)];
+    if (!cell) return null;
+    // 배당금 셀: 배당수익률(data-yield)로 정렬
+    if (cell.hasAttribute('data-yield')) {
+      const y = parseFloat(cell.getAttribute('data-yield'));
+      return isNaN(y) ? null : y;
     }
-    return parseNum(text);
+    return parseNum(cell.innerText.trim());
   };
 
   units.sort((a, b) => {
