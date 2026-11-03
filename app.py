@@ -573,6 +573,8 @@ if current_codes:
     # 각 탭 렌더링
     # -------------------------------------------------------------
     if current_tab == "⭐ 관심종목":
+        import tabs.tab_watchlist as _w
+        st.caption(f"file={_w.__file__} | new={hasattr(_w, '_build_table')}")
         render_tab_watchlist()
 
     elif current_tab == "📊 현재시세":
