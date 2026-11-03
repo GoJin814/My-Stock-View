@@ -6,6 +6,7 @@ import re
 import json
 import requests
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 # Firebase Admin SDK 연동
 import firebase_admin
@@ -353,8 +354,9 @@ def get_all_stocks_parallel(codes_list):
         if ly != "-":
             latest_years.append(ly)
 
-    most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else "2025년"
-    most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else "2026년"
+    _now = datetime.now().year
+    most_prev_yr = max(set(prev_years), key=prev_years.count) if prev_years else f"{_now - 1}년"
+    most_latest_yr = max(set(latest_years), key=latest_years.count) if latest_years else f"{_now}년"
 
     return scan_basic, scan_perf, scan_share, full_csv_records, most_prev_yr, most_latest_yr
 
