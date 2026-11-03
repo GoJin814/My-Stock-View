@@ -35,26 +35,9 @@ def render_tab_share(df_share, most_prev_yr, most_latest_yr):
     if "종목코드" in df_share.columns:
         df_disp["종목코드"] = df_share["종목코드"]
 
-    # 0: 종목명(고정)
-    # 1~5: 직전년도 (PER, PBR, ROE, EPS, BPS) -> 5번 우측에만 굵은 선
-    # 6~10: 최근년도 (PER, PBR, ROE, EPS, BPS) -> 맨 오른쪽은 기본 선 유지
-    header_rows = [
-        [
-            {"text": "종목명", "rowspan": 2},
-            {"text": prev_label, "colspan": 5, "border_right": True},
-            {"text": latest_label, "colspan": 5},
-        ],
-        [
-            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"},
-            {"text": "BPS", "border_right": True},
-            {"text": "PER"}, {"text": "PBR"}, {"text": "ROE"}, {"text": "EPS"},
-            {"text": "BPS"},
-        ],
-    ]
-
     render_multi_header_table(
         df_disp,
-        header_rows=header_rows,
-        divider_indices=[5],
+        prev_yr=prev_label,
+        latest_yr=latest_label,
         tab_name="tab_share",
     )
