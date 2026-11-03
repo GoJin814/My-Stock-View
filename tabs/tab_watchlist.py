@@ -363,6 +363,7 @@ def render_tab_watchlist(full_csv_records_map=None):
 
     if watchlist_codes:
         selected = _watch_table(watchlist_codes)
+        st.caption(f"선택됨: {len(selected)}개 {selected}")   # 확인용
 
         st.write("")
         _, col_r = st.columns([3, 1.8])
