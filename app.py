@@ -206,6 +206,18 @@ def fetch_single_stock(code: str):
     }
 
     row_list = extract_row_list(fin_json)
+
+    all_years = set()
+    for row in row_list or []:
+        for k in (row.get("columns") or {}).keys():
+            m = re.search(r"(20\d{2})", str(k))
+            if m:
+                all_years.add(int(m.group(1)))
+    sorted_all = sorted(all_years)
+    if sorted_all:
+        fin_info["latest_yr"] = f"{sorted_all[-1]}년"
+        fin_info["prev_yr"] = f"{sorted_all[-2]}년" if len(sorted_all) >= 2 else "-"
+        
     if row_list:
         for row in row_list:
             raw_title = row.get("title", "").strip().replace(" ", "")
