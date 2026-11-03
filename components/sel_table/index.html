@@ -5,11 +5,13 @@
 <style>
   html, body { margin: 0; padding: 0; background: #0e1117; overflow: hidden; }
   #root { height: 100vh; }
-  /* 표 래퍼: iframe 높이(100vh)를 꽉 채우고, 그 안에서만 스크롤 */
   .wl-wrap, .bs-wrap, .mk-wrap {
     height: 100vh !important; max-height: none !important;
     margin: 0 !important; overflow: auto !important; border-radius: 0 !important;
   }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: #60a5fa; }
+  .sort-ind { color: #60a5fa; font-size: 0.72rem; margin-left: 3px; }
 </style>
 </head>
 <body>
@@ -21,6 +23,7 @@ function send(type, payload) {
   window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, payload), '*');
 }
 
+/* ---------- 체크박스 → Python 전달 ---------- */
 function selectedCodes() {
   const out = [];
   root.querySelectorAll('.stock-checkbox').forEach(cb => {
@@ -44,6 +47,76 @@ function toggleAll(headerBox) {
   pushValue();
 }
 
+/* ---------- 헤더 정렬 ---------- */
+function cellText(row, idx) {
+  const c = row && row.cells[idx];
+  return c ? c.innerText.trim() : '';
+}
+
+// 숫자로 읽을 수 있으면 숫자, 아니면 null(= 맨 아래로 보냄)
+function parseNum(s) {
+  if (!s || s === '-') return null;
+  let t = s.replace(/\s/g, '').replace(/[,%원배년]/g, '');
+  if (t.includes('조') || t.includes('억')) {
+    let total = 0, found = false;
+    const jo = t.match(/([-\d.]+)조/);
+    const eok = t.match(/([-\d.]+)억/);
+    if (jo) { total += parseFloat(jo[1]) * 10000; found = true; }
+    if (eok) { total += parseFloat(eok[1]); found = true; }
+    return found && !isNaN(total) ? total : null;
+  }
+  const n = parseFloat(t);
+  return isNaN(n) ? (s.trim() || null) : n;
+}
+
+function sortTable(table, idx, asc) {
+  const bodies = Array.from(table.tBodies);
+  // 종목 묶음(tbody가 여러 개)이면 묶음 단위, 아니면 행 단위로 정렬
+  const multi = bodies.length > 1;
+  const container = multi ? table : bodies[0];
+  const units = multi ? bodies : Array.from(bodies[0].rows);
+  const keyOf = u => parseNum(cellText(multi ? u.rows[0] : u, idx));
+
+  units.sort((a, b) => {
+    const ka = keyOf(a), kb = keyOf(b);
+    if (ka === null && kb === null) return 0;
+    if (ka === null) return 1;   // 빈 값은 항상 아래
+    if (kb === null) return -1;
+    if (typeof ka === 'number' && typeof kb === 'number') {
+      return asc ? ka - kb : kb - ka;
+    }
+    return asc ? String(ka).localeCompare(String(kb)) : String(kb).localeCompare(String(ka));
+  });
+  units.forEach(u => container.appendChild(u));
+}
+
+function onHeaderSort(th) {
+  const table = th.closest('table');
+  const idx = th.cellIndex;
+  const asc = th.dataset.asc !== 'true';
+
+  table.querySelectorAll('thead th').forEach(o => {
+    o.removeAttribute('data-asc');
+    const ind = o.querySelector('.sort-ind');
+    if (ind) ind.remove();
+  });
+  th.dataset.asc = asc ? 'true' : 'false';
+  const ind = document.createElement('span');
+  ind.className = 'sort-ind';
+  ind.textContent = asc ? '▲' : '▼';
+  th.appendChild(ind);
+
+  sortTable(table, idx, asc);
+}
+
+// 체크박스 열(0번)을 뺀 헤더를 정렬 가능하게 표시
+function initSortHeaders() {
+  root.querySelectorAll('thead th').forEach((th, i) => {
+    if (i > 0) th.classList.add('sortable');
+  });
+}
+
+/* ---------- 이벤트 ---------- */
 root.addEventListener('change', e => {
   const t = e.target;
   if (!t || !t.classList) return;
@@ -56,9 +129,13 @@ root.addEventListener('change', e => {
 
 root.addEventListener('click', e => {
   const t = e.target;
-  if (t && t.classList && t.classList.contains('header-select-all')) {
+  if (!t || !t.classList) return;
+  if (t.classList.contains('header-select-all')) {
     setTimeout(() => toggleAll(t), 0);
+    return;
   }
+  const th = t.closest('th.sortable');
+  if (th) onHeaderSort(th);
 });
 
 window.addEventListener('message', e => {
@@ -66,7 +143,7 @@ window.addEventListener('message', e => {
   if (!d || d.type !== 'streamlit:render') return;
   const a = d.args || {};
   root.innerHTML = a.html || '';
-  // 최소 600px을 보장해서 행이 충분히 보이도록 한다
+  initSortHeaders();
   send('streamlit:setFrameHeight', { height: Math.max(600, a.frame_h || 600) });
 });
 
