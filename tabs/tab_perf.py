@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import pandas as pd
 import streamlit as st
 
 from styles import render_multi_header_table
@@ -34,27 +33,9 @@ def render_tab_perf(df_perf, most_prev_yr, most_latest_yr):
     if "종목코드" in df_perf.columns:
         df_disp["종목코드"] = df_perf["종목코드"]
 
-    # 0: 종목명
-    # 1~3: 직전년도 -> 3번 끝에 선
-    # 4~6: 최근년도 -> 6번 끝에 선
-    # 7~9: YoY
-    header_rows = [
-        [
-            {"text": "종목명", "rowspan": 2},
-            {"text": prev_label, "colspan": 3, "border_right": True},
-            {"text": latest_label, "colspan": 3, "border_right": True},
-            {"text": "YoY 성장률", "colspan": 3},
-        ],
-        [
-            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익", "border_right": True},
-            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익", "border_right": True},
-            {"text": "매출액"}, {"text": "영업이익"}, {"text": "당기순익"},
-        ],
-    ]
-
     render_multi_header_table(
         df_disp,
-        header_rows=header_rows,
-        divider_indices=[3, 6],
+        prev_yr=prev_label,
+        latest_yr=latest_label,
         tab_name="tab_perf",
     )
