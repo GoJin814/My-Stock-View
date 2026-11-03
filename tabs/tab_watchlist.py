@@ -11,6 +11,7 @@ import streamlit as st
 from firebase_admin import db
 
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+from tabs.sel_table import selectable_table
 
 WATCHLIST_FILE = "watchlist_codes.txt"
 FB_WATCHLIST_PATH = "my_stock_view/watchlist_codes"
