@@ -99,11 +99,10 @@ def commit_to_github(filename, content_str, commit_message="Auto-update watchlis
 
 
 def load_watchlist_codes():
-    """Firebase를 우선으로 읽고, 없으면 로컬 파일을 사용한다."""
+    """Firebase를 기준으로 읽는다. Firebase 조회가 실패했을 때만 로컬 파일을 쓴다."""
     try:
         v = db.reference(FB_WATCHLIST_PATH).get()
-        if isinstance(v, list):
-            return _dedupe(v)
+        return _dedupe(v) if isinstance(v, list) else []
     except Exception:
         pass
 
@@ -115,11 +114,11 @@ def load_watchlist_codes():
             pass
     return []
 
-
 def save_watchlist_codes(codes):
     cleaned = _dedupe(codes)
     try:
-        db.reference(FB_WATCHLIST_PATH).set(cleaned if cleaned else None)
+        # 빈 목록은 None이 아니라 []로 저장한다 (None은 Firebase에서 삭제로 처리되어 에러가 날 수 있음)
+        db.reference(FB_WATCHLIST_PATH).set(cleaned)
     except Exception as e:
         st.error(f"⚠️ Firebase 저장 실패: {e}")
 
@@ -127,7 +126,6 @@ def save_watchlist_codes(codes):
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         f.write(content)
     commit_to_github(WATCHLIST_FILE, content, f"Auto-commit watchlist_codes.txt ({len(cleaned)} stocks)")
-
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_watchlist_item(code: str):
