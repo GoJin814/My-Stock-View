@@ -573,8 +573,6 @@ if current_codes:
     # 각 탭 렌더링
     # -------------------------------------------------------------
     if current_tab == "⭐ 관심종목":
-        import tabs.tab_watchlist as _w
-        st.caption(f"file={_w.__file__} | new={hasattr(_w, '_build_table')}")
         render_tab_watchlist()
 
     elif current_tab == "📊 현재시세":
@@ -710,11 +708,9 @@ if current_codes:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
     elif current_tab == "💰 주당가치":
-        st.caption(f"DEBUG prev={most_prev_yr!r} latest={most_latest_yr!r}")
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
     elif current_tab == "📈 실적":
-        st.caption(f"DEBUG prev={most_prev_yr!r} latest={most_latest_yr!r}")
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
     elif current_tab == "🌐 국내지수":
