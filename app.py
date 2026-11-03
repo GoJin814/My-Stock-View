@@ -708,9 +708,11 @@ if current_codes:
                                 st.error(f"파일 처리 중 오류 발생: {e}")
 
     elif current_tab == "💰 주당가치":
+        st.caption(f"DEBUG prev={most_prev_yr!r} latest={most_latest_yr!r}")
         render_tab_share(df_share, most_prev_yr, most_latest_yr)
 
     elif current_tab == "📈 실적":
+        st.caption(f"DEBUG prev={most_prev_yr!r} latest={most_latest_yr!r}")
         render_tab_perf(df_perf, most_prev_yr, most_latest_yr)
 
     elif current_tab == "🌐 국내지수":
