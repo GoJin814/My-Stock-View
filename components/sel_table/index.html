@@ -75,12 +75,23 @@ function sortTable(table, idx, asc) {
   const container = multi ? table : bodies[0];
   const units = multi ? bodies : Array.from(bodies[0].rows);
 
-  // 관심종목처럼 종목이 여러 행으로 묶인 표는 마지막 행(최근연도)의 값으로 정렬한다.
-  // 단, 종목명·현재가/시총 열은 묶음 첫 행에만 값이 있으므로 첫 행을 읽는다.
-  const isLatestOnly = multi && table.classList.contains('wl-table') && idx >= 3;
+  // 묶음(종목) 단위 표에서 최근연도 행의 셀 위치 보정값
+  // 첫 행에는 종목명·현재가/시총 셀이 rowspan으로 포함되어 있고, 둘째 행에는 없다.
+  const offsetFor = u => {
+    if (!multi || u.rows.length < 2) return 0;
+    return u.rows[0].cells.length - u.rows[u.rows.length - 1].cells.length;
+  };
+
+  // 관심종목처럼 묶음 표는 적용연도 이후 열(3번 이후)을 최근연도 행 값으로 정렬한다.
+  // 종목명(1번)과 현재가/시총(2번)은 묶음 첫 행을 쓴다.
   const keyOf = u => {
-    const row = multi ? (isLatestOnly ? u.rows[u.rows.length - 1] : u.rows[0]) : u;
-    return parseNum(cellText(row, idx));
+    if (!multi) return parseNum(cellText(u, idx));
+    if (idx >= 4 && u.rows.length >= 2) {
+      const last = u.rows[u.rows.length - 1];
+      const pos = idx - offsetFor(u);
+      return parseNum(cellText(last, pos));
+    }
+    return parseNum(cellText(u.rows[0], idx));
   };
 
   units.sort((a, b) => {
@@ -94,8 +105,7 @@ function sortTable(table, idx, asc) {
     return asc ? String(ka).localeCompare(String(kb)) : String(kb).localeCompare(String(ka));
   });
   units.forEach(u => container.appendChild(u));
-}
-  
+}  
 function onHeaderSort(th) {
   const table = th.closest('table');
   const idx = th.cellIndex;
