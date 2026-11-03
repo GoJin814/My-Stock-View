@@ -576,7 +576,7 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
 
             if (table.id !== 'table_tab_market') {
-                const sortedCodes = rows.map(r => r.getAttribute('data-code')).filter(Boolean);
+                const sortedCodes = [...new Set(rows.map(r => r.getAttribute('data-code')).filter(Boolean))];
                 
                 doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
                     if (otherTable !== table) {
