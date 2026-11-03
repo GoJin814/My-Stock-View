@@ -14,7 +14,6 @@ from firebase_admin import credentials, db
 
 from styles import apply_custom_styles, inject_client_sort_sync_engine
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
-from tabs.tab_watchlist import render_tab_watchlist
 from tabs.tab_watchlist import render_tab_watchlist, fetch_watchlist_item
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
@@ -68,43 +67,43 @@ if not firebase_admin._apps:
 
 
 def load_codes():
-    """Firebase에서 정렬 순서(sort_order)를 우선 불러오고, 없으면 saved_codes를 사용한다."""
+    """Firebase(sort_order 우선, 없으면 saved_codes)에서 종목 목록을 읽는다."""
     try:
-        synced_order = db.reference("my_stock_view/sort_order").get()
-        if synced_order and isinstance(synced_order, list):
-            cleaned_order = dedupe_codes(synced_order)
-            if cleaned_order:
-                return cleaned_order
-
-        codes = db.reference("my_stock_view/saved_codes").get()
-        if codes and isinstance(codes, list):
-            cleaned = dedupe_codes(codes)
-            if cleaned:
-                return cleaned
+        so = db.reference("my_stock_view/sort_order").get()
+        sc = db.reference("my_stock_view/saved_codes").get()
+        if so is not None or sc is not None:
+            src = so if isinstance(so, list) else (sc if isinstance(sc, list) else [])
+            return dedupe_codes(src)
     except Exception:
         pass
 
+    # Firebase에 아무 값도 없을 때만 로컬 파일을 읽는다 (빈 목록일 수 있음)
     if os.path.exists(SAVE_FILE):
         with open(SAVE_FILE, "r", encoding="utf-8") as f:
-            codes = dedupe_codes(f.readlines())
-            if codes:
-                return codes
+            return dedupe_codes(f.readlines())
 
+    # 최초 실행일 때만 기본 종목을 넣는다
     default_codes = ["005930"]
     save_codes(default_codes)
     return default_codes
 
 
 def save_codes(codes):
-    """종목코드 목록 저장 (Firebase + 로컬 파일)"""
+    """종목 목록을 saved_codes, sort_order, 로컬 파일에 함께 저장한다.
+    빈 목록은 Firebase에 빈 값을 쓰지 않고 삭제(delete)로 처리한다."""
     cleaned = dedupe_codes(codes)
     try:
-        db.reference("my_stock_view/saved_codes").set(cleaned)
+        for path in ("my_stock_view/saved_codes", "my_stock_view/sort_order"):
+            ref = db.reference(path)
+            if cleaned:
+                ref.set(cleaned)
+            else:
+                ref.delete()
     except Exception as e:
         st.error(f"⚠️ Firebase 저장 실패: {e}")
 
     with open(SAVE_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(cleaned) + "\n")
+        f.write("\n".join(cleaned) + ("\n" if cleaned else ""))
 
 
 def get_synced_sort_order():
@@ -424,17 +423,10 @@ if current_codes:
             save_filter_settings(fb_filter)
 
     with c_add:
-        selected_codes = []
-        for param_key, param_val in st.query_params.items():
-            if param_val and ("code" in param_key.lower() or "del" in param_key.lower() or "sel" in param_key.lower()):
-                codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
-                if codes:
-                    selected_codes.extend(codes)
-        selected_codes = dedupe_codes(selected_codes)
-
         if st.button("⭐ 관심추가", type="primary", use_container_width=True, key="btn_add_watchlist_top"):
-            if not selected_codes:
-                st.warning("⚠️ 표에서 체크박스를 먼저 선택해 주세요.")
+            picked = dedupe_codes(st.session_state.get("basic_sel", []) or [])
+            if not picked:
+                st.warning("⚠️ 현재시세 탭에서 체크박스를 먼저 선택해 주세요.")
             else:
                 try:
                     w_ref = db.reference("my_stock_view/watchlist_codes")
@@ -442,20 +434,10 @@ if current_codes:
                     if not isinstance(w_codes, list):
                         w_codes = []
                     w_codes = dedupe_codes(w_codes)
-
-                    added = 0
-                    for c in selected_codes:
-                        if c not in w_codes:
-                            w_codes.append(c)
-                            added += 1
-
-                    if added > 0:
-                        w_ref.set(w_codes)
-                        try:
-                            st.query_params.clear()
-                        except Exception:
-                            pass
-                        st.success(f"🎉 {added}개 등록 완료!")
+                    new = [c for c in picked if c not in w_codes]
+                    if new:
+                        w_ref.set(w_codes + new)
+                        st.success(f"🎉 {len(new)}개 등록 완료!")
                         st.rerun()
                     else:
                         st.info("ℹ️ 이미 등록되어 있습니다.")
@@ -578,23 +560,17 @@ if current_codes:
         render_tab_watchlist()
 
     elif current_tab == "📊 현재시세":
-        render_tab_basic(df_basic)
+        selected_basic = render_tab_basic(df_basic)
         st.write("")
 
         col_del, col_csv, col_bak = st.columns([1.6, 2.2, 1.8])
         with col_del:
             if st.button("🗑️ 선택 종목 삭제", type="primary", use_container_width=True, key="btn_del_basic"):
-                raw_del = st.query_params.get("del_codes", "")
-                del_codes = dedupe_codes(str(raw_del).split(","))
-
+                del_codes = [c for c in dedupe_codes(selected_basic) if c in current_codes]
                 if del_codes:
                     remaining_codes = [c for c in current_codes if c not in del_codes]
                     save_codes(remaining_codes)
                     fetch_single_stock.clear()
-                    try:
-                        st.query_params.clear()
-                    except Exception:
-                        pass
                     st.success(f"종목 {len(del_codes)}개 삭제 완료")
                     st.rerun()
                 else:
@@ -736,3 +712,16 @@ if current_codes:
 
 else:
     st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
+    with st.container(border=True):
+        st.markdown("##### ➕ 종목코드 추가")
+        c_code, c_btn = st.columns([3, 1])
+        with c_code:
+            init_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930",
+                                      max_chars=6, key="init_single_code")
+        with c_btn:
+            st.write("")
+            if st.button("종목 추가", use_container_width=True, key="btn_init_add"):
+                code = init_code.strip().zfill(6)
+                if code.isdigit():
+                    save_codes([code])
+                    st.rerun()
