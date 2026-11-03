@@ -8,6 +8,14 @@ def apply_custom_styles():
         <meta name="supported-color-schemes" content="dark">
 
         <style>
+         div.st-key-nav_tab_radio {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: #0e1117;
+            padding-top: 0.4rem;
+        }
+        
         :root {
             color-scheme: dark !important;
         }
@@ -321,6 +329,13 @@ def apply_custom_styles():
         div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
             color: #ffffff !important;
             font-weight: 700 !important;
+        }
+        div.st-key-nav_tab_radio {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: #0e1117;
+            padding-top: 0.4rem;
         }
         </style>
     """, unsafe_allow_html=True)
