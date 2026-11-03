@@ -15,34 +15,37 @@ from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list,
 WATCHLIST_FILE = "watchlist_codes.txt"
 FB_WATCHLIST_PATH = "my_stock_view/watchlist_codes"
 
-# 종목 1개당 행은 2개(직전/최근). 종목명·현재가·시총·선택박스는 rowspan으로 한 칸만 그린다.
+# 종목 1개당 행은 2개(직전/최근). 종목명·현재가(시총)·선택박스는 rowspan으로 한 칸만 그린다.
 DATA_COLS = ["적용연도", "PER", "PBR", "ROE", "배당금", "매출액", "영업익", "당기순이익"]
 
-WL_CSS = (
-    "<style>"
-    ".wl-wrap{overflow:auto;max-height:70vh;margin-bottom:1.2rem;border:1px solid #334155;"
-    "border-radius:4px;background:#0e1117;-webkit-overflow-scrolling:touch;}"
-    "table.wl-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;"
-    "font-size:0.82rem;color:#f3f4f6;background:#0e1117;"
-    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;}"
-    "table.wl-table th{position:sticky;top:0;z-index:10;background:#161a22;color:#9ca3af;"
-    "font-weight:500;font-size:0.81rem;padding:6px 10px;border-bottom:2px solid #334155;"
-    "border-right:1px solid #262c36;text-align:center;white-space:nowrap;vertical-align:middle;}"
-    "table.wl-table td{background:#0e1117;padding:8px 10px;border-right:1px solid #1e242c;"
-    "border-bottom:1px solid #1e242c;text-align:center;white-space:nowrap;vertical-align:middle;"
-    "font-variant-numeric:tabular-nums;}"
-    "table.wl-table tbody tr:last-child td{border-bottom:2px solid #64748b;}"
-    "table.wl-table .c-chk{position:sticky;left:0;z-index:5;width:40px;min-width:40px;max-width:40px;"
-    "padding:6px 0;background:#0e1117;}"
-    "table.wl-table th.c-chk{z-index:100;background:#161a22;}"
-    "table.wl-table .c-name{position:sticky;left:40px;z-index:5;min-width:130px;max-width:150px;"
-    "text-align:left;padding-left:12px;white-space:normal;background:#0e1117;}"
-    "table.wl-table th.c-name{z-index:100;background:#161a22;}"
-    "table.wl-table .c-code{color:#94a3b8;font-family:monospace;font-size:0.72rem;margin-top:2px;}"
-    "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}"
-    "table.wl-table input[type=checkbox]{cursor:pointer;width:16px;height:16px;accent-color:#3b82f6;vertical-align:middle;}"
-    "</style>"
-)
+GROUP_END_STYLE = "border-bottom:3px solid #64748b;"
+
+WL_CSS = "".join([
+    "<style>",
+    ".wl-wrap{overflow:auto;max-height:70vh;margin-bottom:1.2rem;border:1px solid #334155;",
+    "border-radius:4px;background:#0e1117;-webkit-overflow-scrolling:touch;}",
+    "table.wl-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;",
+    "font-size:0.82rem;color:#f3f4f6;background:#0e1117;",
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;}",
+    "table.wl-table th{position:sticky;top:0;z-index:10;background:#161a22;color:#9ca3af;",
+    "font-weight:500;font-size:0.81rem;padding:6px 10px;border-bottom:2px solid #334155;",
+    "border-right:1px solid #262c36;text-align:center;white-space:nowrap;vertical-align:middle;}",
+    "table.wl-table td{background:#0e1117;padding:8px 10px;border-right:1px solid #1e242c;",
+    "border-bottom:1px solid #1e242c;text-align:center;white-space:nowrap;vertical-align:middle;",
+    "font-variant-numeric:tabular-nums;}",
+    "table.wl-table .c-chk{position:sticky;left:0;z-index:5;width:40px;min-width:40px;max-width:40px;",
+    "padding:6px 0;background:#0e1117;}",
+    "table.wl-table th.c-chk{z-index:100;background:#161a22;}",
+    "table.wl-table .c-price{position:sticky;left:40px;z-index:5;min-width:110px;background:#0e1117;}",
+    "table.wl-table th.c-price{z-index:100;background:#161a22;}",
+    "table.wl-table .c-name{text-align:left;padding-left:12px;white-space:normal;min-width:120px;max-width:160px;}",
+    "table.wl-table .c-code{color:#94a3b8;font-family:monospace;font-size:0.72rem;margin-top:2px;}",
+    "table.wl-table .c-mcap{color:#94a3b8;font-size:0.76rem;margin-top:3px;}",
+    "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}",
+    "table.wl-table a.naver-link:hover{text-decoration:underline !important;}",
+    "table.wl-table input[type=checkbox]{cursor:pointer;width:16px;height:16px;accent-color:#3b82f6;vertical-align:middle;}",
+    "</style>",
+])
 
 
 def _dedupe(codes):
@@ -266,14 +269,14 @@ def fetch_watchlist_item(code: str):
 
 
 def _build_table(rows):
-    """종목별로 tbody를 하나씩 만들고, 공통 값은 rowspan으로 병합한다.
-    HTML은 한 줄로 만들어야 st.markdown이 코드블록으로 해석하지 않는다."""
+    """종목별로 tbody를 하나씩 만든다. 공통 값은 rowspan으로 병합하고,
+    종목 구분선은 인라인 스타일로 넣어 CSS 적용 여부와 무관하게 보이도록 한다.
+    HTML은 한 줄로 만들어 st.markdown이 코드블록으로 해석하지 않게 한다."""
     head = (
         '<th class="c-chk"><input type="checkbox" class="header-select-all" title="전체 선택"></th>'
         '<th class="c-name">종목명</th>'
-        '<th>현재가</th>'
-        '<th>시총</th>'
-        + "".join(f"<th>{c}</th>" for c in ["적용연도"] + DATA_COLS[1:])
+        '<th class="c-price">현재가 / 시총</th>'
+        + "".join(f"<th>{c}</th>" for c in DATA_COLS)
     )
 
     groups = {}
@@ -287,25 +290,33 @@ def _build_table(rows):
         rs = f' rowspan="{n}"' if n > 1 else ""
         name = _html.escape(str(first["종목명"]))
         url = f"https://finance.naver.com/item/main.naver?code={code}"
+        price = _html.escape(str(first["현재가"]))
+        mcap = _html.escape(str(first["시총"]))
 
         body.append("<tbody>")
         for i, r in enumerate(g):
-            body.append("<tr>")
+            last = i == n - 1
+            row_style = f' style="{GROUP_END_STYLE}"' if last else ""
+            body.append(f"<tr{row_style}>")
+
             if i == 0:
+                # rowspan 셀의 아래 경계는 종목 그룹의 끝이므로 구분선을 함께 준다
                 body.append(
-                    f'<td class="c-chk"{rs}>'
+                    f'<td class="c-chk"{rs} style="{GROUP_END_STYLE}">'
                     f'<input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
                 )
                 body.append(
-                    f'<td class="c-name"{rs}>'
+                    f'<td class="c-name"{rs} style="{GROUP_END_STYLE}">'
                     f'<a class="naver-link" target="_blank" href="{url}">{name}</a>'
                     f'<div class="c-code">{code}</div></td>'
                 )
-                body.append(f'<td{rs}>{_html.escape(str(first["현재가"]))}</td>')
-                body.append(f'<td{rs}>{_html.escape(str(first["시총"]))}</td>')
+                body.append(
+                    f'<td class="c-price"{rs} style="{GROUP_END_STYLE}">'
+                    f'<div>{price}</div>'
+                    f'<div class="c-mcap">시총 {mcap}</div></td>'
+                )
 
-            body.append(f'<td>{_html.escape(str(r["적용연도"]))}</td>')
-            for col in DATA_COLS[1:]:
+            for col in DATA_COLS:
                 val = r[col]
                 # 배당금 셀만 <br>을 포함하므로 이스케이프하지 않는다
                 cell = val if col == "배당금" else _html.escape(str(val))
