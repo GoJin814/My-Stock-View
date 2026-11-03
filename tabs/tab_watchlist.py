@@ -27,18 +27,24 @@ WL_CSS = "".join([
     "table.wl-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;",
     "font-size:0.82rem;color:#f3f4f6;background:#0e1117;",
     "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;}",
+    # 일반 헤더/셀
     "table.wl-table th{position:sticky;top:0;z-index:10;background:#161a22;color:#9ca3af;",
     "font-weight:500;font-size:0.81rem;padding:6px 10px;border-bottom:2px solid #334155;",
     "border-right:1px solid #262c36;text-align:center;white-space:nowrap;vertical-align:middle;}",
     "table.wl-table td{background:#0e1117;padding:8px 10px;border-right:1px solid #1e242c;",
     "border-bottom:1px solid #1e242c;text-align:center;white-space:nowrap;vertical-align:middle;",
     "font-variant-numeric:tabular-nums;}",
-    "table.wl-table .c-chk{position:sticky;left:0;z-index:5;width:40px;min-width:40px;max-width:40px;",
-    "padding:6px 0;background:#0e1117;}",
-    "table.wl-table th.c-chk{z-index:100;background:#161a22;}",
-    "table.wl-table .c-price{position:sticky;left:40px;z-index:5;min-width:110px;background:#0e1117;}",
-    "table.wl-table th.c-price{z-index:100;background:#161a22;}",
-    "table.wl-table .c-name{text-align:left;padding-left:12px;white-space:normal;min-width:120px;max-width:160px;}",
+    # 고정 열 공통: 폭을 고정하고 가로 스크롤 시 제자리에 머문다
+    # 체크박스 40px | 종목명 150px | 현재가/시총 120px  -> 누적 left: 0 / 40px / 190px
+    "table.wl-table .c-chk,table.wl-table .c-name,table.wl-table .c-price{position:sticky;z-index:5;",
+    "background:#0e1117;}",
+    "table.wl-table th.c-chk,table.wl-table th.c-name,table.wl-table th.c-price{z-index:100;background:#161a22;}",
+    "table.wl-table .c-chk{left:0;width:40px;min-width:40px;max-width:40px;padding:6px 0;}",
+    "table.wl-table .c-name{left:40px;width:150px;min-width:150px;max-width:150px;",
+    "text-align:left;padding-left:12px;white-space:normal;}",
+    "table.wl-table .c-price{left:190px;width:120px;min-width:120px;max-width:120px;}",
+    # 고정 열 오른쪽 경계선
+    "table.wl-table .c-price{box-shadow:2px 0 0 #334155;}",
     "table.wl-table .c-code{color:#94a3b8;font-family:monospace;font-size:0.72rem;margin-top:2px;}",
     "table.wl-table .c-mcap{color:#94a3b8;font-size:inherit;margin-top:3px;}",
     "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}",
@@ -46,7 +52,6 @@ WL_CSS = "".join([
     "table.wl-table input[type=checkbox]{cursor:pointer;width:16px;height:16px;accent-color:#3b82f6;vertical-align:middle;}",
     "</style>",
 ])
-
 
 def _dedupe(codes):
     out = []
