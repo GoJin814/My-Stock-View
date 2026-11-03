@@ -1,56 +1,155 @@
-import streamlit as st
-import pandas as pd
-import json
 import os
 import re
 import base64
-import requests
-import numpy as np
-from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
-from styles import render_multi_header_table
+import html as _html
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
+import pandas as pd
+import requests
+import streamlit as st
+from firebase_admin import db
+
+from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
+
 WATCHLIST_FILE = "watchlist_codes.txt"
+FB_WATCHLIST_PATH = "my_stock_view/watchlist_codes"
+
+DATA_COLS = ["적용연도", "PER", "PBR", "ROE", "배당금", "매출액", "영업익", "당기순이익"]
+
+WL_CSS = """
+<style>
+.wl-wrap {
+    overflow: auto; max-height: 70vh; margin-bottom: 1.2rem;
+    border: 1px solid #334155; border-radius: 4px; background: #0e1117;
+    -webkit-overflow-scrolling: touch;
+}
+table.wl-table {
+    border-collapse: separate; border-spacing: 0;
+    width: max-content; min-width: 100%;
+    font-size: 0.82rem; color: #f3f4f6; background: #0e1117;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+table.wl-table th {
+    position: sticky; top: 0; z-index: 10;
+    background: #161a22; color: #9ca3af; font-weight: 500; font-size: 0.81rem;
+    padding: 6px 10px; border-bottom: 2px solid #334155; border-right: 1px solid #262c36;
+    text-align: center; white-space: nowrap; vertical-align: middle;
+}
+table.wl-table td {
+    background: #0e1117; padding: 8px 10px;
+    border-right: 1px solid #1e242c; border-bottom: 1px solid #1e242c;
+    text-align: right; white-space: nowrap; vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+}
+/* 종목 단위 구분선: 각 tbody(종목)의 마지막 행 아래 */
+table.wl-table tbody tr:last-child td { border-bottom: 2px solid #64748b; }
+
+table.wl-table .c-chk {
+    position: sticky; left: 0; z-index: 5;
+    width: 40px; min-width: 40px; max-width: 40px;
+    text-align: center; padding: 6px 0; background: #0e1117;
+}
+table.wl-table th.c-chk { z-index: 100; background: #161a22; }
+
+table.wl-table .c-name {
+    position: sticky; left: 40px; z-index: 5;
+    min-width: 130px; max-width: 150px;
+    text-align: left; padding-left: 12px; white-space: normal; background: #0e1117;
+}
+table.wl-table th.c-name { z-index: 100; background: #161a22; }
+
+table.wl-table .c-mid { text-align: center; }
+table.wl-table .c-code {
+    color: #94a3b8; font-family: monospace; font-size: 0.72rem; margin-top: 2px;
+}
+table.wl-table a.naver-link { color: #58a6ff !important; text-decoration: none !important; }
+table.wl-table a.naver-link:hover { text-decoration: underline !important; }
+table.wl-table input[type="checkbox"] {
+    cursor: pointer; width: 16px; height: 16px; accent-color: #3b82f6; vertical-align: middle;
+}
+</style>
+"""
+
+
+def _dedupe(codes):
+    out = []
+    for c in codes:
+        s = str(c).strip()
+        if s.isdigit():
+            z = s.zfill(6)
+            if z not in out:
+                out.append(z)
+    return out
+
 
 def commit_to_github(filename, content_str, commit_message="Auto-update watchlist from Streamlit"):
     token = st.secrets.get("GITHUB_TOKEN")
     repo = st.secrets.get("GITHUB_REPO")
     branch = st.secrets.get("GITHUB_BRANCH", "main")
-    
     if not token or not repo:
         return False
-        
+
     url = f"https://api.github.com/repos/{repo}/contents/{filename}"
     headers = {
         "Authorization": f"Bearer {token.strip()}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+        "X-GitHub-Api-Version": "2022-11-28",
     }
-    
     try:
         res = requests.get(url, headers=headers, params={"ref": branch}, timeout=7)
         sha = res.json().get("sha") if res.status_code == 200 else None
-            
-        content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
         payload = {
             "message": commit_message,
-            "content": content_b64,
-            "branch": branch
+            "content": base64.b64encode(content_str.encode("utf-8")).decode("utf-8"),
+            "branch": branch,
         }
         if sha:
             payload["sha"] = sha
-            
         put_res = requests.put(url, headers=headers, json=payload, timeout=7)
         return put_res.status_code in [200, 201]
     except Exception:
         return False
 
+
+def load_watchlist_codes():
+    """Firebase를 우선으로 읽고, 값이 없으면 로컬 파일을 사용한다."""
+    try:
+        v = db.reference(FB_WATCHLIST_PATH).get()
+        if isinstance(v, list):
+            return _dedupe(v)
+    except Exception:
+        pass
+
+    if os.path.exists(WATCHLIST_FILE):
+        try:
+            with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+                return _dedupe(f.readlines())
+        except Exception:
+            pass
+    return []
+
+
+def save_watchlist_codes(codes):
+    cleaned = _dedupe(codes)
+    try:
+        db.reference(FB_WATCHLIST_PATH).set(cleaned if cleaned else None)
+    except Exception as e:
+        st.error(f"⚠️ Firebase 저장 실패: {e}")
+
+    content = "\n".join(cleaned) + ("\n" if cleaned else "")
+    with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
+    commit_to_github(WATCHLIST_FILE, content, f"Auto-commit watchlist_codes.txt ({len(cleaned)} stocks)")
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_watchlist_item(code: str):
+    """종목 1개에 대해 최근 2개년 행을 반환한다. (직전연도 행, 최근연도 행)"""
     basic = fetch_basic(code)
     integration = fetch_integration(code)
     fin_json = fetch_finance(code)
-    
+
     stock_name = basic.get("stockName", "")
     if not stock_name or stock_name == "-":
         stock_name = ""
@@ -61,9 +160,8 @@ def fetch_watchlist_item(code: str):
     else:
         curr_price_str = f"{raw_close}원" if "원" not in str(raw_close) else str(raw_close)
 
-    total_infos = integration.get("totalInfos", [])
     market_cap = ""
-    for item in total_infos:
+    for item in integration.get("totalInfos", []):
         if str(item.get("code", "")).strip() == "marketValue" or str(item.get("key", "")).strip() in ["시총", "시가총액"]:
             val = str(item.get("value", "")).strip()
             if val and val != "-":
@@ -81,179 +179,177 @@ def fetch_watchlist_item(code: str):
         "prev_dps": np.nan, "cur_dps": np.nan,
     }
 
-    row_list = extract_row_list(fin_json)
-    if row_list:
-        for row in row_list:
-            raw_title = row.get("title", "").strip().replace(" ", "")
-            columns = row.get("columns", {})
-            if not columns:
-                continue
-            
-            clean_years = []
-            for k in columns.keys():
-                yr_match = re.search(r'(20\d{2})', str(k))
-                if yr_match:
-                    clean_years.append((yr_match.group(1), k))
-            clean_years = sorted(clean_years, key=lambda x: x[0])
-            sorted_keys = [item[1] for item in clean_years]
-            
-            if not sorted_keys:
-                continue
-                
-            latest_k = sorted_keys[-1]
-            prev_k = sorted_keys[-2] if len(sorted_keys) >= 2 else None
-            
-            fin_info["latest_yr"] = f"{re.search(r'(20\d{2})', str(latest_k)).group(1)}년" if re.search(r'(20\d{2})', str(latest_k)) else ""
-            fin_info["prev_yr"] = f"{re.search(r'(20\d{2})', str(prev_k)).group(1)}년" if prev_k and re.search(r'(20\d{2})', str(prev_k)) else ""
+    def _yr(k):
+        m = re.search(r"(20\d{2})", str(k))
+        return f"{m.group(1)}년" if m else ""
 
-            c_item = columns.get(latest_k, {})
-            c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
-            p_val = np.nan
-            if prev_k:
-                p_item = columns.get(prev_k, {})
-                p_val = to_num(p_item.get("value") if isinstance(p_item, dict) else p_item)
+    for row in extract_row_list(fin_json) or []:
+        raw_title = str(row.get("title", "")).strip().replace(" ", "")
+        columns = row.get("columns", {}) or {}
+        if not columns:
+            continue
 
-            if raw_title in ["매출액", "수익"]:
-                fin_info["cur_rev"] = c_val
-                fin_info["prev_rev"] = p_val
-            elif raw_title == "영업이익":
-                fin_info["cur_op"] = c_val
-                fin_info["prev_op"] = p_val
-            elif raw_title in ["당기순이익", "당기순익"]:
-                fin_info["cur_np"] = c_val
-                fin_info["prev_np"] = p_val
-            elif "ROE" in raw_title:
-                fin_info["cur_roe"] = c_val
-                fin_info["prev_roe"] = p_val
-            elif "PER" in raw_title:
-                fin_info["cur_per"] = c_val
-                fin_info["prev_per"] = p_val
-            elif "PBR" in raw_title:
-                fin_info["cur_pbr"] = c_val
-                fin_info["prev_pbr"] = p_val
-            elif any(k in raw_title for k in ["주당배당금", "DPS"]):
-                fin_info["cur_dps"] = c_val
-                fin_info["prev_dps"] = p_val
+        by_year = {}
+        for k in columns.keys():
+            m = re.search(r"(20\d{2})", str(k))
+            if m:
+                by_year[m.group(1)] = k
+        if not by_year:
+            continue
+
+        years = sorted(by_year)
+        latest_k = by_year[years[-1]]
+        prev_k = by_year[years[-2]] if len(years) >= 2 else None
+
+        fin_info["latest_yr"] = _yr(latest_k)
+        fin_info["prev_yr"] = _yr(prev_k) if prev_k else ""
+
+        c_item = columns.get(latest_k, {})
+        c_val = to_num(c_item.get("value") if isinstance(c_item, dict) else c_item)
+        p_val = np.nan
+        if prev_k:
+            p_item = columns.get(prev_k, {})
+            p_val = to_num(p_item.get("value") if isinstance(p_item, dict) else p_item)
+
+        if raw_title in ["매출액", "수익"]:
+            fin_info["cur_rev"], fin_info["prev_rev"] = c_val, p_val
+        elif raw_title == "영업이익":
+            fin_info["cur_op"], fin_info["prev_op"] = c_val, p_val
+        elif raw_title in ["당기순이익", "당기순익"]:
+            fin_info["cur_np"], fin_info["prev_np"] = c_val, p_val
+        elif "ROE" in raw_title:
+            fin_info["cur_roe"], fin_info["prev_roe"] = c_val, p_val
+        elif "PER" in raw_title:
+            fin_info["cur_per"], fin_info["prev_per"] = c_val, p_val
+        elif "PBR" in raw_title:
+            fin_info["cur_pbr"], fin_info["prev_pbr"] = c_val, p_val
+        elif any(k in raw_title for k in ["주당배당금", "DPS"]):
+            fin_info["cur_dps"], fin_info["prev_dps"] = c_val, p_val
 
     def fmt_val(v, suffix=""):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+        if v is None or pd.isna(v):
             return "-"
-        if isinstance(v, (int, float)):
-            return f"{v:,.0f}{suffix}"
-        return f"{str(v).strip()}{suffix}"
+        return f"{v:,.0f}{suffix}"
 
     def fmt_rate(v):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+        if v is None or pd.isna(v):
             return "-"
-        if isinstance(v, (int, float)):
-            return f"{v:.2f}%"
-        return f"{str(v).strip()}%"
+        return f"{v:.2f}%"
 
     def fmt_multi(v):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+        if v is None or pd.isna(v):
             return "-"
-        return f"{str(v).strip()}배"
+        return f"{v:.2f}배"
 
-    numeric_key_close = to_num(raw_close)
+    numeric_close = to_num(raw_close)
 
-    def fmt_dps_prev(v):
-        if v is None or pd.isna(v) or v == "-" or str(v).lower() == "none":
+    def fmt_dps(v, fallback=False):
+        if v is None or pd.isna(v):
             return "-"
-        val_num = to_num(v)
-        if pd.notna(val_num) and isinstance(val_num, (int, float)):
-            return f"{val_num:,.0f}원"
-        return f"{str(v).strip()}원"
+        s = f"{v:,.0f}원"
+        if numeric_close is not None and not pd.isna(numeric_close) and numeric_close > 0:
+            s += f"<br>({v / numeric_close * 100:.1f}%)"
+        return s + (" (예)" if fallback else "")
 
-    def fmt_dps_latest(cur_v, prev_v):
-        is_fallback = False
-        target_v = cur_v
-        
-        if target_v is None or pd.isna(target_v) or target_v == "-" or str(target_v).lower() == "none":
-            target_v = prev_v
-            is_fallback = True
-
-        if target_v is None or pd.isna(target_v) or target_v == "-" or str(target_v).lower() == "none":
-            return "-"
-        
-        val_num = to_num(target_v)
-        if pd.notna(val_num) and isinstance(val_num, (int, float)):
-            dps_str = f"{val_num:,.0f}원"
-        else:
-            dps_str = f"{str(target_v).strip()}원"
-        
-        if is_fallback:
-            dps_str += " (예)"
-
-        if pd.notna(val_num) and isinstance(val_num, (int, float)) and numeric_key_close is not None and not pd.isna(numeric_key_close) and numeric_key_close > 0:
-            yield_val = (val_num / numeric_key_close) * 100.0
-            return f"{dps_str}<br>({yield_val:.1f}%)"
-            
-        return dps_str
+    base = {"종목코드": code, "종목명": stock_name or "-",
+            "현재가": curr_price_str or "-", "시총": market_cap or "-"}
 
     items = []
-    empty_space = "\u3164"  
-    
     if fin_info["prev_yr"]:
         items.append({
-            "선택": "",
-            "종목코드": code, 
-            "종목명": stock_name, 
-            "현재가": curr_price_str, 
-            "시총": market_cap,
+            **base,
             "적용연도": fin_info["prev_yr"],
             "PER": fmt_multi(fin_info["prev_per"]),
             "PBR": fmt_multi(fin_info["prev_pbr"]),
             "ROE": fmt_rate(fin_info["prev_roe"]),
-            "배당금": fmt_dps_prev(fin_info["prev_dps"]),
+            "배당금": fmt_dps(fin_info["prev_dps"]),
             "매출액": fmt_val(fin_info["prev_rev"], "억"),
             "영업익": fmt_val(fin_info["prev_op"], "억"),
-            "당기순이익": fmt_val(fin_info["prev_np"], "억")
+            "당기순이익": fmt_val(fin_info["prev_np"], "억"),
         })
 
     if fin_info["latest_yr"]:
-        is_second_row = (len(items) > 0)
+        cur_dps = fin_info["cur_dps"]
+        if pd.isna(cur_dps):
+            dps_cell = fmt_dps(fin_info["prev_dps"], fallback=True)
+        else:
+            dps_cell = fmt_dps(cur_dps)
         items.append({
-            "선택": "",
-            "종목코드": code, 
-            "종목명": empty_space if is_second_row else stock_name, 
-            "현재가": empty_space if is_second_row else curr_price_str, 
-            "시총": empty_space if is_second_row else market_cap,
+            **base,
             "적용연도": fin_info["latest_yr"],
             "PER": fmt_multi(fin_info["cur_per"]),
             "PBR": fmt_multi(fin_info["cur_pbr"]),
             "ROE": fmt_rate(fin_info["cur_roe"]),
-            "배당금": fmt_dps_latest(fin_info["cur_dps"], fin_info["prev_dps"]),
+            "배당금": dps_cell,
             "매출액": fmt_val(fin_info["cur_rev"], "억"),
             "영업익": fmt_val(fin_info["cur_op"], "억"),
-            "당기순이익": fmt_val(fin_info["cur_np"], "억")
+            "당기순이익": fmt_val(fin_info["cur_np"], "억"),
         })
 
     return items
 
-def load_watchlist_codes():
-    codes = []
-    if os.path.exists(WATCHLIST_FILE):
-        try:
-            with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
-                codes = [line.strip().zfill(6) for line in f.readlines() if line.strip() and line.strip().isdigit()]
-                if codes:
-                    return list(dict.fromkeys(codes))
-        except Exception:
-            pass
-    return []
 
-def save_watchlist_codes(codes):
-    cleaned_codes = [str(c).zfill(6) for c in codes if str(c).strip().isdigit()]
-    content = "\n".join(cleaned_codes) + ("\n" if cleaned_codes else "")
-    
-    with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
-        f.write(content)
-        
-    commit_to_github(
-        WATCHLIST_FILE, 
-        content, 
-        f"Auto-commit watchlist_codes.txt ({len(cleaned_codes)} stocks)"
+def _esc(v):
+    s = "-" if v is None else str(v)
+    return _html.escape(s)
+
+
+def _group_by_code(rows):
+    groups = {}
+    for r in rows:
+        groups.setdefault(r["종목코드"], []).append(r)
+    return list(groups.values())
+
+
+def _build_table(rows):
+    head = (
+        '<th class="c-chk"><input type="checkbox" class="header-select-all" title="전체 선택"></th>'
+        '<th class="c-name">종목명</th>'
+        '<th>현재가</th>'
+        '<th>시총</th>'
+        + "".join(f"<th>{c}</th>" for c in DATA_COLS)
     )
+
+    body = []
+    for g in _group_by_code(rows):
+        first = g[0]
+        code = first["종목코드"]
+        n = len(g)
+        rs = f' rowspan="{n}"' if n > 1 else ""
+        name = _esc(first["종목명"])
+        name_html = (
+            f'<a class="naver-link" target="_blank" '
+            f'href="https://finance.naver.com/item/main.naver?code={code}">{name}</a>'
+            f'<div class="c-code">{code}</div>'
+        )
+
+        body.append("<tbody>")
+        for i, r in enumerate(g):
+            body.append("<tr>")
+            if i == 0:
+                body.append(
+                    f'<td class="c-chk"{rs}>'
+                    f'<input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
+                )
+                body.append(f'<td class="c-name{" c-mid" if False else ""}"{rs}>{name_html}</td>')
+                body.append(f'<td class="c-mid"{rs}>{_esc(first["현재가"])}</td>')
+                body.append(f'<td class="c-mid"{rs}>{_esc(first["시총"])}</td>')
+
+            body.append(f'<td class="c-mid">{_esc(r["적용연도"])}</td>')
+            for col in DATA_COLS[1:]:
+                if col == "배당금":
+                    # fmt_dps 결과에는 <br>이 포함되어 있으므로 이스케이프하지 않는다
+                    body.append(f'<td>{r[col]}</td>')
+                else:
+                    body.append(f'<td>{_esc(r[col])}</td>')
+            body.append("</tr>")
+        body.append("</tbody>")
+
+    return (
+        f'<div class="wl-wrap"><table class="wl-table" id="table_tab_watchlist">'
+        f'<thead><tr>{head}</tr></thead>{"".join(body)}</table></div>'
+    )
+
 
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
@@ -262,49 +358,27 @@ def render_tab_watchlist(full_csv_records_map=None):
     if watchlist_codes:
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(fetch_watchlist_item, watchlist_codes))
-
         for info_list in results:
-            if not info_list:
-                continue
-            for info in info_list:
-                rows.append(info)
+            rows.extend(info_list or [])
 
     if rows:
-        df_watch = pd.DataFrame(rows)
-        
-        render_multi_header_table(
-            df_watch,
-            tab_name="tab_watchlist",
-            has_checkbox=True,
-            has_naver_link=True
-        )
+        st.markdown(WL_CSS, unsafe_allow_html=True)
+        st.markdown(_build_table(rows), unsafe_allow_html=True)
 
         st.write("")
-        
-        col_l, col_r = st.columns([3, 1.8])
+        _, col_r = st.columns([3, 1.8])
         with col_r:
-            if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True):
+            if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True, key="btn_wl_delete"):
                 raw_del = st.query_params.get("del_codes", "")
-                codes_to_delete = [c.strip().zfill(6) for c in str(raw_del).split(",") if c.strip() and c.strip().isdigit()]
-                
-                if not codes_to_delete:
-                    for key, val in st.session_state.items():
-                        if val is True:
-                            for code in watchlist_codes:
-                                if code in str(key) and code not in codes_to_delete:
-                                    codes_to_delete.append(code)
-
-                codes_to_delete = list(dict.fromkeys(codes_to_delete))
+                codes_to_delete = _dedupe(str(raw_del).split(","))
 
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
                     save_watchlist_codes(new_codes)
-                    
                     if "del_codes" in st.query_params:
                         del st.query_params["del_codes"]
-                        
                     st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
     else:
@@ -313,84 +387,75 @@ def render_tab_watchlist(full_csv_records_map=None):
     st.write("---")
 
     show_manage_box = st.toggle("➕ 종목코드 추가 및 관리", value=False, key="toggle_watchlist_manage")
-    if show_manage_box:
-        with st.container(border=True):
-            if st.button("📥 현재시세 탭에서 체크된 종목 가져오기", use_container_width=True, type="secondary"):
-                selected_codes = []
-                for param_key, param_val in st.query_params.items():
-                    if param_val:
-                        codes = [c.strip().zfill(6) for c in str(param_val).split(",") if c.strip() and c.strip().isdigit()]
-                        if codes:
-                            selected_codes.extend(codes)
-                selected_codes = list(dict.fromkeys(selected_codes))
+    if not show_manage_box:
+        return
 
-                if not selected_codes:
-                    st.warning("⚠️ 현재시세 탭에서 체크박스로 선택된 종목이 없습니다.")
+    with st.container(border=True):
+        if st.button("📥 현재시세 탭에서 체크된 종목 가져오기", use_container_width=True, type="secondary", key="btn_wl_import"):
+            raw = st.query_params.get("sel_price", "") or st.query_params.get("del_codes", "")
+            picked = _dedupe(str(raw).split(","))
+            if not picked:
+                st.warning("⚠️ 현재시세 탭에서 체크박스로 선택된 종목이 없습니다.")
+            else:
+                current = load_watchlist_codes()
+                new = [c for c in picked if c not in current]
+                if new:
+                    save_watchlist_codes(current + new)
+                    st.success(f"🎉 총 {len(new)}개의 종목이 관심종목에 추가되었습니다!")
+                    st.rerun()
                 else:
-                    current_codes = load_watchlist_codes()
-                    added_count = 0
-                    for code in selected_codes:
-                        if code not in current_codes:
-                            current_codes.append(code)
-                            added_count += 1
-                    
-                    if added_count > 0:
-                        save_watchlist_codes(current_codes)
-                        st.success(f"🎉 총 {added_count}개의 종목이 관심종목에 추가되었습니다!")
+                    st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
+
+        st.markdown("---")
+
+        st.caption("📂 관심종목 백업 파일(TXT) 관리")
+        d_col1, d_col2 = st.columns(2)
+
+        with d_col1:
+            current = load_watchlist_codes()
+            file_content = "\n".join(current) + ("\n" if current else "")
+            st.download_button(
+                label="💾 백업 파일 다운로드",
+                data=file_content,
+                file_name="watchlist_codes.txt",
+                mime="text/plain",
+                use_container_width=True,
+                key="dl_wl_backup",
+            )
+
+        with d_col2:
+            uploaded_file = st.file_uploader("백업 파일 업로드 (복구)", type=["txt"],
+                                             label_visibility="collapsed", key="wl_restore_upload")
+            if uploaded_file is not None and st.button("📥 업로드 파일로 복구", use_container_width=True, key="btn_wl_restore"):
+                try:
+                    decoded = uploaded_file.getvalue().decode("utf-8")
+                    restored = _dedupe(decoded.splitlines())
+                    if restored:
+                        save_watchlist_codes(restored)
+                        st.success(f"🎉 총 {len(restored)}개 종목 복구 완료!")
                         st.rerun()
                     else:
-                        st.info("ℹ️ 선택한 종목이 이미 모두 관심종목에 등록되어 있습니다.")
+                        st.warning("⚠️ 업로드한 파일에 올바른 종목 코드가 없습니다.")
+                except Exception as e:
+                    st.error(f"⚠️ 파일 처리 중 오류 발생: {e}")
 
-            st.markdown("---")
+        st.markdown("---")
 
-            st.caption("📂 관심종목 백업 파일(TXT) 관리")
-            d_col1, d_col2 = st.columns(2)
-            
-            with d_col1:
-                current_codes = load_watchlist_codes()
-                file_content = "\n".join(current_codes) + ("\n" if current_codes else "")
-                st.download_button(
-                    label="💾 백업 파일 다운로드",
-                    data=file_content,
-                    file_name="watchlist_codes.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-
-            with d_col2:
-                uploaded_file = st.file_uploader("백업 파일 업로드 (복구)", type=["txt"], label_visibility="collapsed")
-                if uploaded_file is not None:
-                    try:
-                        content_bytes = uploaded_file.getvalue()
-                        decoded_str = content_bytes.decode("utf-8")
-                        uploaded_codes = [line.strip().zfill(6) for line in decoded_str.splitlines() if line.strip() and line.strip().isdigit()]
-                        uploaded_codes = list(dict.fromkeys(uploaded_codes))
-                        
-                        if uploaded_codes:
-                            save_watchlist_codes(uploaded_codes)
-                            st.success(f"🎉 총 {len(uploaded_codes)}개 종목 복구 완료!")
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ 업로드한 파일에 올바른 종목 코드가 없습니다.")
-                    except Exception as e:
-                        st.error(f"⚠️ 파일 처리 중 오류 발생: {e}")
-
-            st.markdown("---")
-            st.caption("6자리 종목코드를 직접 입력하여 관심종목에 추가할 수 있습니다.")
-            add_col1, add_col2 = st.columns([3, 1])
-            with add_col1:
-                input_code = st.text_input("종목코드 입력", placeholder="예: 005930 (삼성전자)", label_visibility="collapsed", key="input_new_watchlist_code")
-            with add_col2:
-                if st.button("종목 추가", use_container_width=True, type="primary"):
-                    cleaned_code = input_code.strip().zfill(6)
-                    if cleaned_code and cleaned_code.isdigit() and len(cleaned_code) == 6:
-                        current_codes = load_watchlist_codes()
-                        if cleaned_code not in current_codes:
-                            current_codes.append(cleaned_code)
-                            save_watchlist_codes(current_codes)
-                            st.success(f"🎉 종목코드({cleaned_code})가 추가되었습니다!")
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+        st.caption("6자리 종목코드를 직접 입력하여 관심종목에 추가할 수 있습니다.")
+        add_col1, add_col2 = st.columns([3, 1])
+        with add_col1:
+            input_code = st.text_input("종목코드 입력", placeholder="예: 005930 (삼성전자)",
+                                       label_visibility="collapsed", key="input_new_watchlist_code")
+        with add_col2:
+            if st.button("종목 추가", use_container_width=True, type="primary", key="btn_wl_add"):
+                cleaned = input_code.strip().zfill(6)
+                if cleaned.isdigit() and len(cleaned) == 6:
+                    current = load_watchlist_codes()
+                    if cleaned not in current:
+                        save_watchlist_codes(current + [cleaned])
+                        st.success(f"🎉 종목코드({cleaned})가 추가되었습니다!")
+                        st.rerun()
                     else:
-                        st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
+                        st.warning("⚠️ 이미 관심종목에 등록된 코드입니다.")
+                else:
+                    st.error("⚠️ 올바른 6자리 숫자 종목코드를 입력해주세요.")
