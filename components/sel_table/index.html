@@ -75,9 +75,11 @@ function sortTable(table, idx, asc) {
   const container = multi ? table : bodies[0];
   const units = multi ? bodies : Array.from(bodies[0].rows);
 
-  // 묶음 표에서 정렬 키로 쓸 행을 고른다.
-  // 적용연도 이후 열(idx >= 4)은 최근연도 행(data-yr="last")의 값으로 정렬한다.
-  // 종목명, 현재가/시총, 적용연도는 묶음 첫 행을 쓴다.
+  // 정렬 대상 열의 헤더 이름
+  const headerName = (table.querySelectorAll('thead tr')[table.querySelectorAll('thead tr').length - 1]
+    .cells[idx] || {}).textContent || '';
+  const isDividend = headerName.trim() === '배당금';
+
   const rowFor = u => {
     if (!multi) return u;
     if (idx >= 4) {
@@ -86,15 +88,25 @@ function sortTable(table, idx, asc) {
     return u.rows[0];
   };
 
-  // 최근 행에는 rowspan으로 빠진 셀이 있으므로, 같은 열의 셀을 찾을 때 위치를 보정한다
   const cellIndexFor = (row, u) => {
     if (!multi || row === u.rows[0]) return idx;
     return idx - (u.rows[0].cells.length - row.cells.length);
   };
 
+  // 배당금 셀은 "150원<br>(1.4%)" 형태이므로 괄호 안의 배당수익률로 정렬한다
+  const dividendYield = text => {
+    const m = text.match(/\(([-\d.]+)%\)/);
+    return m ? parseFloat(m[1]) : null;
+  };
+
   const keyOf = u => {
     const row = rowFor(u);
-    return parseNum(cellText(row, cellIndexFor(row, u)));
+    const text = cellText(row, cellIndexFor(row, u));
+    if (isDividend) {
+      const y = dividendYield(text);
+      return y === null || isNaN(y) ? null : y;
+    }
+    return parseNum(text);
   };
 
   units.sort((a, b) => {
@@ -109,6 +121,7 @@ function sortTable(table, idx, asc) {
   });
   units.forEach(u => container.appendChild(u));
 }
+  
   
 function onHeaderSort(th) {
   const table = th.closest('table');
