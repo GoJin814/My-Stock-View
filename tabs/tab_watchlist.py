@@ -306,7 +306,9 @@ def _build_table(rows, selected=frozenset()):
         body.append("<tbody>")
         for i, r in enumerate(g):
             last = i == n - 1
-            body.append('<tr class="grp-end">' if last else "<tr>")
+            is_latest = i == n - 1
+            cls = ' class="grp-end"' if last else ""
+            body.append(f'<tr{cls} data-yr="{"last" if is_latest else "first"}">')
 
             if i == 0:
                 body.append(
