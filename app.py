@@ -378,7 +378,7 @@ def get_all_stocks_parallel(codes_list):
 # -------------------------------------------------------------
 current_codes = load_codes()
 
-if current_codes:
+if True:  # 종목이 0개여도 탭 바는 항상 표시한다
     # 정렬 URL 파라미터 → Firebase (중복 제거 후 저장)
     sort_param = st.query_params.get("sort_codes", "")
     if sort_param:
@@ -709,19 +709,3 @@ if current_codes:
         render_tab_returns_jinwoo()
 
     inject_client_sort_sync_engine()
-
-else:
-    st.info("등록된 종목이 없습니다. 아래에서 종목코드를 추가해 주세요.")
-    with st.container(border=True):
-        st.markdown("##### ➕ 종목코드 추가")
-        c_code, c_btn = st.columns([3, 1])
-        with c_code:
-            init_code = st.text_input("종목코드 (6자리)", placeholder="예: 005930",
-                                      max_chars=6, key="init_single_code")
-        with c_btn:
-            st.write("")
-            if st.button("종목 추가", use_container_width=True, key="btn_init_add"):
-                code = init_code.strip().zfill(6)
-                if code.isdigit():
-                    save_codes([code])
-                    st.rerun()
