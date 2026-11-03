@@ -3,7 +3,13 @@
 <head>
 <meta charset="utf-8">
 <style>
-  html, body { margin: 0; padding: 0; background: #0e1117; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #0e1117; overflow: hidden; }
+  #root { height: 100%; }
+  /* 표 래퍼가 iframe 높이만큼 차지하고, 그 안에서만 스크롤 */
+  .wl-wrap, .bs-wrap, .mk-wrap {
+    height: 100% !important; max-height: none !important;
+    margin: 0 !important; overflow: auto !important; border-radius: 0 !important;
+  }
 </style>
 </head>
 <body>
@@ -13,11 +19,6 @@ const root = document.getElementById('root');
 
 function send(type, payload) {
   window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, payload), '*');
-}
-
-// 표 높이만큼 iframe 높이를 맞춘다 (내부 스크롤 없이 페이지 전체가 스크롤되도록)
-function fitHeight() {
-  send('streamlit:setFrameHeight', { height: Math.ceil(document.body.scrollHeight) + 4 });
 }
 
 function selectedCodes() {
@@ -65,9 +66,8 @@ window.addEventListener('message', e => {
   if (!d || d.type !== 'streamlit:render') return;
   const a = d.args || {};
   root.innerHTML = a.html || '';
-  fitHeight();
-  setTimeout(fitHeight, 60);
-  setTimeout(fitHeight, 300);
+  // 높이는 Python에서 준 값으로 고정한다 (내부 스크롤 사용)
+  send('streamlit:setFrameHeight', { height: a.frame_h || 500 });
 });
 
 send('streamlit:componentReady', { apiVersion: 1 });
