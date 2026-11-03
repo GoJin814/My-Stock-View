@@ -71,16 +71,22 @@ function parseNum(s) {
 
 function sortTable(table, idx, asc) {
   const bodies = Array.from(table.tBodies);
-  // 종목 묶음(tbody가 여러 개)이면 묶음 단위, 아니면 행 단위로 정렬
   const multi = bodies.length > 1;
   const container = multi ? table : bodies[0];
   const units = multi ? bodies : Array.from(bodies[0].rows);
-  const keyOf = u => parseNum(cellText(multi ? u.rows[0] : u, idx));
+
+  // 관심종목처럼 종목이 여러 행으로 묶인 표는 마지막 행(최근연도)의 값으로 정렬한다.
+  // 단, 종목명·현재가/시총 열은 묶음 첫 행에만 값이 있으므로 첫 행을 읽는다.
+  const isLatestOnly = multi && table.classList.contains('wl-table') && idx >= 3;
+  const keyOf = u => {
+    const row = multi ? (isLatestOnly ? u.rows[u.rows.length - 1] : u.rows[0]) : u;
+    return parseNum(cellText(row, idx));
+  };
 
   units.sort((a, b) => {
     const ka = keyOf(a), kb = keyOf(b);
     if (ka === null && kb === null) return 0;
-    if (ka === null) return 1;   // 빈 값은 항상 아래
+    if (ka === null) return 1;
     if (kb === null) return -1;
     if (typeof ka === 'number' && typeof kb === 'number') {
       return asc ? ka - kb : kb - ka;
@@ -89,7 +95,7 @@ function sortTable(table, idx, asc) {
   });
   units.forEach(u => container.appendChild(u));
 }
-
+  
 function onHeaderSort(th) {
   const table = th.closest('table');
   const idx = th.cellIndex;
