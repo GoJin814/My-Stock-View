@@ -34,17 +34,20 @@ WL_CSS = "".join([
     "table.wl-table td{background:#0e1117;padding:8px 10px;border-right:1px solid #1e242c;",
     "border-bottom:1px solid #1e242c;text-align:center;white-space:nowrap;vertical-align:middle;",
     "font-variant-numeric:tabular-nums;}",
-    # 고정 열 공통: 폭을 고정하고 가로 스크롤 시 제자리에 머문다
-    # 체크박스 40px | 종목명 150px | 현재가/시총 120px  -> 누적 left: 0 / 40px / 190px
-    "table.wl-table .c-chk,table.wl-table .c-name,table.wl-table .c-price{position:sticky;z-index:5;",
-    "background:#0e1117;}",
+    # 고정 열 공통
+    "table.wl-table .c-chk,table.wl-table .c-name,table.wl-table .c-price{",
+    "position:sticky;z-index:5;background:#0e1117;box-sizing:border-box;}",
     "table.wl-table th.c-chk,table.wl-table th.c-name,table.wl-table th.c-price{z-index:100;background:#161a22;}",
-    "table.wl-table .c-chk{left:0;width:40px;min-width:40px;max-width:40px;padding:6px 0;}",
-    "table.wl-table .c-name{left:40px;width:150px;min-width:150px;max-width:150px;",
-    "text-align:left;padding-left:12px;white-space:normal;}",
-    "table.wl-table .c-price{left:190px;width:120px;min-width:120px;max-width:120px;}",
-    # 고정 열 오른쪽 경계선
-    "table.wl-table .c-price{box-shadow:2px 0 0 #334155;}",
+    # 체크박스: 34px (left 0)
+    "table.wl-table .c-chk{left:0;width:34px;min-width:34px;max-width:34px;padding:6px 0;}",
+    # 종목명: 한글 5글자 폭 (left 34px), 넘치면 글자 단위로 줄바꿈
+    "table.wl-table .c-name{left:34px;width:calc(5em + 14px);min-width:calc(5em + 14px);",
+    "max-width:calc(5em + 14px);padding:8px 6px 8px 8px;text-align:left;",
+    "white-space:normal;word-break:break-all;line-height:1.3;}",
+    # 현재가/시총: 값 폭에 맞춤 (left = 체크박스 34px + 종목명 폭)
+    "table.wl-table .c-price{left:calc(34px + 5em + 14px);width:calc(6em + 12px);",
+    "min-width:calc(6em + 12px);max-width:calc(6em + 12px);padding:8px 6px;",
+    "box-shadow:2px 0 0 #334155;}",
     "table.wl-table .c-code{color:#94a3b8;font-family:monospace;font-size:0.72rem;margin-top:2px;}",
     "table.wl-table .c-mcap{color:#94a3b8;font-size:inherit;margin-top:3px;}",
     "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}",
