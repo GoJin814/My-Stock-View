@@ -451,7 +451,7 @@ def render_multi_header_table(df, *args, **kwargs):
     st.markdown(table_html, unsafe_allow_html=True)
 
 def inject_client_sort_sync_engine():
-    """정렬 시 Firebase 직접 동기화 + 탭 전환 시 즉시 순서 복원 + 화면 우측 쏠림 원천 차단"""
+    """당겨서 새로고침, Firebase 정렬 순서 적용, 체크박스 선택 → URL del_codes 동기화."""
     components.html("""
     <script>
     (function initEngine() {
@@ -461,7 +461,7 @@ def inject_client_sort_sync_engine():
 
         const FIREBASE_URL = "https://my-stock-view-default-rtdb.firebaseio.com/my_stock_view/sort_order.json";
 
-        // 1. 화면이 우측으로 밀리는 포커스 강제 스크롤 차단
+        // 1. 가로 스크롤 튐 방지
         function lockHorizontalScroll() {
             if (win.scrollX !== 0) win.scrollTo(0, win.scrollY);
             const containers = [
@@ -477,21 +477,66 @@ def inject_client_sort_sync_engine():
             });
         }
 
+        // 이전 실행의 스크롤 리스너 제거 후 재등록
+        if (win.__scanScrollLock) {
+            win.removeEventListener('scroll', win.__scanScrollLock);
+            doc.removeEventListener('scroll', win.__scanScrollLock);
+        }
+        win.__scanScrollLock = lockHorizontalScroll;
         win.addEventListener('scroll', lockHorizontalScroll, { passive: true });
         doc.addEventListener('scroll', lockHorizontalScroll, { passive: true });
 
-        // 2. 표 재정렬 유틸리티 함수
+        // 2. 당겨서 새로고침 표시기
+        let ptrBox = doc.getElementById('native_ptr_box');
+        if (!ptrBox) {
+            ptrBox = doc.createElement('div');
+            ptrBox.id = 'native_ptr_box';
+            ptrBox.style.cssText = 'position:fixed;top:-65px;left:50%;transform:translateX(-50%);width:42px;height:42px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.35);z-index:99999999;transition:top .15s ease,opacity .15s ease;opacity:0;pointer-events:none;';
+            ptrBox.innerHTML = '<svg id="ptr_svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#e2e8f0" stroke-width="2.5"/><path d="M12 3 A9 9 0 0 1 21 12" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/></svg>';
+            doc.body.appendChild(ptrBox);
+        }
+        let startY = 0, startX = 0, canPull = false;
+        function scrollTopNow() {
+            const c1 = doc.querySelector('[data-testid="stAppViewContainer"]');
+            const c2 = doc.querySelector('[data-testid="stMain"]');
+            return Math.max(win.scrollY || 0, c1 ? c1.scrollTop : 0, c2 ? c2.scrollTop : 0);
+        }
+        win.ontouchstart = function (e) {
+            canPull = e.touches.length === 1 && scrollTopNow() <= 1;
+            if (canPull) { startY = e.touches[0].clientY; startX = e.touches[0].clientX; }
+        };
+        win.ontouchmove = function (e) {
+            if (!canPull) return;
+            const dy = e.touches[0].clientY - startY;
+            const dx = Math.abs(e.touches[0].clientX - startX);
+            if (dy <= 40 || dx > dy || scrollTopNow() > 1) {
+                ptrBox.style.top = '-65px'; ptrBox.style.opacity = '0'; return;
+            }
+            const pull = Math.min((dy - 40) * 0.45, 80);
+            ptrBox.style.top = (pull - 45) + 'px';
+            ptrBox.style.opacity = Math.min((dy - 40) / 80, 1);
+        };
+        win.ontouchend = function (e) {
+            if (!canPull) return;
+            canPull = false;
+            const dy = e.changedTouches[0].clientY - startY;
+            if (dy >= 180 && scrollTopNow() <= 1) {
+                ptrBox.style.top = '20px'; ptrBox.style.opacity = '1';
+                setTimeout(function () { win.location.reload(); }, 120);
+            } else {
+                ptrBox.style.top = '-65px'; ptrBox.style.opacity = '0';
+            }
+        };
+
+        // 3. 정렬 유틸
         function sortTableByCodeList(table, codeOrder) {
             if (!table || !codeOrder || codeOrder.length === 0) return;
             const tbody = table.querySelector('tbody');
             if (!tbody) return;
-
             const rows = Array.from(tbody.querySelectorAll('tr'));
             rows.sort((a, b) => {
-                let cA = a.getAttribute('data-code');
-                let cB = b.getAttribute('data-code');
-                let iA = codeOrder.indexOf(cA);
-                let iB = codeOrder.indexOf(cB);
+                let iA = codeOrder.indexOf(a.getAttribute('data-code'));
+                let iB = codeOrder.indexOf(b.getAttribute('data-code'));
                 if (iA === -1) iA = 9999;
                 if (iB === -1) iB = 9999;
                 return iA - iB;
@@ -499,7 +544,6 @@ def inject_client_sort_sync_engine():
             rows.forEach(r => tbody.appendChild(r));
         }
 
-        // Firebase 순서를 읽어와 현재 화면의 모든 테이블 정렬
         function applyFirebaseSortOrder() {
             fetch(FIREBASE_URL)
                 .then(res => res.json())
@@ -513,45 +557,44 @@ def inject_client_sort_sync_engine():
                 .catch(() => {});
         }
 
-        // ★ 탭 메뉴 클릭 시: 스크롤 잠금 + Firebase 최신 정렬 즉시 재적용
-        doc.addEventListener('click', function(e) {
+        // 탭 클릭 시 가로 스크롤 잠금 + Firebase 정렬 재적용
+        if (win.__scanTabClick) {
+            doc.removeEventListener('click', win.__scanTabClick, true);
+        }
+        win.__scanTabClick = function (e) {
             const isTab = e.target.closest('div[data-testid="stRadio"]');
             if (isTab) {
                 setTimeout(lockHorizontalScroll, 10);
-                setTimeout(lockHorizontalScroll, 50);
-                // Streamlit이 탭 내용을 바꿀 때까지 대기 후 정렬 적용
                 setTimeout(applyFirebaseSortOrder, 100);
                 setTimeout(applyFirebaseSortOrder, 300);
                 setTimeout(applyFirebaseSortOrder, 600);
             }
-        }, true);
+        };
+        doc.addEventListener('click', win.__scanTabClick, true);
 
-        // 3. 헤더 클릭 정렬 및 Firebase 실시간 PUT 전송
-        doc.addEventListener('click', function(e) {
+        // 4. 헤더 클릭 정렬 + Firebase PUT
+        if (win.__scanHeaderSort) {
+            doc.removeEventListener('click', win.__scanHeaderSort);
+        }
+        win.__scanHeaderSort = function (e) {
             if (e.target && e.target.classList.contains('header-select-all')) return;
-
             const th = e.target.closest('th.sortable-th');
             if (!th) return;
-
             const table = th.closest('table.custom-grid-table');
             if (!table) return;
-
             const tbody = table.querySelector('tbody');
             if (!tbody) return;
-
             const colIdx = parseInt(th.getAttribute('data-col-idx'), 10);
             if (isNaN(colIdx)) return;
 
             const rows = Array.from(tbody.querySelectorAll('tr'));
-            let isAsc = th.getAttribute('data-sort-asc') === 'true';
-            let nextAsc = !isAsc;
+            const nextAsc = th.getAttribute('data-sort-asc') !== 'true';
 
-            table.querySelectorAll('th.sortable-th').forEach(otherTh => {
-                otherTh.removeAttribute('data-sort-asc');
-                const ind = otherTh.querySelector('.sort-indicator');
+            table.querySelectorAll('th.sortable-th').forEach(o => {
+                o.removeAttribute('data-sort-asc');
+                const ind = o.querySelector('.sort-indicator');
                 if (ind) ind.remove();
             });
-
             th.setAttribute('data-sort-asc', nextAsc);
             const indicator = doc.createElement('span');
             indicator.className = 'sort-indicator';
@@ -559,123 +602,97 @@ def inject_client_sort_sync_engine():
             th.appendChild(indicator);
 
             rows.sort((a, b) => {
-                let cellA = a.children[colIdx];
-                let cellB = b.children[colIdx];
-                let valA = cellA ? cellA.innerText.trim() : '';
-                let valB = cellB ? cellB.innerText.trim() : '';
-
-                let pA = parseFin(valA);
-                let pB = parseFin(valB);
-
+                const pA = parseFin((a.children[colIdx] || {}).innerText || '');
+                const pB = parseFin((b.children[colIdx] || {}).innerText || '');
                 if (typeof pA === 'number' && typeof pB === 'number') {
-                    return nextAsc ? (pA - pB) : (pB - pA);
+                    return nextAsc ? pA - pB : pB - pA;
                 }
                 return nextAsc ? String(pA).localeCompare(String(pB)) : String(pB).localeCompare(String(pA));
             });
-
             rows.forEach(r => tbody.appendChild(r));
 
             if (table.id !== 'table_tab_market') {
                 const sortedCodes = [...new Set(rows.map(r => r.getAttribute('data-code')).filter(Boolean))];
-                
-                doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(otherTable => {
-                    if (otherTable !== table) {
-                        sortTableByCodeList(otherTable, sortedCodes);
-                    }
+                doc.querySelectorAll('table.custom-grid-table:not(#table_tab_market)').forEach(other => {
+                    if (other !== table) sortTableByCodeList(other, sortedCodes);
                 });
-
-                // Firebase Realtime DB에 PUT
                 try {
                     fetch(FIREBASE_URL, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(sortedCodes)
-                    }).catch(err => console.log('Firebase sync error:', err));
-                } catch(e) {}
-            }
-        });
-
-        // 체크박스 삭제 파라미터 관리
-        function updateDelParam() {
-            const checkedCodes = [];
-            doc.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
-                const c = cb.getAttribute('data-code');
-                if (c && c.length === 6) checkedCodes.push(c);
-            });
-            try {
-                const url = new URL(win.location.href);
-                if (checkedCodes.length > 0) {
-                    url.searchParams.set('del_codes', checkedCodes.join(','));
-                } else {
-                    url.searchParams.delete('del_codes');
-                }
-                win.history.replaceState(null, '', url.toString());
-            } catch(e) {}
-        }
-
-        // 체크박스 선택 → URL의 del_codes 동기화
-        function updateDelParam() {
-            const checkedCodes = [];
-            doc.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
-                const c = cb.getAttribute('data-code');
-                if (c && c.length === 6 && !checkedCodes.includes(c)) checkedCodes.push(c);
-            });
-            try {
-                const url = new URL(win.location.href);
-                if (checkedCodes.length > 0) {
-                    url.searchParams.set('del_codes', checkedCodes.join(','));
-                } else {
-                    url.searchParams.delete('del_codes');
-                }
-                win.history.replaceState(null, '', url.toString());
-            } catch (e) {}
-        }
-
-        // 리스너를 중복 등록하지 않도록 이전 것을 제거
-        if (win.__wlChangeHandler) {
-            doc.removeEventListener('change', win.__wlChangeHandler);
-        }
-        win.__wlChangeHandler = function (e) {
-            const t = e.target;
-            if (!t) return;
-            if (t.classList.contains('header-select-all')) {
-                const tbl = t.closest('table');
-                if (tbl) {
-                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => { cb.checked = t.checked; });
-                }
-                updateDelParam();
-            } else if (t.classList.contains('stock-checkbox')) {
-                updateDelParam();
+                    }).catch(() => {});
+                } catch (err) {}
             }
         };
-        doc.addEventListener('change', win.__wlChangeHandler);
+        doc.addEventListener('click', win.__scanHeaderSort);
 
+        // 5. 체크박스 → URL del_codes 동기화 (모든 표 공통)
+        function syncDelParam() {
+            const codes = [];
+            doc.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
+                const c = (cb.getAttribute('data-code') || '').trim();
+                if (c.length === 6 && !codes.includes(c)) codes.push(c);
+            });
+            try {
+                const url = new URL(win.location.href);
+                if (codes.length) url.searchParams.set('del_codes', codes.join(','));
+                else url.searchParams.delete('del_codes');
+                win.history.replaceState(null, '', url.toString());
+            } catch (err) {}
+        }
+
+        function toggleAllInTable(headerBox) {
+            const tbl = headerBox.closest('table');
+            if (!tbl) return;
+            tbl.querySelectorAll('.stock-checkbox').forEach(cb => { cb.checked = headerBox.checked; });
+            syncDelParam();
+        }
+
+        if (win.__scanDelHandlers) {
+            doc.removeEventListener('change', win.__scanDelHandlers.change, true);
+            doc.removeEventListener('click', win.__scanDelHandlers.click, true);
+        }
+        const onChange = function (e) {
+            const t = e.target;
+            if (!t || !t.classList) return;
+            if (t.classList.contains('header-select-all')) {
+                toggleAllInTable(t);
+            } else if (t.classList.contains('stock-checkbox')) {
+                syncDelParam();
+            }
+        };
+        const onClick = function (e) {
+            const t = e.target;
+            if (t && t.classList && t.classList.contains('header-select-all')) {
+                setTimeout(() => toggleAllInTable(t), 0);
+            }
+        };
+        doc.addEventListener('change', onChange, true);
+        doc.addEventListener('click', onClick, true);
+        win.__scanDelHandlers = { change: onChange, click: onClick };
+
+        // 6. parseFin
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
-            let clean = str.replace(/[,%원배\s]/g, '').trim();
-
-            if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(clean)) {
-                let parts = clean.split(/[\/\-]/);
-                let y = parts[0];
-                let m = parts[1].padStart(2, '0');
-                let d = parts[2].padStart(2, '0');
-                return parseInt(y + m + d, 10);
+            let clean = str.replace(/[,%원배\\s]/g, '').trim();
+            if (/^\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2}$/.test(clean)) {
+                const p = clean.split(/[\\/\\-]/);
+                return parseInt(p[0] + p[1].padStart(2, '0') + p[2].padStart(2, '0'), 10);
             }
-
             if (clean.includes('조')) {
-                let parts = clean.split('조');
-                let jo = parseFloat(parts[0]) || 0;
-                let rest = parseFloat(parts[1].replace(/억/g, '')) || 0;
-                return (jo * 10000) + rest;
+                const p = clean.split('조');
+                const jo = parseFloat(p[0]) || 0;
+                const rest = parseFloat(p[1].replace(/억/g, '')) || 0;
+                return jo * 10000 + rest;
             } else if (clean.includes('억')) {
-                clean = clean.replace(/억/g, '');
-                return parseFloat(clean) || 0;
+                return parseFloat(clean.replace(/억/g, '')) || 0;
             }
-            let num = parseFloat(clean);
+            const num = parseFloat(clean);
             return isNaN(num) ? str.trim() : num;
         }
 
-        // 페이지 최초 로드 시 적용
+        // 최초 로드 시 Firebase 정렬 적용
         applyFirebaseSortOrder();
     })();
     </script>
