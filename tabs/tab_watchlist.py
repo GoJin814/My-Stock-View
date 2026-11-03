@@ -56,6 +56,7 @@ WL_CSS = "".join([
     "</style>",
 ])
 
+
 def _dedupe(codes):
     out = []
     for c in codes:
@@ -276,10 +277,10 @@ def fetch_watchlist_item(code: str):
     return items
 
 
-def _build_table(rows):
+def _build_table(rows, selected=frozenset()):
     """종목별로 tbody를 하나씩 만든다. 공통 값은 rowspan으로 병합하고,
-    종목 구분선은 인라인 스타일로 넣어 CSS 적용 여부와 무관하게 보이도록 한다.
-    HTML은 한 줄로 만들어 st.markdown이 코드블록으로 해석하지 않게 한다."""
+    종목 구분선은 인라인 스타일로 넣는다. HTML은 한 줄로 만들어
+    st.markdown이 코드블록으로 해석하지 않게 한다."""
     head = (
         '<th class="c-chk"><input type="checkbox" class="header-select-all" title="전체 선택"></th>'
         '<th class="c-name">종목명</th>'
@@ -300,6 +301,7 @@ def _build_table(rows):
         url = f"https://finance.naver.com/item/main.naver?code={code}"
         price = _html.escape(str(first["현재가"]))
         mcap = _html.escape(str(first["시총"]))
+        checked = " checked" if code in selected else ""
 
         body.append("<tbody>")
         for i, r in enumerate(g):
@@ -308,10 +310,9 @@ def _build_table(rows):
             body.append(f"<tr{row_style}>")
 
             if i == 0:
-                # rowspan 셀의 아래 경계는 종목 그룹의 끝이므로 구분선을 함께 준다
                 body.append(
                     f'<td class="c-chk"{rs} style="{GROUP_END_STYLE}">'
-                    f'<input type="checkbox" class="stock-checkbox" data-code="{code}"></td>'
+                    f'<input type="checkbox" class="stock-checkbox" data-code="{code}"{checked}></td>'
                 )
                 body.append(
                     f'<td class="c-name"{rs} style="{GROUP_END_STYLE}">'
@@ -338,19 +339,27 @@ def _build_table(rows):
     )
 
 
+def _watch_table(codes):
+    """관심종목 시세 표를 그린다. 캐시가 비어 있으면 새로 조회한다."""
+    rows = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(fetch_watchlist_item, codes))
+    for info_list in results:
+        rows.extend(info_list or [])
+
+    if rows:
+        selected = set(_dedupe(str(st.query_params.get("del_codes", "")).split(",")))
+        st.markdown(WL_CSS, unsafe_allow_html=True)
+        st.markdown(_build_table(rows, selected), unsafe_allow_html=True)
+    else:
+        st.info("관심종목 시세를 불러오지 못했습니다.")
+
+
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
 
-    rows = []
     if watchlist_codes:
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            results = list(executor.map(fetch_watchlist_item, watchlist_codes))
-        for info_list in results:
-            rows.extend(info_list or [])
-
-    if rows:
-        st.markdown(WL_CSS, unsafe_allow_html=True)
-        st.markdown(_build_table(rows), unsafe_allow_html=True)
+        _watch_table(watchlist_codes)
 
         st.write("")
         _, col_r = st.columns([3, 1.8])
