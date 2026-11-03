@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import html as _html
@@ -6,10 +7,27 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from store import (
-    MARKET_CACHE_FILE, THRESHOLDS_FILE,
-    load_json, save_json,
-)
+MARKET_CACHE_FILE = "market_indices_cache.json"
+THRESHOLDS_FILE = "market_thresholds.json"
+
+
+def load_json(filename, default):
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, type(default)):
+                return data
+        except Exception:
+            pass
+    return default
+
+
+def save_json(filename, obj, msg=None):
+    # 로컬 파일에만 저장한다 (GitHub 커밋은 기존 commit_to_github 대신 생략)
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+        
 from tabs.sel_table import selectable_table
 
 DEFAULT_TH = {"use_pbr": True, "pbr": 0.90, "use_dep": True, "dep": 2.50, "use_crd": True, "crd": 0.85}
