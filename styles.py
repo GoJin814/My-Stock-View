@@ -613,20 +613,42 @@ def inject_client_sort_sync_engine():
             } catch(e) {}
         }
 
-        doc.addEventListener('change', function(e) {
-            if (e.target && e.target.classList.contains('header-select-all')) {
-                const isChecked = e.target.checked;
-                const tbl = e.target.closest('table');
+        // 체크박스 선택 → URL의 del_codes 동기화
+        function updateDelParam() {
+            const checkedCodes = [];
+            doc.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
+                const c = cb.getAttribute('data-code');
+                if (c && c.length === 6 && !checkedCodes.includes(c)) checkedCodes.push(c);
+            });
+            try {
+                const url = new URL(win.location.href);
+                if (checkedCodes.length > 0) {
+                    url.searchParams.set('del_codes', checkedCodes.join(','));
+                } else {
+                    url.searchParams.delete('del_codes');
+                }
+                win.history.replaceState(null, '', url.toString());
+            } catch (e) {}
+        }
+
+        // 리스너를 중복 등록하지 않도록 이전 것을 제거
+        if (win.__wlChangeHandler) {
+            doc.removeEventListener('change', win.__wlChangeHandler);
+        }
+        win.__wlChangeHandler = function (e) {
+            const t = e.target;
+            if (!t) return;
+            if (t.classList.contains('header-select-all')) {
+                const tbl = t.closest('table');
                 if (tbl) {
-                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => {
-                        cb.checked = isChecked;
-                    });
+                    tbl.querySelectorAll('.stock-checkbox').forEach(cb => { cb.checked = t.checked; });
                 }
                 updateDelParam();
-            } else if (e.target && e.target.classList.contains('stock-checkbox')) {
+            } else if (t.classList.contains('stock-checkbox')) {
                 updateDelParam();
             }
-        });
+        };
+        doc.addEventListener('change', win.__wlChangeHandler);
 
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
