@@ -40,7 +40,7 @@ WL_CSS = "".join([
     "table.wl-table th.c-price{z-index:100;background:#161a22;}",
     "table.wl-table .c-name{text-align:left;padding-left:12px;white-space:normal;min-width:120px;max-width:160px;}",
     "table.wl-table .c-code{color:#94a3b8;font-family:monospace;font-size:0.72rem;margin-top:2px;}",
-    "table.wl-table .c-mcap{color:#94a3b8;font-size:0.76rem;margin-top:3px;}",
+    "table.wl-table .c-mcap{color:#94a3b8;font-size:inherit;margin-top:3px;}",
     "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}",
     "table.wl-table a.naver-link:hover{text-decoration:underline !important;}",
     "table.wl-table input[type=checkbox]{cursor:pointer;width:16px;height:16px;accent-color:#3b82f6;vertical-align:middle;}",
@@ -313,7 +313,7 @@ def _build_table(rows):
                 body.append(
                     f'<td class="c-price"{rs} style="{GROUP_END_STYLE}">'
                     f'<div>{price}</div>'
-                    f'<div class="c-mcap">시총 {mcap}</div></td>'
+                    f'<div class="c-mcap">{mcap}</div></td>'
                 )
 
             for col in DATA_COLS:
