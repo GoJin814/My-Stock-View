@@ -326,7 +326,7 @@ def _build_table(rows, selected=frozenset()):
                     f'<div class="c-mcap">{mcap}</div></td>'
                 )
 
-                        for col in DATA_COLS:
+            for col in DATA_COLS:
                 val = r[col]
                 if col == "배당금":
                     # 정렬용으로 배당수익률을 data-yield 속성에 넣는다
