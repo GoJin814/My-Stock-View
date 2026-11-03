@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <style>
   html, body { margin: 0; padding: 0; background: #0e1117; }
-  .wl-wrap { height: 100vh !important; max-height: none !important; margin: 0 !important; }
+  .wl-wrap { max-height: none !important; margin: 0 !important; }
 </style>
 </head>
 <body>
@@ -18,22 +18,43 @@ function send(type, payload) {
 
 function selectedCodes() {
   const out = [];
-  root.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
-    const c = cb.dataset.code;
-    if (c && !out.includes(c)) out.push(c);
+  root.querySelectorAll('.stock-checkbox').forEach(cb => {
+    if (cb.checked) {
+      const c = (cb.dataset.code || '').trim();
+      if (c && !out.includes(c)) out.push(c);
+    }
   });
   return out;
 }
 
+function pushValue() {
+  send('streamlit:setComponentValue', { value: selectedCodes(), dataType: 'json' });
+}
+
+function toggleAll(headerBox) {
+  const tbl = headerBox.closest('table');
+  if (tbl) {
+    tbl.querySelectorAll('.stock-checkbox').forEach(cb => { cb.checked = headerBox.checked; });
+  }
+  pushValue();
+}
+
+// 개별 체크 및 헤더 체크 (change)
 root.addEventListener('change', e => {
   const t = e.target;
   if (!t || !t.classList) return;
   if (t.classList.contains('header-select-all')) {
-    const tbl = t.closest('table');
-    if (tbl) tbl.querySelectorAll('.stock-checkbox').forEach(cb => { cb.checked = t.checked; });
-    send('streamlit:setComponentValue', { value: selectedCodes(), dataType: 'json' });
+    toggleAll(t);
   } else if (t.classList.contains('stock-checkbox')) {
-    send('streamlit:setComponentValue', { value: selectedCodes(), dataType: 'json' });
+    pushValue();
+  }
+});
+
+// 일부 브라우저에서 헤더 체크가 click으로만 올라오는 경우 대비
+root.addEventListener('click', e => {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('header-select-all')) {
+    setTimeout(() => toggleAll(t), 0);
   }
 });
 
