@@ -326,11 +326,15 @@ def _build_table(rows, selected=frozenset()):
                     f'<div class="c-mcap">{mcap}</div></td>'
                 )
 
-            for col in DATA_COLS:
+                        for col in DATA_COLS:
                 val = r[col]
-                # 배당금 셀만 <br>을 포함하므로 이스케이프하지 않는다
-                cell = val if col == "배당금" else _html.escape(str(val))
-                body.append(f"<td>{cell}</td>")
+                if col == "배당금":
+                    # 정렬용으로 배당수익률을 data-yield 속성에 넣는다
+                    m = re.search(r"\(([-\d.]+)%\)", str(val))
+                    yld = m.group(1) if m else ""
+                    body.append(f'<td data-yield="{yld}">{val}</td>')
+                else:
+                    body.append(f"<td>{_html.escape(str(val))}</td>")
             body.append("</tr>")
         body.append("</tbody>")
 
