@@ -23,7 +23,7 @@ GROUP_END_STYLE = "border-bottom:3px solid #64748b;"
 
 WL_CSS = "".join([
     "<style>",
-    ".wl-wrap{overflow:auto;max-height:70vh;margin-bottom:1.2rem;border:1px solid #334155;",
+    ".wl-wrap{overflow-x:auto;margin-bottom:1.2rem;border:1px solid #334155;",
     "border-radius:4px;background:#0e1117;-webkit-overflow-scrolling:touch;}",
     "table.wl-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;",
     "font-size:0.82rem;color:#f3f4f6;background:#0e1117;",
@@ -54,6 +54,7 @@ WL_CSS = "".join([
     "table.wl-table a.naver-link{color:#58a6ff !important;text-decoration:none !important;}",
     "table.wl-table a.naver-link:hover{text-decoration:underline !important;}",
     "table.wl-table input[type=checkbox]{cursor:pointer;width:16px;height:16px;accent-color:#3b82f6;vertical-align:middle;}",
+    "table.wl-table tr.grp-end td{border-bottom:3px solid #64748b !important;}",
     "</style>",
 ])
 
@@ -305,8 +306,7 @@ def _build_table(rows, selected=frozenset()):
         body.append("<tbody>")
         for i, r in enumerate(g):
             last = i == n - 1
-            row_style = f' style="{GROUP_END_STYLE}"' if last else ""
-            body.append(f"<tr{row_style}>")
+            body.append('<tr class="grp-end">' if last else "<tr>")
 
             if i == 0:
                 body.append(
