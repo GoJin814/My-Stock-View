@@ -627,51 +627,6 @@ def inject_client_sort_sync_engine():
         };
         doc.addEventListener('click', win.__scanHeaderSort);
 
-        // 5. 체크박스 → URL del_codes 동기화 (모든 표 공통)
-        function syncDelParam() {
-            const codes = [];
-            doc.querySelectorAll('.stock-checkbox:checked').forEach(cb => {
-                const c = (cb.getAttribute('data-code') || '').trim();
-                if (c.length === 6 && !codes.includes(c)) codes.push(c);
-            });
-            try {
-                const url = new URL(win.location.href);
-                if (codes.length) url.searchParams.set('del_codes', codes.join(','));
-                else url.searchParams.delete('del_codes');
-                win.history.replaceState(null, '', url.toString());
-            } catch (err) {}
-        }
-
-        function toggleAllInTable(headerBox) {
-            const tbl = headerBox.closest('table');
-            if (!tbl) return;
-            tbl.querySelectorAll('.stock-checkbox').forEach(cb => { cb.checked = headerBox.checked; });
-            syncDelParam();
-        }
-
-        if (win.__scanDelHandlers) {
-            doc.removeEventListener('change', win.__scanDelHandlers.change, true);
-            doc.removeEventListener('click', win.__scanDelHandlers.click, true);
-        }
-        const onChange = function (e) {
-            const t = e.target;
-            if (!t || !t.classList) return;
-            if (t.classList.contains('header-select-all')) {
-                toggleAllInTable(t);
-            } else if (t.classList.contains('stock-checkbox')) {
-                syncDelParam();
-            }
-        };
-        const onClick = function (e) {
-            const t = e.target;
-            if (t && t.classList && t.classList.contains('header-select-all')) {
-                setTimeout(() => toggleAllInTable(t), 0);
-            }
-        };
-        doc.addEventListener('change', onChange, true);
-        doc.addEventListener('click', onClick, true);
-        win.__scanDelHandlers = { change: onChange, click: onClick };
-
         // 6. parseFin
         function parseFin(str) {
             if (!str || str.trim() === '-' || str.trim() === '') return -999999999999;
