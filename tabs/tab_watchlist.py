@@ -340,41 +340,40 @@ def _build_table(rows, selected=frozenset()):
 
 
 def _watch_table(codes):
-    """관심종목 시세 표를 그린다. 캐시가 비어 있으면 새로 조회한다."""
+    """관심종목 표를 컴포넌트로 그리고, 체크된 종목코드 목록을 반환한다."""
     rows = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(fetch_watchlist_item, codes))
     for info_list in results:
         rows.extend(info_list or [])
 
-    if rows:
-        selected = set(_dedupe(str(st.query_params.get("del_codes", "")).split(",")))
-        st.markdown(WL_CSS, unsafe_allow_html=True)
-        st.markdown(_build_table(rows, selected), unsafe_allow_html=True)
-    else:
+    if not rows:
         st.info("관심종목 시세를 불러오지 못했습니다.")
+        return []
+
+    prev_selected = set(st.session_state.get("wl_sel", []) or [])
+    html = WL_CSS + _build_table(rows, prev_selected)
+    frame_h = min(640, 120 + len(codes) * 60)
+    return selectable_table(html, key="wl_sel", frame_h=frame_h) or []
 
 
 def render_tab_watchlist(full_csv_records_map=None):
     watchlist_codes = load_watchlist_codes()
 
     if watchlist_codes:
-        _watch_table(watchlist_codes)
+        selected = _watch_table(watchlist_codes)
 
         st.write("")
         _, col_r = st.columns([3, 1.8])
         with col_r:
             if st.button("🗑️ 선택 항목 삭제", type="primary", use_container_width=True, key="btn_wl_delete"):
-                raw_del = st.query_params.get("del_codes", "")
-                codes_to_delete = _dedupe(str(raw_del).split(","))
-
+                # 현재 목록에 있는 종목만 삭제 대상으로 본다 (이미 지운 종목 제외)
+                codes_to_delete = [c for c in dict.fromkeys(selected) if c in watchlist_codes]
                 if not codes_to_delete:
                     st.warning("⚠️ 삭제할 종목의 체크박스를 먼저 선택해 주세요.")
                 else:
                     new_codes = [c for c in watchlist_codes if c not in codes_to_delete]
                     save_watchlist_codes(new_codes)
-                    if "del_codes" in st.query_params:
-                        del st.query_params["del_codes"]
                     st.success(f"🗑️ 선택한 종목({len(codes_to_delete)}개) 삭제 완료")
                     st.rerun()
     else:
