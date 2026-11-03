@@ -15,6 +15,7 @@ from firebase_admin import credentials, db
 from styles import apply_custom_styles, inject_client_sort_sync_engine
 from api import fetch_basic, fetch_integration, fetch_finance, extract_row_list, to_num
 from tabs.tab_watchlist import render_tab_watchlist
+from tabs.tab_watchlist import render_tab_watchlist, fetch_watchlist_item
 from tabs.tab_basic import render_tab_basic
 from tabs.tab_share import render_tab_share
 from tabs.tab_perf import render_tab_perf
@@ -464,6 +465,7 @@ if current_codes:
     with c_sync:
         if st.button("🔄 시세동기화", use_container_width=True, key="btn_sync_top"):
             fetch_single_stock.clear()
+            fetch_watchlist_item.clear()
             st.rerun()
 
     # -------------------------------------------------------------
